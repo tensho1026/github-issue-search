@@ -11,8 +11,12 @@ import (
 )
 
 func main() {
-	cfg := config.Load()
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	cfg, err := config.Load()
+	if err != nil {
+		logger.Error("invalid API configuration", "error", err)
+		os.Exit(1)
+	}
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
