@@ -280,6 +280,111 @@ func TestGetUserBoundsUpstreamTimeoutRetries(t *testing.T) {
 	}
 }
 
+func TestListRepositoriesPaginatesAndHonorsLimit(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(
+		writer http.ResponseWriter,
+		request *http.Request,
+	) {
+		attempt := requests.Add(1)
+		if request.URL.Path != "/users/octocat/repos" {
+			t.Errorf("path = %q", request.URL.Path)
+		}
+		if request.URL.Query().Get("type") != "owner" ||
+			request.URL.Query().Get("sort") != "updated" ||
+			request.URL.Query().Get("direction") != "desc" {
+			t.Errorf("query = %s", request.URL.RawQuery)
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		writer.Header().Set("X-RateLimit-Remaining", strconv.Itoa(50-int(attempt)))
+		switch attempt {
+		case 1:
+			if request.URL.Query().Get("page") != "1" ||
+				request.URL.Query().Get("per_page") != "3" {
+				t.Errorf("first query = %s", request.URL.RawQuery)
+			}
+			writer.Header().Set(
+				"Link",
+				`<http://example.test?page=2>; rel="next", <http://example.test?page=2>; rel="last"`,
+			)
+			_, _ = io.WriteString(writer, `[
+				{
+					"id":1,
+					"owner":{"login":"octocat"},
+					"name":"alpha",
+					"full_name":"octocat/alpha",
+					"description":"Alpha repository",
+					"html_url":"https://github.com/octocat/alpha",
+					"language":"Go",
+					"stargazers_count":10,
+					"forks_count":2,
+					"open_issues_count":3,
+					"fork":false,
+					"archived":false,
+					"default_branch":"main",
+					"updated_at":"2026-07-30T01:00:00Z",
+					"pushed_at":"2026-07-30T00:30:00Z"
+				},
+				{"id":2,"owner":{"login":"octocat"},"name":"beta","full_name":"octocat/beta"}
+			]`)
+		case 2:
+			if request.URL.Query().Get("page") != "2" ||
+				request.URL.Query().Get("per_page") != "3" {
+				t.Errorf("second query = %s", request.URL.RawQuery)
+			}
+			_, _ = io.WriteString(writer, `[
+				{"id":3,"owner":{"login":"octocat"},"name":"gamma","full_name":"octocat/gamma"},
+				{"id":4,"owner":{"login":"octocat"},"name":"must-not-escape-limit"}
+			]`)
+		default:
+			t.Errorf("unexpected request %d", attempt)
+		}
+	}))
+	defer server.Close()
+
+	repositories, rateLimit, err := newTestClient(t, server.URL, "").
+		ListRepositories(context.Background(), "octocat", 3)
+	if err != nil {
+		t.Fatalf("ListRepositories() error = %v", err)
+	}
+	if len(repositories) != 3 {
+		t.Fatalf("repository count = %d, want 3", len(repositories))
+	}
+	if repositories[0].FullName != "octocat/alpha" ||
+		repositories[0].MainLanguage != "Go" ||
+		repositories[0].Stars != 10 ||
+		repositories[2].Name != "gamma" {
+		t.Fatalf("repositories = %+v", repositories)
+	}
+	if !rateLimit.Known || rateLimit.Remaining != 48 {
+		t.Fatalf("rate limit = %+v", rateLimit)
+	}
+	if got := requests.Load(); got != 2 {
+		t.Fatalf("requests = %d, want 2", got)
+	}
+}
+
+func TestListRepositoriesStopsWithoutNextLink(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(
+		writer http.ResponseWriter,
+		_ *http.Request,
+	) {
+		requests.Add(1)
+		_, _ = io.WriteString(writer, `[{"id":1,"name":"only"}]`)
+	}))
+	defer server.Close()
+
+	repositories, _, err := newTestClient(t, server.URL, "").
+		ListRepositories(context.Background(), "octocat", 100)
+	if err != nil {
+		t.Fatalf("ListRepositories() error = %v", err)
+	}
+	if len(repositories) != 1 || requests.Load() != 1 {
+		t.Fatalf("repositories = %d, requests = %d", len(repositories), requests.Load())
+	}
+}
+
 func newTestClient(t *testing.T, rawURL, token string) *Client {
 	t.Helper()
 	baseURL, err := url.Parse(rawURL)

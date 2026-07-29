@@ -11,8 +11,10 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/repository"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/user"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
 )
@@ -117,6 +119,72 @@ func (c *Client) GetUser(
 		},
 		RateLimit: rateLimit,
 	}, nil
+}
+
+func (c *Client) ListRepositories(
+	ctx context.Context,
+	username user.Username,
+	limit int,
+) ([]repository.Summary, port.RateLimit, error) {
+	if limit <= 0 {
+		return []repository.Summary{}, port.RateLimit{}, nil
+	}
+
+	repositories := make([]repository.Summary, 0, limit)
+	var rateLimit port.RateLimit
+	pageSize := min(100, limit)
+
+	for pageNumber := 1; len(repositories) < limit; pageNumber++ {
+		endpoint := *c.baseURL
+		endpoint.Path = path.Join(
+			endpoint.Path,
+			"users",
+			url.PathEscape(username.String()),
+			"repos",
+		)
+		query := endpoint.Query()
+		query.Set("type", "owner")
+		query.Set("sort", "updated")
+		query.Set("direction", "desc")
+		query.Set("per_page", strconv.Itoa(pageSize))
+		query.Set("page", strconv.Itoa(pageNumber))
+		endpoint.RawQuery = query.Encode()
+
+		response, err := c.do(ctx, endpoint.String())
+		if err != nil {
+			return nil, rateLimit, err
+		}
+
+		rateLimit = parseRateLimit(response.Header)
+		if statusErr := responseError(response.StatusCode, rateLimit); statusErr != nil {
+			drainAndClose(response.Body)
+			return nil, rateLimit, statusErr
+		}
+
+		var payload []repositoryResponse
+		decoder := json.NewDecoder(io.LimitReader(response.Body, maxResponseBytes))
+		decodeErr := decoder.Decode(&payload)
+		_ = response.Body.Close()
+		if decodeErr != nil {
+			return nil, rateLimit, &port.GitHubError{
+				Kind:  port.GitHubErrorUpstream,
+				Cause: fmt.Errorf("decode GitHub repository response: %w", decodeErr),
+			}
+		}
+
+		for _, item := range payload {
+			repositories = append(repositories, item.toDomain())
+			if len(repositories) == limit {
+				break
+			}
+		}
+
+		if len(payload) == 0 || !hasNextPage(response.Header.Get("Link")) {
+			break
+		}
+	}
+
+	return repositories, rateLimit, nil
 }
 
 func (c *Client) do(ctx context.Context, endpoint string) (*http.Response, error) {
@@ -250,6 +318,15 @@ func stringValue(value *string) string {
 	return *value
 }
 
+func hasNextPage(linkHeader string) bool {
+	for _, link := range strings.Split(linkHeader, ",") {
+		if strings.Contains(link, `rel="next"`) {
+			return true
+		}
+	}
+	return false
+}
+
 type userResponse struct {
 	Login       string  `json:"login"`
 	Name        *string `json:"name"`
@@ -260,4 +337,51 @@ type userResponse struct {
 	Following   int     `json:"following"`
 }
 
+type repositoryResponse struct {
+	ID            int64      `json:"id"`
+	Owner         owner      `json:"owner"`
+	Name          string     `json:"name"`
+	FullName      string     `json:"full_name"`
+	Description   *string    `json:"description"`
+	HTMLURL       string     `json:"html_url"`
+	Language      *string    `json:"language"`
+	Stars         int        `json:"stargazers_count"`
+	Forks         int        `json:"forks_count"`
+	OpenIssues    int        `json:"open_issues_count"`
+	Fork          bool       `json:"fork"`
+	Archived      bool       `json:"archived"`
+	DefaultBranch string     `json:"default_branch"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	PushedAt      *time.Time `json:"pushed_at"`
+}
+
+type owner struct {
+	Login string `json:"login"`
+}
+
+func (r repositoryResponse) toDomain() repository.Summary {
+	var pushedAt time.Time
+	if r.PushedAt != nil {
+		pushedAt = r.PushedAt.UTC()
+	}
+	return repository.Summary{
+		ID:            r.ID,
+		Owner:         r.Owner.Login,
+		Name:          r.Name,
+		FullName:      r.FullName,
+		Description:   stringValue(r.Description),
+		URL:           r.HTMLURL,
+		MainLanguage:  stringValue(r.Language),
+		Stars:         r.Stars,
+		Forks:         r.Forks,
+		OpenIssues:    r.OpenIssues,
+		IsFork:        r.Fork,
+		IsArchived:    r.Archived,
+		DefaultBranch: r.DefaultBranch,
+		UpdatedAt:     r.UpdatedAt.UTC(),
+		PushedAt:      pushedAt,
+	}
+}
+
 var _ port.GitHubUserReader = (*Client)(nil)
+var _ port.GitHubRepositoryReader = (*Client)(nil)

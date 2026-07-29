@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/repository"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/user"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/platform/apperror"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
@@ -21,9 +22,13 @@ func TestGetGitHubUserExecute(t *testing.T) {
 			},
 			RateLimit: port.RateLimit{Remaining: 42},
 		},
+		repositories: []repository.Summary{
+			{Name: "hello-world", FullName: "octocat/hello-world"},
+		},
+		repositoryRateLimit: port.RateLimit{Known: true, Remaining: 41},
 	}
 
-	output, err := NewGetGitHubUser(reader).Execute(
+	output, err := NewGetGitHubUser(reader, 20).Execute(
 		context.Background(),
 		"octocat",
 	)
@@ -32,7 +37,8 @@ func TestGetGitHubUserExecute(t *testing.T) {
 	}
 	if output.Profile.Login != "octocat" ||
 		output.Profile.Name != "The Octocat" ||
-		output.RateLimit.Remaining != 42 {
+		len(output.Repositories) != 1 ||
+		output.RateLimit.Remaining != 41 {
 		t.Fatalf("Execute() output = %+v", output)
 	}
 }
@@ -74,7 +80,7 @@ func TestGetGitHubUserMapsErrors(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := NewGetGitHubUser(githubUserReaderStub{
 				err: test.readerErr,
-			}).Execute(context.Background(), "octocat")
+			}, 20).Execute(context.Background(), "octocat")
 
 			var applicationError *apperror.Error
 			if !errors.As(err, &applicationError) {
@@ -92,8 +98,10 @@ func TestGetGitHubUserMapsErrors(t *testing.T) {
 }
 
 type githubUserReaderStub struct {
-	result port.GitHubUserResult
-	err    error
+	result              port.GitHubUserResult
+	repositories        []repository.Summary
+	repositoryRateLimit port.RateLimit
+	err                 error
 }
 
 func (stub githubUserReaderStub) GetUser(
@@ -101,4 +109,12 @@ func (stub githubUserReaderStub) GetUser(
 	user.Username,
 ) (port.GitHubUserResult, error) {
 	return stub.result, stub.err
+}
+
+func (stub githubUserReaderStub) ListRepositories(
+	context.Context,
+	user.Username,
+	int,
+) ([]repository.Summary, port.RateLimit, error) {
+	return stub.repositories, stub.repositoryRateLimit, stub.err
 }

@@ -5,14 +5,16 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/repository"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/user"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/platform/apperror"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
 )
 
 type GetGitHubUserOutput struct {
-	Profile   user.Profile
-	RateLimit port.RateLimit
+	Profile      user.Profile
+	Repositories []repository.Summary
+	RateLimit    port.RateLimit
 }
 
 type GetGitHubUser interface {
@@ -23,11 +25,18 @@ type GetGitHubUser interface {
 }
 
 type getGitHubUser struct {
-	reader port.GitHubUserReader
+	reader          port.GitHubProfileReader
+	repositoryLimit int
 }
 
-func NewGetGitHubUser(reader port.GitHubUserReader) GetGitHubUser {
-	return &getGitHubUser{reader: reader}
+func NewGetGitHubUser(
+	reader port.GitHubProfileReader,
+	repositoryLimit int,
+) GetGitHubUser {
+	return &getGitHubUser{
+		reader:          reader,
+		repositoryLimit: repositoryLimit,
+	}
 }
 
 func (u *getGitHubUser) Execute(
@@ -39,9 +48,23 @@ func (u *getGitHubUser) Execute(
 		return GetGitHubUserOutput{}, mapGitHubUserError(err)
 	}
 
+	repositories, repositoryRateLimit, err := u.reader.ListRepositories(
+		ctx,
+		username,
+		u.repositoryLimit,
+	)
+	if err != nil {
+		return GetGitHubUserOutput{}, mapGitHubUserError(err)
+	}
+	rateLimit := result.RateLimit
+	if repositoryRateLimit.Known {
+		rateLimit = repositoryRateLimit
+	}
+
 	return GetGitHubUserOutput{
-		Profile:   result.Profile,
-		RateLimit: result.RateLimit,
+		Profile:      result.Profile,
+		Repositories: repositories,
+		RateLimit:    rateLimit,
 	}, nil
 }
 

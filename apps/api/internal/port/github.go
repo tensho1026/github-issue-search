@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/repository"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/user"
 )
 
@@ -52,4 +53,17 @@ type GitHubUserResult struct {
 // GitHubUserReader is the application-facing port for user profile reads.
 type GitHubUserReader interface {
 	GetUser(ctx context.Context, username user.Username) (GitHubUserResult, error)
+}
+
+type GitHubRepositoryReader interface {
+	ListRepositories(
+		ctx context.Context,
+		username user.Username,
+		limit int,
+	) ([]repository.Summary, RateLimit, error)
+}
+
+type GitHubProfileReader interface {
+	GitHubUserReader
+	GitHubRepositoryReader
 }

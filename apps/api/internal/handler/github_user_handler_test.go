@@ -6,8 +6,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/repository"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/user"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/platform/apperror"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
@@ -27,6 +29,25 @@ func TestGitHubUserHandlerGet(t *testing.T) {
 				PublicRepos: 8,
 				Followers:   10,
 				Following:   2,
+			},
+			Repositories: []repository.Summary{
+				{
+					Owner:        "octocat",
+					Name:         "hello-world",
+					FullName:     "octocat/hello-world",
+					MainLanguage: "Go",
+					Stars:        10,
+					UpdatedAt: time.Date(
+						2026,
+						time.July,
+						30,
+						1,
+						0,
+						0,
+						0,
+						time.UTC,
+					),
+				},
 			},
 			RateLimit: port.RateLimit{Known: true, Remaining: 42},
 		},
@@ -51,6 +72,9 @@ func TestGitHubUserHandlerGet(t *testing.T) {
 		`"name":"The Octocat"`,
 		`"publicRepos":8`,
 		`"rateLimitRemaining":42`,
+		`"fullName":"octocat/hello-world"`,
+		`"mainLanguage":"Go"`,
+		`"updatedAt":"2026-07-30T01:00:00Z"`,
 	} {
 		if !strings.Contains(body, value) {
 			t.Errorf("body missing %s: %s", value, body)

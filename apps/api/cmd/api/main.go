@@ -33,7 +33,10 @@ func main() {
 		cfg.GitHubRequestTimeout,
 		logger,
 	)
-	getGitHubUser := usecase.NewGetGitHubUser(gitHubClient)
+	getGitHubUser := usecase.NewGetGitHubUser(
+		gitHubClient,
+		cfg.ProfileRepositoryLimit,
+	)
 	httpHandler, err := router.New(router.Dependencies{
 		Config:        cfg,
 		Logger:        logger,
