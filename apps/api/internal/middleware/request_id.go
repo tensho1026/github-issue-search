@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"net/http"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -65,8 +64,4 @@ func generateRequestID() string {
 		time.Now().UTC().UnixNano(),
 		fallbackRequestIDCounter.Add(1),
 	)
-}
-
-func requestIDFromHeader(request *http.Request) string {
-	return request.Header.Get(requestIDHeader)
 }

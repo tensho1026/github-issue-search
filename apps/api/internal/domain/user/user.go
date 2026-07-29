@@ -22,10 +22,13 @@ func ParseUsername(raw string) (Username, error) {
 	previousHyphen := false
 	for _, character := range value {
 		isHyphen := character == '-'
+		isLowercaseLetter := character >= 'a' && character <= 'z'
+		isUppercaseLetter := character >= 'A' && character <= 'Z'
+		isDigit := character >= '0' && character <= '9'
 		if !isHyphen &&
-			!(character >= 'a' && character <= 'z') &&
-			!(character >= 'A' && character <= 'Z') &&
-			!(character >= '0' && character <= '9') {
+			!isLowercaseLetter &&
+			!isUppercaseLetter &&
+			!isDigit {
 			return "", ErrInvalidUsername
 		}
 		if isHyphen && previousHyphen {

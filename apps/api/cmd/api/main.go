@@ -74,7 +74,12 @@ func main() {
 		IdleTimeout:       cfg.IdleTimeout,
 	}
 
-	listener, err := net.Listen("tcp", httpServer.Addr)
+	listenConfig := net.ListenConfig{}
+	listener, err := listenConfig.Listen(
+		context.Background(),
+		"tcp",
+		httpServer.Addr,
+	)
 	if err != nil {
 		logger.Error("listen for API traffic", "error", err)
 		os.Exit(1)

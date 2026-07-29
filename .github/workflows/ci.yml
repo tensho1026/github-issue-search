@@ -1,0 +1,383 @@
+name: CI
+
+on:
+  pull_request:
+    types:
+      - edited
+      - opened
+      - ready_for_review
+      - reopened
+      - synchronize
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOLANGCI_LINT_VERSION: v2.12.2
+  NODE_VERSION: 24.18.0
+  PNPM_VERSION: 10.12.4
+
+jobs:
+  changes:
+    name: Detect changed scopes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.scopes.outputs.backend }}
+      contracts: ${{ steps.scopes.outputs.contracts }}
+      docs: ${{ steps.scopes.outputs.docs }}
+      e2e: ${{ steps.scopes.outputs.e2e }}
+      frontend: ${{ steps.scopes.outputs.frontend }}
+    steps:
+      - name: Check out the exact revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detect affected applications
+        id: scopes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: node scripts/ci/detect-changes.mjs "${BASE_SHA}" "${HEAD_SHA}"
+
+  repository-quality:
+    name: Repository quality
+    needs:
+      - changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the exact revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          run_install: false
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          cache-dependency-path: apps/api/go.sum
+          go-version-file: apps/api/go.mod
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install verified actionlint
+        run: bash scripts/ci/install-actionlint.sh
+
+      - name: Check formatting
+        run: pnpm run format:check
+
+      - name: Check architecture boundaries
+        run: pnpm run architecture:check
+
+      - name: Lint workflows and workflow policy
+        run: pnpm run lint:workflows
+
+      - name: Lint shell scripts
+        run: shellcheck scripts/ci/*.sh
+
+      - name: Lint Markdown
+        run: pnpm run lint:docs
+
+      - name: Validate commit subjects
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/ci/check-commit-messages.mjs "${BASE_SHA}" "${HEAD_SHA}"
+
+      - name: Validate pull request metadata
+        if: github.event_name == 'pull_request'
+        run: node scripts/ci/check-pr-metadata.mjs
+
+  frontend:
+    name: Frontend
+    needs:
+      - changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the exact revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          run_install: false
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ESLint
+        run: pnpm run lint:web
+
+      - name: Run strict TypeScript checks
+        run: pnpm run typecheck
+
+      - name: Enforce frontend coverage
+        run: pnpm run coverage:web
+
+      - name: Build production frontend
+        run: pnpm run build:web
+
+      - name: Enforce bundle budget
+        run: pnpm run bundle:check
+
+      - name: Upload frontend evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          if-no-files-found: warn
+          name: frontend-evidence-${{ github.run_id }}
+          path: |
+            apps/web/coverage
+            apps/web/dist
+          retention-days: 7
+
+  backend:
+    name: Backend
+    needs:
+      - changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the exact revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install Node.js for quality budgets
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          cache-dependency-path: apps/api/go.sum
+          go-version-file: apps/api/go.mod
+
+      - name: Run strict Go linters
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
+        with:
+          args: --timeout=5m
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          working-directory: apps/api
+
+      - name: Run race tests and enforce coverage
+        run: bash scripts/ci/check-go-coverage.sh
+
+      - name: Build production API
+        run: |
+          mkdir -p artifacts/go
+          go -C apps/api build -trimpath -o ../../artifacts/go/issuescout-api ./cmd/api
+
+      - name: Upload backend evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          if-no-files-found: warn
+          name: backend-evidence-${{ github.run_id }}
+          path: artifacts/go
+          retention-days: 7
+
+  contracts:
+    name: API contracts
+    needs:
+      - changes
+    if: needs.changes.outputs.contracts == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the exact revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          run_install: false
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate OpenAPI and route drift
+        run: pnpm run contracts:check
+
+      - name: Upload validated contract
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openapi-contract-${{ github.run_id }}
+          path: packages/contracts/openapi.yaml
+          retention-days: 14
+
+  docs:
+    name: Documentation
+    needs:
+      - changes
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the exact revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          run_install: false
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint Markdown
+        run: pnpm run lint:docs
+
+  e2e:
+    name: End-to-end
+    needs:
+      - changes
+    if: needs.changes.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the exact revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          run_install: false
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          cache-dependency-path: apps/api/go.sum
+          go-version-file: apps/api/go.mod
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run built-stack smoke tests
+        run: pnpm run e2e
+
+      - name: Upload E2E failure evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          if-no-files-found: warn
+          name: e2e-evidence-${{ github.run_id }}
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7
+
+  required:
+    name: required
+    if: always()
+    needs:
+      - backend
+      - changes
+      - contracts
+      - docs
+      - e2e
+      - frontend
+      - repository-quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Enforce applicable job results
+        env:
+          BACKEND_RESULT: ${{ needs.backend.result }}
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          CONTRACTS_RESULT: ${{ needs.contracts.result }}
+          DOCS_RESULT: ${{ needs.docs.result }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          REPOSITORY_RESULT: ${{ needs.repository-quality.result }}
+        run: |
+          for result in \
+            "${BACKEND_RESULT}" \
+            "${CHANGES_RESULT}" \
+            "${CONTRACTS_RESULT}" \
+            "${DOCS_RESULT}" \
+            "${E2E_RESULT}" \
+            "${FRONTEND_RESULT}" \
+            "${REPOSITORY_RESULT}"; do
+            case "${result}" in
+              success | skipped) ;;
+              *)
+                echo "Required CI dependency ended with status: ${result}" >&2
+                exit 1
+                ;;
+            esac
+          done

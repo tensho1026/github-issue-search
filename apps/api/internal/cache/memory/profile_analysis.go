@@ -66,7 +66,14 @@ func (c *ProfileAnalysis) Get(
 	if !exists {
 		return port.ProfileAnalysisCacheEntry{}, false, nil
 	}
-	item := element.Value.(*profileAnalysisItem)
+	item, valid := element.Value.(*profileAnalysisItem)
+	if !valid {
+		delete(c.items, key)
+		c.recency.Remove(element)
+		return port.ProfileAnalysisCacheEntry{}, false, fmt.Errorf(
+			"profile analysis cache contains an invalid item",
+		)
+	}
 	if !c.now().Before(item.expiresAt) {
 		c.remove(element)
 		return port.ProfileAnalysisCacheEntry{}, false, nil
@@ -90,7 +97,12 @@ func (c *ProfileAnalysis) Set(
 
 	key := profileAnalysisKey(username)
 	if element, exists := c.items[key]; exists {
-		item := element.Value.(*profileAnalysisItem)
+		item, valid := element.Value.(*profileAnalysisItem)
+		if !valid {
+			delete(c.items, key)
+			c.recency.Remove(element)
+			return fmt.Errorf("profile analysis cache contains an invalid item")
+		}
 		item.entry = cloneProfileAnalysisEntry(entry)
 		item.expiresAt = c.now().Add(c.ttl)
 		c.recency.MoveToFront(element)
@@ -113,7 +125,11 @@ func (c *ProfileAnalysis) remove(element *list.Element) {
 	if element == nil {
 		return
 	}
-	item := element.Value.(*profileAnalysisItem)
+	item, valid := element.Value.(*profileAnalysisItem)
+	if !valid {
+		c.recency.Remove(element)
+		return
+	}
 	delete(c.items, item.key)
 	c.recency.Remove(element)
 }

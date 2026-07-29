@@ -11,7 +11,15 @@ export default defineConfig({
   },
   test: {
     clearMocks: true,
+    coverage: {
+      exclude: ["src/main.tsx", "src/test/**"],
+      include: ["src/**/*.{ts,tsx}"],
+      provider: "v8",
+      reporter: ["text", "json-summary", "lcov"],
+      reportsDirectory: "./coverage",
+    },
     environment: "jsdom",
+    include: ["src/**/*.test.{ts,tsx}"],
     setupFiles: ["./src/test/setup.ts"],
   },
 });

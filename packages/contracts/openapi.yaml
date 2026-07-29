@@ -1,0 +1,367 @@
+openapi: 3.1.0
+info:
+  title: IssueScout API
+  version: 0.1.0
+  description: |
+    Stateless API for analyzing a public GitHub profile and finding suitable
+    open-source issues. GitHub credentials remain server-side.
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: http://127.0.0.1:8080
+    description: Local development
+security: []
+tags:
+  - name: System
+    description: Runtime health and operational endpoints.
+  - name: GitHub profiles
+    description: Normalized public GitHub profile and technology analysis.
+paths:
+  /api/health:
+    get:
+      operationId: getHealth
+      summary: Check API health
+      tags:
+        - System
+      responses:
+        "200":
+          description: The API process is ready to serve requests.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthEnvelope"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/github/users/{username}:
+    parameters:
+      - $ref: "#/components/parameters/GitHubUsername"
+    get:
+      operationId: getGitHubUser
+      summary: Get a normalized public GitHub profile
+      tags:
+        - GitHub profiles
+      responses:
+        "200":
+          description: The public profile and bounded repository summaries.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitHubUserEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/GitHubUserNotFound"
+        "429":
+          $ref: "#/components/responses/GitHubRateLimited"
+        "502":
+          $ref: "#/components/responses/GitHubUpstreamError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/github/users/{username}/profile-analysis:
+    parameters:
+      - $ref: "#/components/parameters/GitHubUsername"
+    get:
+      operationId: analyzeGitHubProfile
+      summary: Analyze public repository languages and frameworks
+      tags:
+        - GitHub profiles
+      responses:
+        "200":
+          description: A bounded analysis with optional partial-data warnings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileAnalysisEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/GitHubUserNotFound"
+        "429":
+          $ref: "#/components/responses/GitHubRateLimited"
+        "502":
+          $ref: "#/components/responses/GitHubUpstreamError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+components:
+  parameters:
+    GitHubUsername:
+      name: username
+      in: path
+      required: true
+      description: Public GitHub login, without a leading at-sign.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 39
+        pattern: "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?!-)){0,37}[A-Za-z0-9]$|^[A-Za-z0-9]$"
+      example: tensho1026
+  responses:
+    InvalidRequest:
+      description: A path or request value failed validation.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ForbiddenOrigin:
+      description: The browser Origin is not in the configured allowlist.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    GitHubUserNotFound:
+      description: The requested GitHub user does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    GitHubRateLimited:
+      description: GitHub refused the request because its rate limit was exhausted.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    GitHubUpstreamError:
+      description: Required public data could not be retrieved from GitHub.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    RequestTimeout:
+      description: The bounded request deadline elapsed or the client cancelled.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+  schemas:
+    Meta:
+      type: object
+      additionalProperties: false
+      required:
+        - requestId
+        - timestamp
+      properties:
+        requestId:
+          type: string
+          minLength: 1
+          example: req_01JTEST123
+        timestamp:
+          type: string
+          format: date-time
+        rateLimitRemaining:
+          type: integer
+          minimum: 0
+          example: 4998
+    HealthEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - status
+          properties:
+            status:
+              type: string
+              const: ok
+        meta:
+          $ref: "#/components/schemas/Meta"
+    GitHubUserEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/GitHubUser"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    GitHubUser:
+      type: object
+      additionalProperties: false
+      required:
+        - avatarUrl
+        - bio
+        - followers
+        - following
+        - login
+        - name
+        - publicRepos
+        - repositories
+      properties:
+        login:
+          type: string
+        name:
+          type: string
+        avatarUrl:
+          type: string
+          format: uri
+        bio:
+          type: string
+        publicRepos:
+          type: integer
+          minimum: 0
+        followers:
+          type: integer
+          minimum: 0
+        following:
+          type: integer
+          minimum: 0
+        repositories:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/RepositorySummary"
+    RepositorySummary:
+      type: object
+      additionalProperties: false
+      required:
+        - defaultBranch
+        - description
+        - forks
+        - fullName
+        - isArchived
+        - isFork
+        - mainLanguage
+        - name
+        - openIssues
+        - owner
+        - pushedAt
+        - stars
+        - updatedAt
+        - url
+      properties:
+        owner:
+          type: string
+        name:
+          type: string
+        fullName:
+          type: string
+        description:
+          type: string
+        url:
+          type: string
+          format: uri
+        mainLanguage:
+          type: string
+        stars:
+          type: integer
+          minimum: 0
+        forks:
+          type: integer
+          minimum: 0
+        openIssues:
+          type: integer
+          minimum: 0
+        isFork:
+          type: boolean
+        isArchived:
+          type: boolean
+        defaultBranch:
+          type: string
+        updatedAt:
+          type: string
+        pushedAt:
+          type: string
+    ProfileAnalysisEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/ProfileAnalysis"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    ProfileAnalysis:
+      type: object
+      additionalProperties: false
+      required:
+        - frameworks
+        - languages
+        - repositoriesAnalyzed
+        - username
+        - warnings
+      properties:
+        username:
+          type: string
+        languages:
+          type: array
+          items:
+            $ref: "#/components/schemas/LanguageShare"
+        frameworks:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+        repositoriesAnalyzed:
+          type: integer
+          minimum: 0
+          maximum: 20
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnalysisWarning"
+    LanguageShare:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - percentage
+      properties:
+        name:
+          type: string
+          minLength: 1
+        percentage:
+          type: integer
+          minimum: 0
+          maximum: 100
+    AnalysisWarning:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        repository:
+          type: string
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+        - meta
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              enum:
+                - GITHUB_API_ERROR
+                - GITHUB_RATE_LIMIT_EXCEEDED
+                - GITHUB_USER_NOT_FOUND
+                - INTERNAL_SERVER_ERROR
+                - INVALID_REQUEST
+                - NOT_FOUND
+                - REQUEST_TIMEOUT
+            message:
+              type: string
+        meta:
+          $ref: "#/components/schemas/Meta"

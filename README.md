@@ -1,5 +1,7 @@
 # IssueScout
 
+[![CI](https://github.com/tensho1026/github-issue-search/actions/workflows/ci.yml/badge.svg)](https://github.com/tensho1026/github-issue-search/actions/workflows/ci.yml)
+
 IssueScout helps developers find open-source issues they can realistically
 complete. It compares a GitHub user's public technology profile with issue
 requirements, estimated effort, and repository health.
@@ -26,7 +28,7 @@ future extension seams.
 
 ## Prerequisites
 
-- Node.js 22.12 or newer (Node 24 is recommended)
+- Node.js 22.13 or newer (Node 24 LTS is recommended)
 - pnpm 10
 - Go 1.25
 - A GitHub personal access token is optional for the foundation and will be
@@ -71,6 +73,11 @@ make build
 
 `make check` runs the complete local gate in the same order expected by CI.
 Generated output is ignored and can be removed with `make clean`.
+
+The strict pull request pipeline additionally enforces coverage, bundle,
+OpenAPI drift, architecture, workflow, contribution metadata, and built-stack
+E2E checks. See [the CI guide](docs/ci.md) for local equivalents, quality
+budgets, artifact retention, and branch protection.
 
 Performance-sensitive code is developed against explicit limits: at most 20
 repositories per profile, 50 search candidates, 20 detailed candidates, three
