@@ -105,7 +105,7 @@ type GitHubProfileAnalysisReader interface {
 
 // GitHubIssueSearcher finds one bounded candidate window. Pagination of
 // eligible results is an application concern and never drives unbounded
-// upstream Search API paging.
+// upstream GraphQL Search paging or repository-detail fan-out.
 type GitHubIssueSearcher interface {
 	SearchIssues(
 		ctx context.Context,

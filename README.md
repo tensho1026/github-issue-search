@@ -79,8 +79,10 @@ Omitted filters use the MVP defaults: at least 10 stars, updated within 180
 days, maximum preliminary difficulty 3, non-archived repositories, English
 allowed, and the `good first issue` or `help wanted` labels. See the
 [versioned OpenAPI contract](packages/contracts/openapi.yaml) for all request,
-response, pagination, exclusion, cache-header, and error details. A server-only
-`GITHUB_TOKEN` is strongly recommended for practical GitHub rate limits.
+response, pagination, exclusion, cache-header, and error details. Issue search
+uses GitHub's authenticated GraphQL API, so the API process requires a
+server-only `GITHUB_TOKEN` for this route. Browser callers remain anonymous and
+the token is never returned to them.
 
 ## Quality commands
 

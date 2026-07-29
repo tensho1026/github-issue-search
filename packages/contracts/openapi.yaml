@@ -92,11 +92,15 @@ paths:
       operationId: searchGitHubIssues
       summary: Find eligible public GitHub issue candidates
       description: |
-        Searches one bounded GitHub Search API window of at most 50 candidates,
-        then applies repository and issue eligibility rules before application
-        pagination. Equivalent validated filter orderings share a five-minute
-        in-memory cache. The endpoint never follows unbounded upstream pages or
-        returns GitHub response objects directly.
+        Searches one bounded, authenticated GitHub GraphQL Search window of at
+        most 50 candidates and retrieves the required repository fields in the
+        same request. It then applies repository and issue eligibility rules
+        before application pagination. Equivalent validated filter orderings
+        share a five-minute in-memory cache. The endpoint never follows
+        unbounded upstream pages, fans out to repository detail requests, or
+        returns GitHub response objects directly. The IssueScout endpoint is
+        anonymous to browser clients, while the API process requires a
+        server-only GITHUB_TOKEN for its upstream GraphQL request.
       tags:
         - Issue discovery
       parameters:

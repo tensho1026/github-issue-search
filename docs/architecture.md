@@ -76,13 +76,15 @@ GitHub search (up to 50 candidates)
   -> final scoring and deterministic ranking
 ```
 
-The implemented discovery stage performs exactly one GitHub issue-search
-request with `per_page <= 50` and never fans out to repository detail
-endpoints. It combines typed, safely quoted GitHub qualifiers for open public
-issues, no assignee, label OR, language OR, recency, and archived status.
-Repository stars, repository recency, preliminary difficulty, bots, suspicious
-credential-shaped text, description sufficiency, and optional framework or
-language mismatches are then checked against normalized domain models.
+The implemented discovery stage performs exactly one authenticated GitHub
+GraphQL issue-search request with `first <= 50` and never fans out to
+repository detail endpoints. The query returns each issue and the repository
+fields needed by discovery in one bounded response. It combines typed, safely
+quoted GitHub qualifiers for open public issues, no assignee, label OR,
+language OR, recency, and archived status. Repository stars, repository
+recency, preliminary difficulty, bots, suspicious credential-shaped text,
+description sufficiency, and optional framework or language mismatches are
+then checked against normalized domain models.
 
 ```mermaid
 sequenceDiagram
@@ -99,8 +101,8 @@ sequenceDiagram
     alt cache hit
         Cache-->>Search: Eligible bounded candidates
     else cache miss
-        Search->>GitHub: One encoded Search API request (max 50)
-        GitHub-->>Search: Issue and repository DTOs + rate limit
+        Search->>GitHub: One encoded GraphQL Search request (first <= 50)
+        GitHub-->>Search: Issue + repository nodes + rate limit
         Search->>Search: Normalize and record exclusion reasons
         Search->>Cache: Store deep copy for five minutes
     end
@@ -122,6 +124,11 @@ External calls carry the inbound context and use a ten-second client timeout.
 Only transient network failures and HTTP 502/503/504 responses are retried, at
 most twice, with jittered exponential backoff. Authentication, validation,
 not-found, permission, and rate-limit responses are never retried.
+
+GitHub's GraphQL API requires server authentication. `GITHUB_TOKEN` therefore
+must be configured for issue discovery even though the IssueScout HTTP route
+itself remains anonymous. The token stays inside the API process and is never
+part of cache keys, application responses, logs, or browser configuration.
 
 The bounded in-memory cache implements a port so a future adapter can replace
 it. Initial TTLs are deliberately different by data volatility:
