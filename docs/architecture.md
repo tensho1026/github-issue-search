@@ -69,11 +69,50 @@ Search uses staged enrichment:
 
 ```text
 GitHub search (up to 50 candidates)
-  -> cheap eligibility checks and preliminary score
+  -> normalize GitHub transport data
+  -> cheap eligibility checks and preliminary label difficulty
   -> select the top 20 candidates
   -> bounded repository and issue enrichment (default concurrency: 5)
   -> final scoring and deterministic ranking
 ```
+
+The implemented discovery stage performs exactly one GitHub issue-search
+request with `per_page <= 50` and never fans out to repository detail
+endpoints. It combines typed, safely quoted GitHub qualifiers for open public
+issues, no assignee, label OR, language OR, recency, and archived status.
+Repository stars, repository recency, preliminary difficulty, bots, suspicious
+credential-shaped text, description sufficiency, and optional framework or
+language mismatches are then checked against normalized domain models.
+
+```mermaid
+sequenceDiagram
+    participant Browser
+    participant Handler
+    participant Search as Search usecase
+    participant Cache as TTL/LRU cache
+    participant GitHub
+
+    Browser->>Handler: POST /api/issues/search
+    Handler->>Handler: Strict JSON, criteria, page validation
+    Handler->>Search: Validated criteria and page
+    Search->>Cache: Canonical SHA-256 condition key
+    alt cache hit
+        Cache-->>Search: Eligible bounded candidates
+    else cache miss
+        Search->>GitHub: One encoded Search API request (max 50)
+        GitHub-->>Search: Issue and repository DTOs + rate limit
+        Search->>Search: Normalize and record exclusion reasons
+        Search->>Cache: Store deep copy for five minutes
+    end
+    Search-->>Handler: Page + diagnostics + warnings
+    Handler-->>Browser: Standard data/meta envelope
+```
+
+The canonical cache key lowercases, deduplicates, and sorts validated filter
+collections. Pagination is intentionally outside that key, so different pages
+reuse the same eligible candidate window. The in-memory adapter owns deep
+copies, is concurrency-safe, has a fixed capacity, and uses LRU eviction. Equal
+concurrent cache misses are coalesced into one upstream request.
 
 Profile analysis inspects at most 20 repositories and three supported manifest
 files per repository. The limits and concurrency are configuration values that
@@ -93,6 +132,11 @@ it. Initial TTLs are deliberately different by data volatility:
 | Profile analysis   | 30 minutes |
 | Issue search       |  5 minutes |
 | Repository details | 15 minutes |
+
+Issue search uses `ISSUE_SEARCH_RESULT_LIMIT` (maximum 50),
+`ISSUE_SEARCH_CACHE_TTL` (five minutes by default), and
+`ISSUE_SEARCH_CACHE_CAPACITY` (1000 entries by default). Invalid or excessive
+values fail process startup.
 
 Partial enrichment failures return useful successful items plus typed warnings;
 a missing user or a failed primary search remains a request-level error.
@@ -122,12 +166,16 @@ a missing user or a failed primary search remains a request-level error.
 ## Security principles
 
 - GitHub tokens are server-only and never appear in API responses, browser
-  bundles, logs, fixtures, or container layers.
+  bundles, logs, fixtures, native binaries, or release archives.
 - Upstream responses are normalized; the browser never receives arbitrary
   GitHub transport objects.
 - Configuration is read from the environment and examples contain no secrets.
 - CORS, timeouts, error mapping, and security headers are enforced at the API
   boundary in issue #2.
+- Search values reject quotes, backslashes, control characters, unknown JSON
+  fields, and oversized request bodies before any GitHub request.
+- Issue candidates containing credential-shaped text are excluded from
+  recommendations and counted using a non-content exclusion code.
 - Untrusted issue content is rendered without raw HTML execution.
 
 ## Quality principles
