@@ -58,12 +58,30 @@ func main() {
 		cfg.ManifestFileLimit,
 		cfg.GitHubMaxConcurrency,
 	)
+	issueSearchCache, err := memory.NewIssueSearch(
+		cfg.IssueSearchCacheCapacity,
+		cfg.IssueSearchCacheTTL,
+	)
+	if err != nil {
+		logger.Error("compose issue search cache", "error", err)
+		os.Exit(1)
+	}
+	searchIssues, err := usecase.NewSearchIssues(
+		gitHubClient,
+		issueSearchCache,
+		cfg.IssueSearchResultLimit,
+	)
+	if err != nil {
+		logger.Error("compose issue search usecase", "error", err)
+		os.Exit(1)
+	}
 	httpHandler, err := router.New(router.Dependencies{
 		Config:               cfg,
 		Logger:               logger,
 		Responder:            response.NewResponder(),
 		GetGitHubUser:        getGitHubUser,
 		AnalyzeGitHubProfile: analyzeGitHubProfile,
+		SearchIssues:         searchIssues,
 	})
 	if err != nil {
 		logger.Error("compose API router", "error", err)
