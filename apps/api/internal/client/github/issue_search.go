@@ -1,26 +1,100 @@
 package github
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/issue"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/repository"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
 )
 
 const (
 	maxIssueSearchQueryBytes    = 1024
 	maxIssueSearchResponseBytes = 8 << 20
+
+	graphQLIssueSearchDocument = `query IssueScoutIssueSearch($searchQuery: String!, $first: Int!) {
+  search(query: $searchQuery, type: ISSUE, first: $first) {
+    issueCount
+    pageInfo {
+      hasNextPage
+    }
+    nodes {
+      __typename
+      ... on Issue {
+        number
+        title
+        body
+        url
+        state
+        locked
+        createdAt
+        updatedAt
+        comments {
+          totalCount
+        }
+        author {
+          login
+          __typename
+        }
+        labels(first: 100) {
+          nodes {
+            name
+          }
+        }
+        assignees(first: 10) {
+          nodes {
+            login
+          }
+        }
+        repository {
+          databaseId
+          name
+          nameWithOwner
+          url
+          description
+          stargazerCount
+          forkCount
+          isFork
+          isArchived
+          updatedAt
+          pushedAt
+          primaryLanguage {
+            name
+          }
+          defaultBranchRef {
+            name
+          }
+          owner {
+            login
+          }
+          issues(states: OPEN) {
+            totalCount
+          }
+        }
+      }
+    }
+  }
+  rateLimit {
+    limit
+    remaining
+    resetAt
+  }
+}`
 )
 
+// SearchIssues retrieves one bounded GraphQL search window and normalizes each
+// issue together with its repository. The single query avoids an N+1
+// repository-detail fan-out.
 func (c *Client) SearchIssues(
 	ctx context.Context,
 	criteria issue.SearchCriteria,
@@ -37,73 +111,224 @@ func (c *Client) SearchIssues(
 	if err != nil {
 		return port.GitHubIssueSearchResult{}, err
 	}
+	requestPayload, err := json.Marshal(graphQLIssueSearchRequest{
+		Query: graphQLIssueSearchDocument,
+		Variables: graphQLIssueSearchVariables{
+			SearchQuery: searchQuery,
+			First:       limit,
+		},
+	})
+	if err != nil {
+		return port.GitHubIssueSearchResult{}, upstreamDecodeError(
+			"GitHub GraphQL issue search request",
+			err,
+		)
+	}
 
 	endpoint := *c.baseURL
-	endpoint.Path = path.Join(endpoint.Path, "search", "issues")
-	query := endpoint.Query()
-	query.Set("q", searchQuery)
-	query.Set("sort", "updated")
-	query.Set("order", "desc")
-	query.Set("per_page", strconv.Itoa(limit))
-	query.Set("page", "1")
-	endpoint.RawQuery = query.Encode()
-
-	response, err := c.do(ctx, endpoint.String())
+	endpoint.Path = path.Join(endpoint.Path, "graphql")
+	endpoint.RawQuery = ""
+	response, err := c.doRequest(ctx, func() (*http.Request, error) {
+		request, requestErr := c.newRequest(
+			ctx,
+			http.MethodPost,
+			endpoint.String(),
+			bytes.NewReader(requestPayload),
+		)
+		if requestErr != nil {
+			return nil, requestErr
+		}
+		request.Header.Set("Content-Type", "application/json")
+		return request, nil
+	})
 	if err != nil {
 		return port.GitHubIssueSearchResult{}, err
 	}
 	defer response.Body.Close()
 
-	rateLimit := parseRateLimit(response.Header)
-	if statusErr := responseError(response.StatusCode, rateLimit); statusErr != nil {
+	headerRateLimit := parseRateLimit(response.Header)
+	if statusErr := responseError(response.StatusCode, headerRateLimit); statusErr != nil {
 		return port.GitHubIssueSearchResult{}, statusErr
 	}
 
-	var payload issueSearchResponse
-	decoder := json.NewDecoder(
-		io.LimitReader(response.Body, maxIssueSearchResponseBytes),
+	payload, err := decodeGraphQLIssueSearchResponse(response.Body)
+	if err != nil {
+		return port.GitHubIssueSearchResult{}, err
+	}
+	rateLimit, err := normalizeGraphQLRateLimit(payload.Data.RateLimit, headerRateLimit)
+	if err != nil {
+		return port.GitHubIssueSearchResult{}, err
+	}
+
+	result, err := normalizeGraphQLIssueSearch(payload, limit, rateLimit)
+	if err != nil {
+		return port.GitHubIssueSearchResult{}, err
+	}
+
+	c.logger.Debug(
+		"GitHub GraphQL issue search response received",
+		"status", response.StatusCode,
+		"candidateCount", len(result.Candidates),
+		"upstreamTotal", result.TotalCount,
+		"incompleteResults", result.IncompleteResults,
+		"rateLimitKnown", result.RateLimit.Known,
+		"rateLimitRemaining", result.RateLimit.Remaining,
 	)
-	if decodeErr := decoder.Decode(&payload); decodeErr != nil {
-		return port.GitHubIssueSearchResult{}, upstreamDecodeError(
-			"GitHub issue search response",
-			decodeErr,
+	return result, nil
+}
+
+func decodeGraphQLIssueSearchResponse(
+	body io.Reader,
+) (graphQLIssueSearchEnvelope, error) {
+	raw, err := io.ReadAll(io.LimitReader(body, maxIssueSearchResponseBytes+1))
+	if err != nil {
+		return graphQLIssueSearchEnvelope{}, upstreamDecodeError(
+			"GitHub GraphQL issue search response",
+			err,
 		)
 	}
-	if payload.TotalCount < len(payload.Items) || len(payload.Items) > limit {
-		return port.GitHubIssueSearchResult{}, upstreamDecodeError(
-			"GitHub issue search response",
-			fmt.Errorf("contains invalid result counts"),
+	if len(raw) > maxIssueSearchResponseBytes {
+		return graphQLIssueSearchEnvelope{}, upstreamDecodeError(
+			"GitHub GraphQL issue search response",
+			fmt.Errorf("exceeds %d bytes", maxIssueSearchResponseBytes),
 		)
 	}
 
-	candidates := make([]issue.Candidate, 0, len(payload.Items))
-	for index, item := range payload.Items {
-		candidate, mappingErr := item.toDomain()
+	var payload graphQLIssueSearchEnvelope
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return graphQLIssueSearchEnvelope{}, upstreamDecodeError(
+			"GitHub GraphQL issue search response",
+			err,
+		)
+	}
+	return payload, nil
+}
+
+func normalizeGraphQLIssueSearch(
+	payload graphQLIssueSearchEnvelope,
+	limit int,
+	rateLimit port.RateLimit,
+) (port.GitHubIssueSearchResult, error) {
+	if payload.Data.Search == nil {
+		if len(payload.Errors) > 0 {
+			return port.GitHubIssueSearchResult{}, graphQLIssueSearchError(
+				payload.Errors,
+				rateLimit,
+			)
+		}
+		return port.GitHubIssueSearchResult{}, upstreamDecodeError(
+			"GitHub GraphQL issue search response",
+			errors.New("does not contain search data"),
+		)
+	}
+
+	search := payload.Data.Search
+	if search.IssueCount < 0 ||
+		search.IssueCount < len(search.Nodes) ||
+		len(search.Nodes) > limit {
+		return port.GitHubIssueSearchResult{}, upstreamDecodeError(
+			"GitHub GraphQL issue search response",
+			errors.New("contains invalid result counts"),
+		)
+	}
+
+	candidates := make([]issue.Candidate, 0, len(search.Nodes))
+	for index, node := range search.Nodes {
+		var candidate issue.Candidate
+		var mappingErr error
+		if node == nil {
+			mappingErr = errors.New("contains a null issue node")
+		} else {
+			candidate, mappingErr = node.toDomain()
+		}
 		if mappingErr != nil {
+			if len(payload.Errors) > 0 {
+				continue
+			}
 			return port.GitHubIssueSearchResult{}, upstreamDecodeError(
-				"GitHub issue search response",
-				fmt.Errorf("item %d: %w", index, mappingErr),
+				"GitHub GraphQL issue search response",
+				fmt.Errorf("node %d: %w", index, mappingErr),
 			)
 		}
 		candidates = append(candidates, candidate)
 	}
 
-	c.logger.Debug(
-		"GitHub issue search response received",
-		"status", response.StatusCode,
-		"candidateCount", len(candidates),
-		"upstreamTotal", payload.TotalCount,
-		"incompleteResults", payload.IncompleteResults,
-		"rateLimitKnown", rateLimit.Known,
-		"rateLimitRemaining", rateLimit.Remaining,
-	)
-
+	if len(payload.Errors) > 0 && len(candidates) == 0 {
+		return port.GitHubIssueSearchResult{}, graphQLIssueSearchError(
+			payload.Errors,
+			rateLimit,
+		)
+	}
 	return port.GitHubIssueSearchResult{
 		Candidates:        candidates,
-		TotalCount:        payload.TotalCount,
-		IncompleteResults: payload.IncompleteResults,
+		TotalCount:        search.IssueCount,
+		IncompleteResults: len(payload.Errors) > 0,
 		RateLimit:         rateLimit,
 	}, nil
+}
+
+func normalizeGraphQLRateLimit(
+	graphQL *graphQLRateLimit,
+	fallback port.RateLimit,
+) (port.RateLimit, error) {
+	if graphQL == nil {
+		return fallback, nil
+	}
+	if graphQL.Limit == nil ||
+		graphQL.Remaining == nil ||
+		graphQL.ResetAt == nil ||
+		*graphQL.Limit < 0 ||
+		*graphQL.Remaining < 0 ||
+		*graphQL.Remaining > *graphQL.Limit ||
+		graphQL.ResetAt.IsZero() {
+		return port.RateLimit{}, upstreamDecodeError(
+			"GitHub GraphQL issue search response",
+			errors.New("contains invalid rate-limit data"),
+		)
+	}
+	return port.RateLimit{
+		Known:     true,
+		Limit:     *graphQL.Limit,
+		Remaining: *graphQL.Remaining,
+		Reset:     graphQL.ResetAt.UTC(),
+	}, nil
+}
+
+func graphQLIssueSearchError(
+	graphQLErrors []graphQLError,
+	rateLimit port.RateLimit,
+) error {
+	kind := port.GitHubErrorUpstream
+	for _, graphQLError := range graphQLErrors {
+		classification := strings.ToUpper(strings.Join([]string{
+			graphQLError.Type,
+			graphQLError.Extensions.Code,
+			graphQLError.Message,
+		}, " "))
+		switch {
+		case strings.Contains(classification, "RATE_LIMIT"),
+			strings.Contains(classification, "RATE LIMIT"),
+			strings.Contains(classification, "ABUSE"):
+			kind = port.GitHubErrorRateLimited
+		case kind != port.GitHubErrorRateLimited &&
+			(strings.Contains(classification, "UNAUTHORIZED") ||
+				strings.Contains(classification, "FORBIDDEN")):
+			kind = port.GitHubErrorUnauthorized
+		}
+	}
+
+	var reset time.Time
+	if kind == port.GitHubErrorRateLimited {
+		reset = rateLimit.Reset
+	}
+	return &port.GitHubError{
+		Kind:  kind,
+		Reset: reset,
+		Cause: fmt.Errorf(
+			"GitHub GraphQL issue search returned %d error(s)",
+			len(graphQLErrors),
+		),
+	}
 }
 
 func buildIssueSearchQuery(
@@ -165,74 +390,163 @@ func quoteSearchValue(value issue.FilterValue) string {
 	return `"` + value.String() + `"`
 }
 
-type issueSearchResponse struct {
-	TotalCount        int               `json:"total_count"`
-	IncompleteResults bool              `json:"incomplete_results"`
-	Items             []issueSearchItem `json:"items"`
+type graphQLIssueSearchRequest struct {
+	Query     string                      `json:"query"`
+	Variables graphQLIssueSearchVariables `json:"variables"`
 }
 
-type issueSearchItem struct {
-	Number      int                  `json:"number"`
-	Title       string               `json:"title"`
-	Body        *string              `json:"body"`
-	HTMLURL     string               `json:"html_url"`
-	State       string               `json:"state"`
-	Labels      []issueLabelResponse `json:"labels"`
-	Assignees   []owner              `json:"assignees"`
-	User        owner                `json:"user"`
-	Comments    int                  `json:"comments"`
-	PullRequest json.RawMessage      `json:"pull_request"`
-	Locked      bool                 `json:"locked"`
-	CreatedAt   time.Time            `json:"created_at"`
-	UpdatedAt   time.Time            `json:"updated_at"`
-	Repository  repositoryResponse   `json:"repository"`
+type graphQLIssueSearchVariables struct {
+	SearchQuery string `json:"searchQuery"`
+	First       int    `json:"first"`
 }
 
-type issueLabelResponse struct {
+type graphQLIssueSearchEnvelope struct {
+	Data struct {
+		Search    *graphQLIssueSearchConnection `json:"search"`
+		RateLimit *graphQLRateLimit             `json:"rateLimit"`
+	} `json:"data"`
+	Errors []graphQLError `json:"errors"`
+}
+
+type graphQLIssueSearchConnection struct {
+	IssueCount int                 `json:"issueCount"`
+	PageInfo   graphQLPageInfo     `json:"pageInfo"`
+	Nodes      []*graphQLIssueNode `json:"nodes"`
+}
+
+type graphQLPageInfo struct {
+	HasNextPage bool `json:"hasNextPage"`
+}
+
+type graphQLIssueNode struct {
+	TypeName   string                    `json:"__typename"`
+	Number     int                       `json:"number"`
+	Title      string                    `json:"title"`
+	Body       *string                   `json:"body"`
+	URL        string                    `json:"url"`
+	State      string                    `json:"state"`
+	Locked     bool                      `json:"locked"`
+	CreatedAt  time.Time                 `json:"createdAt"`
+	UpdatedAt  time.Time                 `json:"updatedAt"`
+	Comments   graphQLTotalCount         `json:"comments"`
+	Author     *graphQLActor             `json:"author"`
+	Labels     graphQLLabelConnection    `json:"labels"`
+	Assignees  graphQLAssigneeConnection `json:"assignees"`
+	Repository graphQLIssueRepository    `json:"repository"`
+}
+
+type graphQLActor struct {
+	Login    string `json:"login"`
+	TypeName string `json:"__typename"`
+}
+
+type graphQLLabelConnection struct {
+	Nodes []graphQLLabel `json:"nodes"`
+}
+
+type graphQLLabel struct {
 	Name string `json:"name"`
 }
 
-func (item issueSearchItem) toDomain() (issue.Candidate, error) {
-	if item.Number < 1 ||
-		strings.TrimSpace(item.Title) == "" ||
-		strings.TrimSpace(item.HTMLURL) == "" ||
-		strings.TrimSpace(item.State) == "" ||
-		strings.TrimSpace(item.User.Login) == "" ||
-		item.Comments < 0 ||
-		item.CreatedAt.IsZero() ||
-		item.UpdatedAt.IsZero() {
+type graphQLAssigneeConnection struct {
+	Nodes []graphQLActor `json:"nodes"`
+}
+
+type graphQLTotalCount struct {
+	TotalCount int `json:"totalCount"`
+}
+
+type graphQLIssueRepository struct {
+	DatabaseID      *int64                 `json:"databaseId"`
+	Owner           graphQLActor           `json:"owner"`
+	Name            string                 `json:"name"`
+	NameWithOwner   string                 `json:"nameWithOwner"`
+	URL             string                 `json:"url"`
+	Description     *string                `json:"description"`
+	StargazerCount  int                    `json:"stargazerCount"`
+	ForkCount       int                    `json:"forkCount"`
+	OpenIssues      graphQLTotalCount      `json:"issues"`
+	IsFork          bool                   `json:"isFork"`
+	IsArchived      bool                   `json:"isArchived"`
+	DefaultBranch   *graphQLRepositoryName `json:"defaultBranchRef"`
+	PrimaryLanguage *graphQLRepositoryName `json:"primaryLanguage"`
+	UpdatedAt       time.Time              `json:"updatedAt"`
+	PushedAt        *time.Time             `json:"pushedAt"`
+}
+
+type graphQLRepositoryName struct {
+	Name string `json:"name"`
+}
+
+type graphQLRateLimit struct {
+	Limit     *int       `json:"limit"`
+	Remaining *int       `json:"remaining"`
+	ResetAt   *time.Time `json:"resetAt"`
+}
+
+type graphQLError struct {
+	Message    string `json:"message"`
+	Type       string `json:"type"`
+	Extensions struct {
+		Code string `json:"code"`
+	} `json:"extensions"`
+}
+
+func (node graphQLIssueNode) toDomain() (issue.Candidate, error) {
+	if node.TypeName != "Issue" {
+		return issue.Candidate{}, fmt.Errorf(
+			"contains unexpected node type %q",
+			node.TypeName,
+		)
+	}
+	if node.Number < 1 ||
+		strings.TrimSpace(node.Title) == "" ||
+		strings.TrimSpace(node.URL) == "" ||
+		strings.TrimSpace(node.State) == "" ||
+		node.Comments.TotalCount < 0 ||
+		node.CreatedAt.IsZero() ||
+		node.UpdatedAt.IsZero() {
 		return issue.Candidate{}, errors.New("contains invalid issue fields")
 	}
-	if err := validateAbsoluteHTTPURL(item.HTMLURL); err != nil {
+	if err := validateAbsoluteHTTPURL(node.URL); err != nil {
 		return issue.Candidate{}, fmt.Errorf("invalid issue URL: %w", err)
 	}
 
-	repository := item.Repository.toDomain()
-	if repository.ID < 1 ||
-		strings.TrimSpace(repository.Owner) == "" ||
-		strings.TrimSpace(repository.Name) == "" ||
-		strings.TrimSpace(repository.FullName) == "" ||
-		strings.TrimSpace(repository.URL) == "" ||
-		repository.Stars < 0 ||
-		repository.Forks < 0 ||
-		repository.OpenIssues < 0 ||
-		repository.UpdatedAt.IsZero() {
+	authorLogin := "ghost"
+	authorType := "Unknown"
+	if node.Author != nil {
+		authorLogin = strings.TrimSpace(node.Author.Login)
+		authorType = strings.TrimSpace(node.Author.TypeName)
+		if authorLogin == "" || authorType == "" {
+			return issue.Candidate{}, errors.New("contains invalid author fields")
+		}
+	}
+
+	repositorySummary := node.Repository.toDomain()
+	if strings.TrimSpace(repositorySummary.Owner) == "" ||
+		strings.TrimSpace(repositorySummary.Name) == "" ||
+		strings.TrimSpace(repositorySummary.FullName) == "" ||
+		strings.TrimSpace(repositorySummary.URL) == "" ||
+		repositorySummary.Stars < 0 ||
+		repositorySummary.Forks < 0 ||
+		repositorySummary.OpenIssues < 0 ||
+		repositorySummary.UpdatedAt.IsZero() {
 		return issue.Candidate{}, errors.New("contains invalid repository fields")
 	}
-	if err := validateAbsoluteHTTPURL(repository.URL); err != nil {
+	if err := validateAbsoluteHTTPURL(repositorySummary.URL); err != nil {
 		return issue.Candidate{}, fmt.Errorf("invalid repository URL: %w", err)
 	}
 
-	labels := make([]string, 0, len(item.Labels))
-	for _, label := range item.Labels {
+	labels := make([]string, 0, len(node.Labels.Nodes))
+	for _, label := range node.Labels.Nodes {
 		name := strings.TrimSpace(label.Name)
 		if name == "" {
 			return issue.Candidate{}, errors.New("contains a blank label")
 		}
 		labels = append(labels, name)
 	}
-	assignees := make([]string, 0, len(item.Assignees))
-	for _, assignee := range item.Assignees {
+	assignees := make([]string, 0, len(node.Assignees.Nodes))
+	for _, assignee := range node.Assignees.Nodes {
 		login := strings.TrimSpace(assignee.Login)
 		if login == "" {
 			return issue.Candidate{}, errors.New("contains a blank assignee")
@@ -241,25 +555,60 @@ func (item issueSearchItem) toDomain() (issue.Candidate, error) {
 	}
 
 	return issue.Candidate{
-		Repository: repository,
+		Repository: repositorySummary,
 		Issue: issue.Summary{
-			Number:      item.Number,
-			Title:       strings.TrimSpace(item.Title),
-			Body:        stringValue(item.Body),
-			URL:         item.HTMLURL,
-			State:       item.State,
-			Labels:      labels,
-			Assignees:   assignees,
-			AuthorLogin: item.User.Login,
-			AuthorType:  item.User.Type,
-			Comments:    item.Comments,
-			IsPullRequest: len(item.PullRequest) > 0 &&
-				string(item.PullRequest) != "null",
-			Locked:    item.Locked,
-			CreatedAt: item.CreatedAt.UTC(),
-			UpdatedAt: item.UpdatedAt.UTC(),
+			Number:        node.Number,
+			Title:         strings.TrimSpace(node.Title),
+			Body:          stringValue(node.Body),
+			URL:           node.URL,
+			State:         node.State,
+			Labels:        labels,
+			Assignees:     assignees,
+			AuthorLogin:   authorLogin,
+			AuthorType:    authorType,
+			Comments:      node.Comments.TotalCount,
+			IsPullRequest: false,
+			Locked:        node.Locked,
+			CreatedAt:     node.CreatedAt.UTC(),
+			UpdatedAt:     node.UpdatedAt.UTC(),
 		},
 	}, nil
+}
+
+func (repositoryResponse graphQLIssueRepository) toDomain() repository.Summary {
+	var id int64
+	if repositoryResponse.DatabaseID != nil {
+		id = *repositoryResponse.DatabaseID
+	}
+	var pushedAt time.Time
+	if repositoryResponse.PushedAt != nil {
+		pushedAt = repositoryResponse.PushedAt.UTC()
+	}
+	var mainLanguage string
+	if repositoryResponse.PrimaryLanguage != nil {
+		mainLanguage = repositoryResponse.PrimaryLanguage.Name
+	}
+	var defaultBranch string
+	if repositoryResponse.DefaultBranch != nil {
+		defaultBranch = repositoryResponse.DefaultBranch.Name
+	}
+	return repository.Summary{
+		ID:            id,
+		Owner:         repositoryResponse.Owner.Login,
+		Name:          repositoryResponse.Name,
+		FullName:      repositoryResponse.NameWithOwner,
+		Description:   stringValue(repositoryResponse.Description),
+		URL:           repositoryResponse.URL,
+		MainLanguage:  mainLanguage,
+		Stars:         repositoryResponse.StargazerCount,
+		Forks:         repositoryResponse.ForkCount,
+		OpenIssues:    repositoryResponse.OpenIssues.TotalCount,
+		IsFork:        repositoryResponse.IsFork,
+		IsArchived:    repositoryResponse.IsArchived,
+		DefaultBranch: defaultBranch,
+		UpdatedAt:     repositoryResponse.UpdatedAt.UTC(),
+		PushedAt:      pushedAt,
+	}
 }
 
 func validateAbsoluteHTTPURL(raw string) error {

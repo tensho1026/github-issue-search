@@ -2,11 +2,14 @@ package github
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -14,6 +17,39 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/issue"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
 )
+
+const validGraphQLIssueNode = `{
+	"__typename":"Issue",
+	"number":123,
+	"title":"Add request validation",
+	"body":"The Gin handler needs validation, clear errors, regression tests, and acceptance criteria.",
+	"url":"https://github.com/example/example-api/issues/123",
+	"state":"OPEN",
+	"locked":false,
+	"createdAt":"2026-07-28T10:00:00Z",
+	"updatedAt":"2026-07-30T10:00:00Z",
+	"comments":{"totalCount":4},
+	"author":{"login":"contributor","__typename":"User"},
+	"labels":{"nodes":[{"name":"good first issue"}]},
+	"assignees":{"nodes":[]},
+	"repository":{
+		"databaseId":99,
+		"owner":{"login":"example","__typename":"Organization"},
+		"name":"example-api",
+		"nameWithOwner":"example/example-api",
+		"description":"A production Gin service",
+		"url":"https://github.com/example/example-api",
+		"primaryLanguage":{"name":"Go"},
+		"stargazerCount":120,
+		"forkCount":3,
+		"issues":{"totalCount":7},
+		"isFork":false,
+		"isArchived":false,
+		"defaultBranchRef":{"name":"main"},
+		"updatedAt":"2026-07-30T09:00:00Z",
+		"pushedAt":"2026-07-30T09:00:00Z"
+	}
+}`
 
 func TestBuildIssueSearchQueryUsesCanonicalSafeQualifiers(t *testing.T) {
 	criteria := issueSearchCriteria(t, issue.SearchCriteriaOptions{
@@ -38,7 +74,7 @@ func TestBuildIssueSearchQueryUsesCanonicalSafeQualifiers(t *testing.T) {
 	}
 }
 
-func TestSearchIssuesEncodesRequestAndNormalizesPayload(t *testing.T) {
+func TestSearchIssuesPostsGraphQLAndNormalizesPayload(t *testing.T) {
 	now := time.Date(2026, time.July, 30, 12, 0, 0, 0, time.UTC)
 	var requests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(
@@ -46,60 +82,44 @@ func TestSearchIssuesEncodesRequestAndNormalizesPayload(t *testing.T) {
 		request *http.Request,
 	) {
 		requests.Add(1)
-		if request.URL.Path != "/search/issues" {
-			t.Errorf("path = %q", request.URL.Path)
+		if request.Method != http.MethodPost {
+			t.Errorf("method = %q", request.Method)
 		}
-		query := request.URL.Query()
-		if query.Get("sort") != "updated" ||
-			query.Get("order") != "desc" ||
-			query.Get("per_page") != "50" ||
-			query.Get("page") != "1" {
-			t.Errorf("query parameters = %s", request.URL.RawQuery)
+		if request.URL.Path != "/graphql" || request.URL.RawQuery != "" {
+			t.Errorf("URL = %q", request.URL.String())
 		}
-		if strings.Contains(request.URL.RawQuery, "good first issue") {
-			t.Errorf("raw query was not URL encoded: %s", request.URL.RawQuery)
+		if got := request.Header.Get("Content-Type"); got != "application/json" {
+			t.Errorf("Content-Type = %q", got)
 		}
 		if got := request.Header.Get("Authorization"); got != "Bearer test-token" {
 			t.Errorf("Authorization = %q", got)
 		}
+
+		var payload graphQLIssueSearchRequest
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			t.Errorf("decode request: %v", err)
+		}
+		if payload.Query != graphQLIssueSearchDocument {
+			t.Error("request did not use the pinned GraphQL document")
+		}
+		if payload.Variables.First != 50 {
+			t.Errorf("first = %d", payload.Variables.First)
+		}
+		if strings.Contains(payload.Variables.SearchQuery, `language:`) {
+			t.Errorf("unexpected language filter = %q", payload.Variables.SearchQuery)
+		}
+		if !strings.Contains(
+			payload.Variables.SearchQuery,
+			`label:"good first issue","help wanted"`,
+		) {
+			t.Errorf("searchQuery = %q", payload.Variables.SearchQuery)
+		}
+
 		writer.Header().Set("Content-Type", "application/json")
-		writer.Header().Set("X-RateLimit-Limit", "30")
-		writer.Header().Set("X-RateLimit-Remaining", "29")
-		_, _ = io.WriteString(writer, `{
-			"total_count":1234,
-			"incomplete_results":true,
-			"items":[{
-				"number":123,
-				"title":"Add request validation",
-				"body":"The Gin handler needs validation, clear errors, regression tests, and acceptance criteria.",
-				"html_url":"https://github.com/example/example-api/issues/123",
-				"state":"open",
-				"labels":[{"name":"good first issue"}],
-				"assignees":[],
-				"user":{"login":"contributor","type":"User"},
-				"comments":4,
-				"locked":false,
-				"created_at":"2026-07-28T10:00:00Z",
-				"updated_at":"2026-07-30T10:00:00Z",
-				"repository":{
-					"id":99,
-					"owner":{"login":"example"},
-					"name":"example-api",
-					"full_name":"example/example-api",
-					"description":"A production Gin service",
-					"html_url":"https://github.com/example/example-api",
-					"language":"Go",
-					"stargazers_count":120,
-					"forks_count":3,
-					"open_issues_count":7,
-					"fork":false,
-					"archived":false,
-					"default_branch":"main",
-					"updated_at":"2026-07-30T09:00:00Z",
-					"pushed_at":"2026-07-30T09:00:00Z"
-				}
-			}]
-		}`)
+		_, _ = io.WriteString(writer, graphQLIssueSearchResponse(
+			1234,
+			validGraphQLIssueNode,
+		))
 	}))
 	defer server.Close()
 
@@ -118,56 +138,46 @@ func TestSearchIssuesEncodesRequestAndNormalizesPayload(t *testing.T) {
 
 	if requests.Load() != 1 ||
 		result.TotalCount != 1234 ||
-		!result.IncompleteResults ||
+		result.IncompleteResults ||
+		result.RateLimit.Limit != 5000 ||
 		result.RateLimit.Remaining != 29 ||
 		len(result.Candidates) != 1 {
 		t.Fatalf("SearchIssues() result = %+v, requests = %d", result, requests.Load())
 	}
 	candidate := result.Candidates[0]
-	if candidate.Repository.FullName != "example/example-api" ||
+	if candidate.Repository.ID != 99 ||
+		candidate.Repository.FullName != "example/example-api" ||
 		candidate.Repository.MainLanguage != "Go" ||
+		candidate.Repository.DefaultBranch != "main" ||
 		candidate.Repository.Stars != 120 ||
 		candidate.Issue.Number != 123 ||
 		candidate.Issue.AuthorType != "User" ||
+		candidate.Issue.State != "OPEN" ||
 		candidate.Issue.IsPullRequest ||
 		len(candidate.Issue.Labels) != 1 {
 		t.Fatalf("candidate = %+v", candidate)
 	}
 }
 
-func TestSearchIssuesMarksPullRequestsWithoutLeakingPayload(t *testing.T) {
-	server := jsonServer(`{
-		"total_count":1,
-		"incomplete_results":false,
-		"items":[{
-			"number":1,
-			"title":"A valid pull request title",
-			"body":"This body contains enough meaningful information to pass normalization checks.",
-			"html_url":"https://github.com/example/repo/pull/1",
-			"state":"open",
-			"labels":[],
-			"assignees":[],
-			"user":{"login":"octocat","type":"User"},
-			"comments":0,
-			"pull_request":{"url":"https://api.github.com/repos/example/repo/pulls/1"},
-			"created_at":"2026-07-28T10:00:00Z",
-			"updated_at":"2026-07-30T10:00:00Z",
-			"repository":{
-				"id":1,
-				"owner":{"login":"example"},
-				"name":"repo",
-				"full_name":"example/repo",
-				"html_url":"https://github.com/example/repo",
-				"stargazers_count":10,
-				"forks_count":0,
-				"open_issues_count":1,
-				"updated_at":"2026-07-30T09:00:00Z"
-			}
-		}]
-	}`)
+func TestSearchIssuesAllowsDeletedAuthorAndMissingOptionalRepositoryFields(
+	t *testing.T,
+) {
+	node := strings.NewReplacer(
+		`"author":{"login":"contributor","__typename":"User"}`,
+		`"author":null`,
+		`"databaseId":99,`,
+		`"databaseId":null,`,
+		`"primaryLanguage":{"name":"Go"}`,
+		`"primaryLanguage":null`,
+		`"defaultBranchRef":{"name":"main"}`,
+		`"defaultBranchRef":null`,
+		`"pushedAt":"2026-07-30T09:00:00Z"`,
+		`"pushedAt":null`,
+	).Replace(validGraphQLIssueNode)
+	server := jsonServer(graphQLIssueSearchResponse(1, node))
 	defer server.Close()
 
-	result, err := newTestClient(t, server.URL, "").SearchIssues(
+	result, err := newTestClient(t, server.URL, "token").SearchIssues(
 		context.Background(),
 		issueSearchCriteria(t, issue.SearchCriteriaOptions{Username: "octocat"}),
 		1,
@@ -175,8 +185,47 @@ func TestSearchIssuesMarksPullRequestsWithoutLeakingPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SearchIssues() error = %v", err)
 	}
-	if !result.Candidates[0].Issue.IsPullRequest {
-		t.Fatal("pull request marker was not normalized")
+	candidate := result.Candidates[0]
+	if candidate.Issue.AuthorLogin != "ghost" ||
+		candidate.Issue.AuthorType != "Unknown" ||
+		candidate.Repository.ID != 0 ||
+		candidate.Repository.MainLanguage != "" ||
+		candidate.Repository.DefaultBranch != "" ||
+		!candidate.Repository.PushedAt.IsZero() {
+		t.Fatalf("candidate = %+v", candidate)
+	}
+}
+
+func TestSearchIssuesReturnsValidNodesWithPartialError(t *testing.T) {
+	server := jsonServer(`{
+		"data":{
+			"search":{
+				"issueCount":2,
+				"pageInfo":{"hasNextPage":false},
+				"nodes":[` + validGraphQLIssueNode + `,null]
+			},
+			"rateLimit":{
+				"limit":5000,
+				"remaining":20,
+				"resetAt":"2026-07-30T13:00:00Z"
+			}
+		},
+		"errors":[{"type":"INTERNAL","message":"one node could not be resolved"}]
+	}`)
+	defer server.Close()
+
+	result, err := newTestClient(t, server.URL, "token").SearchIssues(
+		context.Background(),
+		issueSearchCriteria(t, issue.SearchCriteriaOptions{Username: "octocat"}),
+		2,
+	)
+	if err != nil {
+		t.Fatalf("SearchIssues() error = %v", err)
+	}
+	if !result.IncompleteResults ||
+		result.TotalCount != 2 ||
+		len(result.Candidates) != 1 {
+		t.Fatalf("result = %+v", result)
 	}
 }
 
@@ -237,14 +286,41 @@ func TestSearchIssuesRejectsMalformedUpstreamResults(t *testing.T) {
 		name string
 		body string
 	}{
-		{name: "malformed JSON", body: `{"items":`},
+		{name: "malformed JSON", body: `{"data":`},
 		{
 			name: "negative total",
-			body: `{"total_count":-1,"items":[]}`,
+			body: `{"data":{"search":{"issueCount":-1,"nodes":[]}}}`,
 		},
 		{
-			name: "invalid item",
-			body: `{"total_count":1,"items":[{"number":0}]}`,
+			name: "invalid node",
+			body: `{"data":{"search":{"issueCount":1,"nodes":[
+				{"__typename":"Issue","number":0}
+			]}}}`,
+		},
+		{
+			name: "unexpected node type",
+			body: `{"data":{"search":{"issueCount":1,"nodes":[
+				{"__typename":"PullRequest"}
+			]}}}`,
+		},
+		{
+			name: "invalid rate limit",
+			body: `{"data":{
+				"search":{"issueCount":0,"nodes":[]},
+				"rateLimit":{
+					"limit":10,
+					"remaining":11,
+					"resetAt":"2026-07-30T13:00:00Z"
+				}
+			}}`,
+		},
+		{
+			name: "missing search data",
+			body: `{"data":{"rateLimit":{
+				"limit":10,
+				"remaining":9,
+				"resetAt":"2026-07-30T13:00:00Z"
+			}}}`,
 		},
 	}
 
@@ -253,7 +329,7 @@ func TestSearchIssuesRejectsMalformedUpstreamResults(t *testing.T) {
 			server := jsonServer(test.body)
 			defer server.Close()
 
-			_, err := newTestClient(t, server.URL, "").SearchIssues(
+			_, err := newTestClient(t, server.URL, "token").SearchIssues(
 				context.Background(),
 				issueSearchCriteria(
 					t,
@@ -265,6 +341,148 @@ func TestSearchIssuesRejectsMalformedUpstreamResults(t *testing.T) {
 				t.Fatalf("SearchIssues() error = %v", err)
 			}
 		})
+	}
+}
+
+func TestSearchIssuesMapsGraphQLErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		kind port.GitHubErrorKind
+	}{
+		{
+			name: "rate limited",
+			body: `{"data":{
+				"search":null,
+				"rateLimit":{
+					"limit":5000,
+					"remaining":0,
+					"resetAt":"2026-07-30T13:00:00Z"
+				}
+			},"errors":[{"type":"RATE_LIMITED","message":"rate limit exceeded"}]}`,
+			kind: port.GitHubErrorRateLimited,
+		},
+		{
+			name: "forbidden",
+			body: `{"data":{"search":null},"errors":[
+				{"extensions":{"code":"FORBIDDEN"},"message":"denied"}
+			]}`,
+			kind: port.GitHubErrorUnauthorized,
+		},
+		{
+			name: "upstream",
+			body: `{"data":{"search":null},"errors":[
+				{"type":"INTERNAL","message":"unavailable"}
+			]}`,
+			kind: port.GitHubErrorUpstream,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			server := jsonServer(test.body)
+			defer server.Close()
+
+			_, err := newTestClient(t, server.URL, "token").SearchIssues(
+				context.Background(),
+				issueSearchCriteria(
+					t,
+					issue.SearchCriteriaOptions{Username: "octocat"},
+				),
+				50,
+			)
+			if !port.IsGitHubError(err, test.kind) {
+				t.Fatalf("SearchIssues() error = %v", err)
+			}
+			if test.kind == port.GitHubErrorRateLimited {
+				var gitHubError *port.GitHubError
+				if !errors.As(err, &gitHubError) ||
+					gitHubError.Reset.IsZero() {
+					t.Fatalf("rate-limit error = %+v", gitHubError)
+				}
+			}
+		})
+	}
+}
+
+func TestSearchIssuesRetriesTransientGraphQLRequestWithCompleteBody(
+	t *testing.T,
+) {
+	var requests atomic.Int32
+	var bodiesMu sync.Mutex
+	var bodies [][]byte
+	server := httptest.NewServer(http.HandlerFunc(func(
+		writer http.ResponseWriter,
+		request *http.Request,
+	) {
+		body, err := io.ReadAll(request.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		bodiesMu.Lock()
+		bodies = append(bodies, body)
+		bodiesMu.Unlock()
+
+		if requests.Add(1) == 1 {
+			writer.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(writer, graphQLIssueSearchResponse(1, validGraphQLIssueNode))
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL, "token")
+	client.sleep = func(context.Context, time.Duration) error { return nil }
+	result, err := client.SearchIssues(
+		context.Background(),
+		issueSearchCriteria(t, issue.SearchCriteriaOptions{Username: "octocat"}),
+		1,
+	)
+	if err != nil {
+		t.Fatalf("SearchIssues() error = %v", err)
+	}
+	if requests.Load() != 2 || len(result.Candidates) != 1 {
+		t.Fatalf("requests = %d, result = %+v", requests.Load(), result)
+	}
+	bodiesMu.Lock()
+	defer bodiesMu.Unlock()
+	if len(bodies) != 2 ||
+		len(bodies[0]) == 0 ||
+		string(bodies[0]) != string(bodies[1]) {
+		t.Fatalf("request bodies were not recreated: lengths = %d, %d", len(bodies[0]), len(bodies[1]))
+	}
+}
+
+func TestSearchIssuesUsesHeaderRateLimitWhenGraphQLMetadataIsMissing(
+	t *testing.T,
+) {
+	server := httptest.NewServer(http.HandlerFunc(func(
+		writer http.ResponseWriter,
+		_ *http.Request,
+	) {
+		writer.Header().Set("X-RateLimit-Limit", "30")
+		writer.Header().Set("X-RateLimit-Remaining", "29")
+		writer.Header().Set("X-RateLimit-Reset", "1785416400")
+		_, _ = io.WriteString(writer, `{"data":{
+			"search":{"issueCount":0,"nodes":[]}
+		}}`)
+	}))
+	defer server.Close()
+
+	result, err := newTestClient(t, server.URL, "token").SearchIssues(
+		context.Background(),
+		issueSearchCriteria(t, issue.SearchCriteriaOptions{Username: "octocat"}),
+		1,
+	)
+	if err != nil {
+		t.Fatalf("SearchIssues() error = %v", err)
+	}
+	if !result.RateLimit.Known ||
+		result.RateLimit.Limit != 30 ||
+		result.RateLimit.Remaining != 29 ||
+		result.RateLimit.Reset.IsZero() {
+		t.Fatalf("rate limit = %+v", result.RateLimit)
 	}
 }
 
@@ -290,6 +508,23 @@ func TestSearchIssuesPropagatesCancellation(t *testing.T) {
 	if requests.Load() != 1 {
 		t.Fatalf("requests = %d, want 1", requests.Load())
 	}
+}
+
+func graphQLIssueSearchResponse(total int, nodes ...string) string {
+	return `{
+		"data":{
+			"search":{
+				"issueCount":` + strconv.Itoa(total) + `,
+				"pageInfo":{"hasNextPage":true},
+				"nodes":[` + strings.Join(nodes, ",") + `]
+			},
+			"rateLimit":{
+				"limit":5000,
+				"remaining":29,
+				"resetAt":"2026-07-30T13:00:00Z"
+			}
+		}
+	}`
 }
 
 func issueSearchCriteria(

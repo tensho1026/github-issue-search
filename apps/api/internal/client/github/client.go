@@ -33,8 +33,9 @@ type httpDoer interface {
 
 type sleepFunc func(context.Context, time.Duration) error
 type backoffFunc func(retry int) time.Duration
+type requestFactory func() (*http.Request, error)
 
-// Client adapts GitHub REST payloads to IssueScout application ports.
+// Client adapts bounded GitHub REST and GraphQL payloads to IssueScout ports.
 type Client struct {
 	baseURL    *url.URL
 	token      string
@@ -316,19 +317,22 @@ func upstreamDecodeError(description string, err error) error {
 }
 
 func (c *Client) do(ctx context.Context, endpoint string) (*http.Response, error) {
+	return c.doRequest(ctx, func() (*http.Request, error) {
+		return c.newRequest(ctx, http.MethodGet, endpoint, nil)
+	})
+}
+
+func (c *Client) doRequest(
+	ctx context.Context,
+	createRequest requestFactory,
+) (*http.Response, error) {
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		request, err := createRequest()
 		if err != nil {
 			return nil, &port.GitHubError{
 				Kind:  port.GitHubErrorUpstream,
 				Cause: fmt.Errorf("create GitHub request: %w", err),
 			}
-		}
-		request.Header.Set("Accept", "application/vnd.github+json")
-		request.Header.Set("X-GitHub-Api-Version", apiVersion)
-		request.Header.Set("User-Agent", "IssueScout")
-		if c.token != "" {
-			request.Header.Set("Authorization", "Bearer "+c.token)
 		}
 
 		response, requestErr := c.httpClient.Do(request)
@@ -360,6 +364,25 @@ func (c *Client) do(ctx context.Context, endpoint string) (*http.Response, error
 	}
 
 	panic("unreachable GitHub retry loop")
+}
+
+func (c *Client) newRequest(
+	ctx context.Context,
+	method string,
+	endpoint string,
+	body io.Reader,
+) (*http.Request, error) {
+	request, err := http.NewRequestWithContext(ctx, method, endpoint, body)
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Accept", "application/vnd.github+json")
+	request.Header.Set("X-GitHub-Api-Version", apiVersion)
+	request.Header.Set("User-Agent", "IssueScout")
+	if c.token != "" {
+		request.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	return request, nil
 }
 
 func retryableStatus(status int) bool {
