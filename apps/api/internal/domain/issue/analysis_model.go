@@ -5,6 +5,8 @@ const (
 	// engine. GitHub content beyond this limit cannot increase complexity
 	// without bound.
 	MaximumAnalysisTextBytes = 64 << 10
+	// MaximumAnalysisLabels bounds label-derived rule evidence.
+	MaximumAnalysisLabels = 100
 	// MaximumAnalysisDependencies bounds manifest-derived dependency evidence.
 	MaximumAnalysisDependencies = 100
 )
