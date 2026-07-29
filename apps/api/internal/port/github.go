@@ -50,6 +50,17 @@ type GitHubUserResult struct {
 	RateLimit RateLimit
 }
 
+type GitHubLanguagesResult struct {
+	Languages map[string]int64
+	RateLimit RateLimit
+}
+
+type GitHubRepositoryFileResult struct {
+	Content   []byte
+	Exists    bool
+	RateLimit RateLimit
+}
+
 // GitHubUserReader is the application-facing port for user profile reads.
 type GitHubUserReader interface {
 	GetUser(ctx context.Context, username user.Username) (GitHubUserResult, error)
@@ -66,4 +77,19 @@ type GitHubRepositoryReader interface {
 type GitHubProfileReader interface {
 	GitHubUserReader
 	GitHubRepositoryReader
+}
+
+type GitHubProfileAnalysisReader interface {
+	GitHubProfileReader
+	GetRepositoryLanguages(
+		ctx context.Context,
+		owner string,
+		name string,
+	) (GitHubLanguagesResult, error)
+	GetRepositoryFile(
+		ctx context.Context,
+		owner string,
+		name string,
+		filePath string,
+	) (GitHubRepositoryFileResult, error)
 }
