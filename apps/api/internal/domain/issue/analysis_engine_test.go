@@ -10,6 +10,8 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/repository"
 )
 
+var benchmarkAnalysisResult Analysis
+
 func TestAnalyzeIssueAssessesConcreteBugQualitySignals(t *testing.T) {
 	body := `
 ## Problem description
@@ -561,4 +563,32 @@ func mustMarshalAnalysis(t *testing.T, analysis Analysis) []byte {
 		t.Fatalf("json.Marshal() error = %v", err)
 	}
 	return encoded
+}
+
+func BenchmarkAnalyzeIssueBoundedRichInput(b *testing.B) {
+	input := AnalysisInput{
+		Candidate: analysisCandidate(
+			"Implement accessible React account search",
+			strings.Repeat(`
+## Problem description
+Implement a React frontend and Go backend API with PostgreSQL migration,
+keyboard accessibility, regression tests, and acceptance criteria.
+`, 32),
+			[]string{"enhancement", "frontend", "backend", "accessibility"},
+			"Go",
+			12,
+		),
+		Dependencies: []string{
+			"react",
+			"typescript",
+			"github.com/gin-gonic/gin",
+			"github.com/jackc/pgx/v5",
+			"vitest",
+		},
+		HasMaintainerGuidance: true,
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		benchmarkAnalysisResult = AnalyzeIssue(input)
+	}
 }
