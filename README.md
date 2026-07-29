@@ -28,7 +28,7 @@ future extension seams.
 
 ## Prerequisites
 
-- Node.js 22.12 or newer (Node 24 is recommended)
+- Node.js 22.13 or newer (Node 24 LTS is recommended)
 - pnpm 10
 - Go 1.25
 - A GitHub personal access token is optional for the foundation and will be
