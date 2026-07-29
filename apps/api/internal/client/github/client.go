@@ -88,16 +88,16 @@ func (c *Client) GetUser(
 		"rateLimitReset", rateLimit.Reset,
 	)
 
-	if err := responseError(response.StatusCode, rateLimit); err != nil {
-		return port.GitHubUserResult{}, err
+	if statusErr := responseError(response.StatusCode, rateLimit); statusErr != nil {
+		return port.GitHubUserResult{}, statusErr
 	}
 
 	var payload userResponse
 	decoder := json.NewDecoder(io.LimitReader(response.Body, maxResponseBytes))
-	if err := decoder.Decode(&payload); err != nil {
+	if decodeErr := decoder.Decode(&payload); decodeErr != nil {
 		return port.GitHubUserResult{}, &port.GitHubError{
 			Kind:  port.GitHubErrorUpstream,
-			Cause: fmt.Errorf("decode GitHub user response: %w", err),
+			Cause: fmt.Errorf("decode GitHub user response: %w", decodeErr),
 		}
 	}
 

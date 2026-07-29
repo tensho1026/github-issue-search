@@ -38,7 +38,7 @@ func TestRunCompletesInflightRequestDuringShutdown(t *testing.T) {
 		)
 	}()
 
-	responseResult := make(chan *http.Response, 1)
+	responseResult := make(chan int, 1)
 	requestError := make(chan error, 1)
 	go func() {
 		response, requestErr := http.Get("http://" + listener.Addr().String())
@@ -46,7 +46,8 @@ func TestRunCompletesInflightRequestDuringShutdown(t *testing.T) {
 			requestError <- requestErr
 			return
 		}
-		responseResult <- response
+		defer response.Body.Close()
+		responseResult <- response.StatusCode
 	}()
 
 	select {
@@ -60,10 +61,9 @@ func TestRunCompletesInflightRequestDuringShutdown(t *testing.T) {
 	select {
 	case requestErr := <-requestError:
 		t.Fatalf("request error: %v", requestErr)
-	case response := <-responseResult:
-		defer response.Body.Close()
-		if response.StatusCode != http.StatusNoContent {
-			t.Fatalf("status = %d", response.StatusCode)
+	case status := <-responseResult:
+		if status != http.StatusNoContent {
+			t.Fatalf("status = %d", status)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("request did not finish")

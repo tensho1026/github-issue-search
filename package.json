@@ -26,7 +26,7 @@
     "format": "prettier --write . && gofmt -w apps/api",
     "format:check": "prettier --check . && test -z \"$(gofmt -l apps/api)\"",
     "lint": "pnpm run lint:web && pnpm run lint:api && pnpm run architecture:check",
-    "lint:api": "go -C apps/api vet ./...",
+    "lint:api": "cd apps/api && golangci-lint run -c ../../.golangci.yml ./...",
     "lint:docs": "markdownlint-cli2",
     "lint:web": "pnpm --filter @issuescout/web lint",
     "lint:workflow-policy": "node scripts/ci/check-workflow-policy.mjs",
