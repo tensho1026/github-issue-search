@@ -1,0 +1,32 @@
+package main
+
+import (
+	"errors"
+	"log/slog"
+	"net/http"
+	"os"
+
+	"github.com/tensho1026/github-issue-search/apps/api/internal/config"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/router"
+)
+
+func main() {
+	cfg := config.Load()
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+	server := &http.Server{
+		Addr:              ":" + cfg.Port,
+		Handler:           router.New(),
+		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
+		ReadTimeout:       cfg.ReadTimeout,
+		WriteTimeout:      cfg.WriteTimeout,
+		IdleTimeout:       cfg.IdleTimeout,
+	}
+
+	logger.Info("starting IssueScout API", "address", server.Addr)
+
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		logger.Error("IssueScout API stopped unexpectedly", "error", err)
+		os.Exit(1)
+	}
+}
