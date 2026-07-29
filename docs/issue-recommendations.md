@@ -18,7 +18,7 @@ sequenceDiagram
 
     Browser->>Search: POST /api/issues/search
     Search->>Search: Filter at most 50 candidates
-    loop At most 20 candidates, at most 5 concurrently
+    loop Distinct repositories among at most 20 candidates
         Search->>Detail: Validated reference + desired skills
         Detail->>Cache: Canonical owner/repository/number key
         alt Cache hit
@@ -37,9 +37,12 @@ sequenceDiagram
     Search-->>Browser: Ranked list with evidence and warnings
 ```
 
-The search flow inspects at most `ISSUE_DETAIL_ANALYSIS_LIMIT` candidates from
-the at-most-50 discovery window. `GITHUB_API_MAX_CONCURRENCY` bounds fan-out,
-and cancellation propagates through the group.
+The search flow considers at most `ISSUE_DETAIL_ANALYSIS_LIMIT` candidates from
+the at-most-50 discovery window. Within that window it selects one detail
+leader per repository and reuses the normalized repository/maintainer snapshot
+for sibling issues. `GITHUB_API_MAX_CONCURRENCY` bounds distinct-repository
+fan-out, and cancellation propagates through the group. A sibling's comment
+window is not inferred from the leader: its claim evidence stays unavailable.
 
 ## Score model
 
@@ -126,16 +129,17 @@ unavailable; they are never misleading zeroes.
 Warnings contain a stable code, severity, fixed message, and normalized
 evidence. Arbitrary issue/comment text is never copied into evidence.
 
-| Warning                         | Trigger                                          |
-| ------------------------------- | ------------------------------------------------ |
-| `likely_claimed`                | Explicit human work/assignment statement         |
-| `stale_repository`              | No meaningful update within 180 days             |
-| `failing_ci`                    | Default-branch check rollup fails                |
-| `slow_issue_response`           | Median maintainer response exceeds 14 days       |
-| `abandoned_pull_request_risk`   | Open PR older than 60 days and inactive for 30   |
-| `unanswered_issue_risk`         | Issue older than 14 days has no sampled response |
-| `repository_signal_unavailable` | Conventional-path inspection is incomplete       |
-| `detail_enrichment_unavailable` | Search used candidate-only fallback              |
+| Warning                         | Trigger                                           |
+| ------------------------------- | ------------------------------------------------- |
+| `likely_claimed`                | Explicit human work/assignment statement          |
+| `stale_repository`              | No meaningful update within 180 days              |
+| `failing_ci`                    | Default-branch check rollup fails                 |
+| `slow_issue_response`           | Median maintainer response exceeds 14 days        |
+| `abandoned_pull_request_risk`   | Open PR older than 60 days and inactive for 30    |
+| `unanswered_issue_risk`         | Issue older than 14 days has no sampled response  |
+| `repository_signal_unavailable` | Conventional-path inspection is incomplete        |
+| `detail_enrichment_unavailable` | Search used candidate-only fallback               |
+| `claim_evidence_unavailable`    | Repository evidence reused without issue comments |
 
 “Can I work on this?” is intentionally not a claim. Bots are excluded. A
 truncated comment window with no claim produces low-confidence negative
@@ -152,6 +156,9 @@ are ascending. Sorting uses a copy and does not mutate domain or cache input.
 `ISSUE_DETAIL_CACHE_CAPACITY` and `ISSUE_DETAIL_CACHE_TTL` configure a
 concurrency-safe TTL/LRU cache. Keys are canonical validated references,
 values are deep-cloned, and singleflight coalesces concurrent misses.
+Search also groups its analysis window by canonical repository identity, so
+multiple issues from one repository do not repeat the expensive activity
+sample.
 
 Detail maps not-found, rate-limit, timeout, and upstream failures normally.
 Search treats enrichment as optional: a non-cancellation failure produces a
