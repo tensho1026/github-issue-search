@@ -14,10 +14,11 @@ import (
 )
 
 type Dependencies struct {
-	Config        config.Config
-	Logger        *slog.Logger
-	Responder     response.Responder
-	GetGitHubUser usecase.GetGitHubUser
+	Config               config.Config
+	Logger               *slog.Logger
+	Responder            response.Responder
+	GetGitHubUser        usecase.GetGitHubUser
+	AnalyzeGitHubProfile usecase.AnalyzeGitHubProfile
 }
 
 // New composes concrete HTTP dependencies. Feature handlers are constructed by
@@ -28,6 +29,11 @@ func New(dependencies Dependencies) (http.Handler, error) {
 	}
 	if dependencies.GetGitHubUser == nil {
 		return nil, fmt.Errorf("compose router: get GitHub user usecase is required")
+	}
+	if dependencies.AnalyzeGitHubProfile == nil {
+		return nil, fmt.Errorf(
+			"compose router: analyze GitHub profile usecase is required",
+		)
 	}
 
 	engine := gin.New()
@@ -48,6 +54,10 @@ func New(dependencies Dependencies) (http.Handler, error) {
 		dependencies.GetGitHubUser,
 		dependencies.Responder,
 	)
+	gitHubProfileAnalysisHandler := handler.NewGitHubProfileAnalysisHandler(
+		dependencies.AnalyzeGitHubProfile,
+		dependencies.Responder,
+	)
 	api := engine.Group("/api")
 	api.GET(
 		"/health",
@@ -64,6 +74,14 @@ func New(dependencies Dependencies) (http.Handler, error) {
 			dependencies.Responder,
 		),
 		gitHubUserHandler.Get,
+	)
+	api.GET(
+		"/github/users/:username/profile-analysis",
+		middleware.Timeout(
+			dependencies.Config.ProfileRequestTimeout,
+			dependencies.Responder,
+		),
+		gitHubProfileAnalysisHandler.Get,
 	)
 
 	engine.NoRoute(dependencies.Responder.NotFound)
