@@ -26,7 +26,7 @@
     "format:check": "prettier --check . && test -z \"$(gofmt -l apps/api)\"",
     "lint": "pnpm run lint:web && pnpm run lint:api && pnpm run architecture:check",
     "lint:api": "go -C apps/api vet ./...",
-    "lint:docs": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#apps/web/coverage\"",
+    "lint:docs": "markdownlint-cli2",
     "lint:web": "pnpm --filter @issuescout/web lint",
     "lint:workflow-policy": "node scripts/ci/check-workflow-policy.mjs",
     "lint:workflows": "go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 && pnpm run lint:workflow-policy",

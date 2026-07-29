@@ -1,0 +1,52 @@
+name: Feature
+description: Propose a scoped IssueScout capability or engineering improvement.
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Write implementation issues in English and keep each issue small enough for one focused pull request.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Describe the outcome and who benefits.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: List included behavior and important exclusions.
+    validations:
+      required: true
+  - type: textarea
+    id: engineering
+    attributes:
+      label: Engineering requirements
+      description: Capture architecture, performance, security, and operational constraints.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Provide observable, testable completion criteria.
+      placeholder: |
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: test-plan
+    attributes:
+      label: Test plan
+      description: List automated and manual validation.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Link prerequisite or follow-up issues.
