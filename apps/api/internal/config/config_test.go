@@ -22,6 +22,8 @@ var configurationKeys = []string{
 	"ISSUE_SEARCH_CACHE_TTL",
 	"ISSUE_SEARCH_CACHE_CAPACITY",
 	"ISSUE_DETAIL_ANALYSIS_LIMIT",
+	"ISSUE_DETAIL_CACHE_TTL",
+	"ISSUE_DETAIL_CACHE_CAPACITY",
 	"MANIFEST_FILE_LIMIT",
 	"USE_GITHUB_API_MOCK",
 }
@@ -57,6 +59,10 @@ func TestLoadUsesSafeDefaults(t *testing.T) {
 		cfg.IssueSearchCacheCapacity != defaultIssueSearchCacheCapacity {
 		t.Fatalf("Load() issue search cache defaults = %+v", cfg)
 	}
+	if cfg.IssueDetailCacheTTL != defaultIssueDetailCacheTTL ||
+		cfg.IssueDetailCacheCapacity != defaultIssueDetailCacheCapacity {
+		t.Fatalf("Load() issue detail cache defaults = %+v", cfg)
+	}
 }
 
 func TestLoadReadsConfiguredValues(t *testing.T) {
@@ -77,6 +83,8 @@ func TestLoadReadsConfiguredValues(t *testing.T) {
 	t.Setenv("ISSUE_SEARCH_CACHE_TTL", "4m")
 	t.Setenv("ISSUE_SEARCH_CACHE_CAPACITY", "900")
 	t.Setenv("ISSUE_DETAIL_ANALYSIS_LIMIT", "10")
+	t.Setenv("ISSUE_DETAIL_CACHE_TTL", "3m")
+	t.Setenv("ISSUE_DETAIL_CACHE_CAPACITY", "450")
 	t.Setenv("MANIFEST_FILE_LIMIT", "2")
 	t.Setenv("USE_GITHUB_API_MOCK", "true")
 
@@ -97,6 +105,8 @@ func TestLoadReadsConfiguredValues(t *testing.T) {
 		cfg.IssueSearchCacheTTL != 4*time.Minute ||
 		cfg.IssueSearchCacheCapacity != 900 ||
 		cfg.IssueDetailAnalysisLimit != 10 ||
+		cfg.IssueDetailCacheTTL != 3*time.Minute ||
+		cfg.IssueDetailCacheCapacity != 450 ||
 		cfg.ManifestFileLimit != 2 ||
 		!cfg.UseGitHubAPIMock {
 		t.Fatalf("Load() did not parse configured limits: %+v", cfg)
@@ -194,6 +204,18 @@ func TestLoadRejectsInvalidConfiguration(t *testing.T) {
 			message:  "ISSUE_DETAIL_ANALYSIS_LIMIT",
 			preKey:   "ISSUE_SEARCH_RESULT_LIMIT",
 			preValue: "20",
+		},
+		{
+			name:    "detail cache TTL",
+			key:     "ISSUE_DETAIL_CACHE_TTL",
+			value:   "25h",
+			message: "ISSUE_DETAIL_CACHE_TTL",
+		},
+		{
+			name:    "detail cache capacity",
+			key:     "ISSUE_DETAIL_CACHE_CAPACITY",
+			value:   "0",
+			message: "ISSUE_DETAIL_CACHE_CAPACITY",
 		},
 		{
 			name:    "manifest limit",
