@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/issue"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/profile"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/repository"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/user"
@@ -62,6 +63,13 @@ type GitHubRepositoryFileResult struct {
 	RateLimit RateLimit
 }
 
+type GitHubIssueSearchResult struct {
+	Candidates        []issue.Candidate
+	TotalCount        int
+	IncompleteResults bool
+	RateLimit         RateLimit
+}
+
 // GitHubUserReader is the application-facing port for user profile reads.
 type GitHubUserReader interface {
 	GetUser(ctx context.Context, username user.Username) (GitHubUserResult, error)
@@ -95,6 +103,17 @@ type GitHubProfileAnalysisReader interface {
 	) (GitHubRepositoryFileResult, error)
 }
 
+// GitHubIssueSearcher finds one bounded candidate window. Pagination of
+// eligible results is an application concern and never drives unbounded
+// upstream GraphQL Search paging or repository-detail fan-out.
+type GitHubIssueSearcher interface {
+	SearchIssues(
+		ctx context.Context,
+		criteria issue.SearchCriteria,
+		limit int,
+	) (GitHubIssueSearchResult, error)
+}
+
 type ProfileAnalysisCacheEntry struct {
 	Analysis  profile.Analysis
 	RateLimit RateLimit
@@ -109,5 +128,26 @@ type ProfileAnalysisCache interface {
 		ctx context.Context,
 		username user.Username,
 		entry ProfileAnalysisCacheEntry,
+	) error
+}
+
+type IssueSearchCacheEntry struct {
+	Candidates        []issue.Candidate
+	ExclusionCounts   map[issue.ExclusionReason]int
+	CandidatesChecked int
+	UpstreamTotal     int
+	IncompleteResults bool
+	RateLimit         RateLimit
+}
+
+type IssueSearchCache interface {
+	Get(
+		ctx context.Context,
+		key string,
+	) (IssueSearchCacheEntry, bool, error)
+	Set(
+		ctx context.Context,
+		key string,
+		entry IssueSearchCacheEntry,
 	) error
 }

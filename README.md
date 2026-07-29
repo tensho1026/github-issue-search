@@ -65,6 +65,25 @@ make dev-web
 - Web: `http://127.0.0.1:5173`
 - API: `http://127.0.0.1:8080`
 
+The API can search a bounded GitHub issue candidate window after startup:
+
+```sh
+curl --fail-with-body \
+  --request POST \
+  --header 'Content-Type: application/json' \
+  --data '{"username":"octocat","languages":["Go"]}' \
+  'http://127.0.0.1:8080/api/issues/search?page=1&perPage=20'
+```
+
+Omitted filters use the MVP defaults: at least 10 stars, updated within 180
+days, maximum preliminary difficulty 3, non-archived repositories, English
+allowed, and the `good first issue` or `help wanted` labels. See the
+[versioned OpenAPI contract](packages/contracts/openapi.yaml) for all request,
+response, pagination, exclusion, cache-header, and error details. Issue search
+uses GitHub's authenticated GraphQL API, so the API process requires a
+server-only `GITHUB_TOKEN` for this route. Browser callers remain anonymous and
+the token is never returned to them.
+
 ## Quality commands
 
 ```sh

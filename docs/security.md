@@ -46,11 +46,12 @@ protected environments are never entered from pull request events.
 
 - Do not commit tokens, `.env` files, user data, API payload dumps, or private
   repository content.
-- `GITHUB_TOKEN` is job-scoped and receives only permissions listed in the
-  workflow.
+- The workflow-provided `GITHUB_TOKEN` is job-scoped and receives only
+  permissions listed in each workflow.
 - A future hosting provider must use environment-scoped OIDC federation.
-- GitHub personal access tokens are accepted only by the backend process and
-  must never be sent to browser code, logs, errors, analytics, or fixtures.
+- The runtime GitHub token required for GraphQL issue search is accepted only
+  by the backend process and must never be sent to browser code, logs, errors,
+  analytics, cache keys, or fixtures.
 - Logs use request IDs and bounded metadata; authorization headers and upstream
   response bodies are not logged.
 

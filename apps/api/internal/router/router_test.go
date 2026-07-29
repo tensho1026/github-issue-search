@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/config"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/issue"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/profile"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/user"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
@@ -92,6 +93,37 @@ func TestProfileAnalysisRouteUsesStandardEnvelope(t *testing.T) {
 	}
 }
 
+func TestIssueSearchRouteUsesStandardEnvelope(t *testing.T) {
+	router := newTestRouter(t)
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/issues/search?page=1&perPage=20",
+		strings.NewReader(`{"username":"octocat"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Request-ID", "req_search")
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	for _, fragment := range []string{
+		`"items":[]`,
+		`"page":1`,
+		`"perPage":20`,
+		`"excludedByReason":[]`,
+		`"warnings":[]`,
+		`"rateLimitRemaining":40`,
+		`"requestId":"req_search"`,
+	} {
+		if !strings.Contains(recorder.Body.String(), fragment) {
+			t.Errorf("body missing %s: %s", fragment, recorder.Body.String())
+		}
+	}
+}
+
 func TestNewRequiresLogger(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfg := testConfig(t)
@@ -116,6 +148,7 @@ func newTestRouter(t *testing.T) http.Handler {
 		Responder:            response.NewResponder(),
 		GetGitHubUser:        routerGetGitHubUserStub{},
 		AnalyzeGitHubProfile: routerAnalyzeGitHubProfileStub{},
+		SearchIssues:         routerSearchIssuesStub{},
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -146,6 +179,25 @@ func (routerAnalyzeGitHubProfileStub) Execute(
 		RateLimit: port.RateLimit{
 			Known:     true,
 			Remaining: 41,
+		},
+	}, nil
+}
+
+type routerSearchIssuesStub struct{}
+
+func (routerSearchIssuesStub) Execute(
+	context.Context,
+	usecase.SearchIssuesInput,
+) (usecase.SearchIssuesOutput, error) {
+	return usecase.SearchIssuesOutput{
+		Pagination: usecase.SearchIssuesPagination{
+			Page:    1,
+			PerPage: 20,
+		},
+		ExclusionCounts: make(map[issue.ExclusionReason]int),
+		RateLimit: port.RateLimit{
+			Known:     true,
+			Remaining: 40,
 		},
 	}, nil
 }

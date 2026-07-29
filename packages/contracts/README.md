@@ -2,6 +2,10 @@
 
 `openapi.yaml` is the source of truth for the public IssueScout HTTP API. Handler changes must update this document in the same pull request.
 
+The issue discovery contract documents the strict JSON body, bounded
+pagination, cache status header, exclusion diagnostics, and partial GitHub
+search warning returned by `POST /api/issues/search`.
+
 Run both semantic validation and route-drift detection from the repository root:
 
 ```sh

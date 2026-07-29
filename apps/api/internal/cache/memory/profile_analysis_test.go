@@ -40,7 +40,7 @@ func TestProfileAnalysisCacheReturnsIndependentCopies(t *testing.T) {
 func TestProfileAnalysisCacheExpiresEntries(t *testing.T) {
 	cache := newTestProfileAnalysisCache(t, 2, time.Minute)
 	now := time.Date(2026, time.July, 30, 0, 0, 0, 0, time.UTC)
-	cache.now = func() time.Time { return now }
+	cache.store.now = func() time.Time { return now }
 
 	if err := cache.Set(
 		context.Background(),
@@ -55,8 +55,12 @@ func TestProfileAnalysisCacheExpiresEntries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
 	}
-	if found || len(cache.items) != 0 {
-		t.Fatalf("expired entry found = %t, item count = %d", found, len(cache.items))
+	if found || len(cache.store.items) != 0 {
+		t.Fatalf(
+			"expired entry found = %t, item count = %d",
+			found,
+			len(cache.store.items),
+		)
 	}
 }
 

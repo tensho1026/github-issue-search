@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: IssueScout API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Stateless API for analyzing a public GitHub profile and finding suitable
     open-source issues. GitHub credentials remain server-side.
@@ -17,6 +17,8 @@ tags:
     description: Runtime health and operational endpoints.
   - name: GitHub profiles
     description: Normalized public GitHub profile and technology analysis.
+  - name: Issue discovery
+    description: Bounded, validated discovery of eligible public GitHub issues.
 paths:
   /api/health:
     get:
@@ -79,6 +81,98 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "404":
           $ref: "#/components/responses/GitHubUserNotFound"
+        "429":
+          $ref: "#/components/responses/GitHubRateLimited"
+        "502":
+          $ref: "#/components/responses/GitHubUpstreamError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/issues/search:
+    post:
+      operationId: searchGitHubIssues
+      summary: Find eligible public GitHub issue candidates
+      description: |
+        Searches one bounded, authenticated GitHub GraphQL Search window of at
+        most 50 candidates and retrieves the required repository fields in the
+        same request. It then applies repository and issue eligibility rules
+        before application pagination. Equivalent validated filter orderings
+        share a five-minute in-memory cache. The endpoint never follows
+        unbounded upstream pages, fans out to repository detail requests, or
+        returns GitHub response objects directly. The IssueScout endpoint is
+        anonymous to browser clients, while the API process requires a
+        server-only GITHUB_TOKEN for its upstream GraphQL request.
+      tags:
+        - Issue discovery
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: One-based page over eligible candidates.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          example: 1
+        - name: perPage
+          in: query
+          required: false
+          description: Maximum eligible candidates returned on this page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+          example: 20
+      requestBody:
+        required: true
+        description: |
+          Validated discovery filters. Omitted scalar filters receive the
+          documented MVP defaults. Unknown JSON fields are rejected.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssueSearchRequest"
+            examples:
+              profile-aligned:
+                summary: Search Go and TypeScript starter issues
+                value:
+                  username: tensho1026
+                  languages:
+                    - Go
+                    - TypeScript
+                  frameworks:
+                    - Gin
+                    - React
+                  labels:
+                    - good first issue
+                    - help wanted
+                  minimumStars: 10
+                  maximumDifficulty: 3
+                  updatedWithinDays: 180
+                  includeDocumentation: false
+                  includeEnglish: true
+                  excludeArchived: true
+      responses:
+        "200":
+          description: |
+            Eligible, normalized candidates and bounded pagination metadata.
+            A successful response can contain no items.
+          headers:
+            X-IssueScout-Cache:
+              description: Whether the canonical condition was served from cache.
+              schema:
+                type: string
+                enum:
+                  - HIT
+                  - MISS
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssueSearchEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
         "429":
           $ref: "#/components/responses/GitHubRateLimited"
         "502":
@@ -310,6 +404,316 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AnalysisWarning"
+    IssueSearchRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - username
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 39
+          pattern: "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?!-)){0,37}[A-Za-z0-9]$|^[A-Za-z0-9]$"
+          description: |
+            The profile whose preferences will be used by later recommendation
+            stages. It is included in the canonical cache condition.
+          example: tensho1026
+        languages:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          description: |
+            Repository primary languages matched with GitHub language
+            qualifiers. An empty array accepts every language.
+          items:
+            $ref: "#/components/schemas/SearchFilterValue"
+          example:
+            - Go
+            - TypeScript
+        frameworks:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          description: |
+            Framework terms that must appear as a complete term in issue or
+            repository discovery text. An empty array accepts every framework.
+          items:
+            $ref: "#/components/schemas/SearchFilterValue"
+          example:
+            - Gin
+            - React
+        labels:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          description: |
+            Labels matched using logical OR. If omitted or empty, IssueScout
+            uses `good first issue` and `help wanted`.
+          items:
+            $ref: "#/components/schemas/SearchFilterValue"
+          example:
+            - good first issue
+            - help wanted
+        minimumStars:
+          type: integer
+          minimum: 0
+          default: 10
+          description: Minimum repository star count applied after normalization.
+        maximumDifficulty:
+          type: integer
+          minimum: 1
+          maximum: 5
+          default: 3
+          description: |
+            Maximum preliminary label-derived difficulty. Full rule-based
+            analysis is performed by the recommendation stage.
+        updatedWithinDays:
+          type: integer
+          minimum: 1
+          maximum: 3650
+          default: 180
+          description: |
+            Maximum age for both the issue update and repository update.
+        includeDocumentation:
+          type: boolean
+          default: false
+          description: Adds `documentation` to the logical-OR label condition.
+        includeEnglish:
+          type: boolean
+          default: true
+          description: |
+            Allows predominantly Latin-script issue text. When false, a local
+            deterministic script heuristic removes likely English issues.
+        excludeArchived:
+          type: boolean
+          default: true
+          description: Excludes issues from archived repositories.
+    SearchFilterValue:
+      type: string
+      minLength: 1
+      maxLength: 64
+      description: |
+        A trimmed search value. Quotes, backslashes, and control characters are
+        invalid so values cannot inject GitHub search qualifiers.
+      examples:
+        - good first issue
+    IssueSearchEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/IssueSearchResult"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    IssueSearchResult:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - pagination
+        - searchSummary
+        - warnings
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/IssueSearchItem"
+        pagination:
+          $ref: "#/components/schemas/SearchPagination"
+        searchSummary:
+          $ref: "#/components/schemas/SearchSummary"
+        warnings:
+          type: array
+          maxItems: 1
+          items:
+            $ref: "#/components/schemas/SearchWarning"
+    IssueSearchItem:
+      type: object
+      additionalProperties: false
+      required:
+        - issue
+        - repository
+      properties:
+        repository:
+          $ref: "#/components/schemas/IssueSearchRepository"
+        issue:
+          $ref: "#/components/schemas/IssueSearchIssue"
+    IssueSearchRepository:
+      type: object
+      additionalProperties: false
+      required:
+        - description
+        - fullName
+        - isArchived
+        - lastUpdatedAt
+        - mainLanguage
+        - name
+        - owner
+        - stars
+        - url
+      properties:
+        owner:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        fullName:
+          type: string
+          minLength: 3
+        description:
+          type: string
+        url:
+          type: string
+          format: uri
+        stars:
+          type: integer
+          minimum: 0
+        mainLanguage:
+          type: string
+        isArchived:
+          type: boolean
+        lastUpdatedAt:
+          type: string
+          format: date-time
+    IssueSearchIssue:
+      type: object
+      additionalProperties: false
+      required:
+        - comments
+        - createdAt
+        - estimatedDifficulty
+        - labels
+        - number
+        - title
+        - updatedAt
+        - url
+      properties:
+        number:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+          minLength: 1
+        url:
+          type: string
+          format: uri
+        labels:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        comments:
+          type: integer
+          minimum: 0
+        estimatedDifficulty:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Preliminary label-derived difficulty.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SearchPagination:
+      type: object
+      additionalProperties: false
+      required:
+        - hasNext
+        - page
+        - perPage
+        - total
+        - totalPages
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        perPage:
+          type: integer
+          minimum: 1
+          maximum: 50
+        total:
+          type: integer
+          minimum: 0
+          maximum: 50
+        totalPages:
+          type: integer
+          minimum: 0
+          maximum: 50
+        hasNext:
+          type: boolean
+    SearchSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - candidatesChecked
+        - excludedByReason
+        - upstreamTotal
+      properties:
+        candidatesChecked:
+          type: integer
+          minimum: 0
+          maximum: 50
+          description: Candidates evaluated from the bounded upstream window.
+        upstreamTotal:
+          type: integer
+          minimum: 0
+          description: |
+            GitHub's reported total before the 50-candidate window and local
+            eligibility filters. This is not the pagination total.
+        excludedByReason:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/ExclusionCount"
+    ExclusionCount:
+      type: object
+      additionalProperties: false
+      required:
+        - count
+        - reason
+      properties:
+        reason:
+          type: string
+          enum:
+            - above_maximum_difficulty
+            - already_assigned
+            - archived_repository
+            - below_minimum_stars
+            - bot_generated
+            - english_not_allowed
+            - framework_mismatch
+            - insufficient_description
+            - label_mismatch
+            - language_mismatch
+            - not_open
+            - pull_request
+            - stale
+            - suspected_sensitive_content
+        count:
+          type: integer
+          minimum: 1
+          maximum: 50
+    SearchWarning:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          const: github_search_incomplete
+        message:
+          type: string
+          minLength: 1
     LanguageShare:
       type: object
       additionalProperties: false
