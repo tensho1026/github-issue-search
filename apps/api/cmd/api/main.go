@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/gin-gonic/gin"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/config"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/router"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/transport/response"
 )
 
 func main() {
@@ -18,9 +20,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	gin.SetMode(gin.ReleaseMode)
+	httpHandler, err := router.New(router.Dependencies{
+		Config:    cfg,
+		Logger:    logger,
+		Responder: response.NewResponder(),
+	})
+	if err != nil {
+		logger.Error("compose API router", "error", err)
+		os.Exit(1)
+	}
+
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           router.New(),
+		Handler:           httpHandler,
 		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
 		ReadTimeout:       cfg.ReadTimeout,
 		WriteTimeout:      cfg.WriteTimeout,
