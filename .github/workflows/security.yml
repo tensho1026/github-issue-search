@@ -125,7 +125,7 @@ jobs:
           version: 1.28.0
 
   required:
-    name: required
+    name: Security required
     if: always()
     needs:
       - codeql

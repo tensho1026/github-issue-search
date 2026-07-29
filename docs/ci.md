@@ -14,8 +14,8 @@ flowchart TD
     Changes --> Delivery["Docker-free release artifacts"]
     Changes --> Docs["Documentation"]
     Changes --> E2E["Built-stack E2E"]
-    Security["Security workflow"] --> SecurityRequired["Security / required"]
-    Repo --> Required["CI / required"]
+    Security["Security workflow"] --> SecurityRequired["Security required"]
+    Repo --> Required["CI required"]
     Frontend --> Required
     Backend --> Required
     Contract --> Required
@@ -24,7 +24,7 @@ flowchart TD
     E2E --> Required
 ```
 
-Change detection avoids unrelated expensive work, but `CI / required` always runs. It accepts an individual job only when that job succeeds or was legitimately skipped. A failure or cancellation fails the aggregate status, so branch protection needs one stable required check instead of a changing list of path-aware checks.
+Change detection avoids unrelated expensive work, but `CI required` always runs. It accepts an individual job only when that job succeeds or was legitimately skipped. A failure or cancellation fails the aggregate status, so branch protection needs one stable required check instead of a changing list of path-aware checks.
 
 ## Enforced gates
 
@@ -95,7 +95,7 @@ Draft pull requests may retain incomplete self-review boxes. The metadata gate r
 Configure the `main` branch with:
 
 1. Require a pull request before merging.
-2. Require `CI / required` and `Security / required`, and require branches to be up to date.
+2. Require `CI required` and `Security required`, and require branches to be up to date.
 3. Require conversation resolution.
 4. Apply protection to administrators.
 5. Block force pushes and branch deletion.

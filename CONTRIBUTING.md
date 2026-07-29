@@ -73,7 +73,7 @@ Use the repository template. A ready pull request must:
 - contain only conventional, focused commits;
 - update OpenAPI and developer documentation when behavior changes.
 
-The stable branch-protection statuses are `CI / required` and `Security / required`. Individual path-aware jobs may be skipped, but each aggregate status fails if any applicable job fails or is cancelled.
+The stable branch-protection statuses are `CI required` and `Security required`. Individual path-aware jobs may be skipped, but each aggregate status fails if any applicable job fails or is cancelled.
 
 ## Reviews and merges
 

@@ -53,7 +53,7 @@ job.
 
 ## Creating a release
 
-1. Ensure `main` has successful `CI / required` and `Security / required`
+1. Ensure `main` has successful `CI required` and `Security required`
    checks.
 2. Run the `Release` workflow manually with `dry_run=true`.
 3. Review all archive, smoke, scan, SBOM, and workflow evidence.

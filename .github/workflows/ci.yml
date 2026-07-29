@@ -397,7 +397,7 @@ jobs:
           retention-days: 7
 
   required:
-    name: required
+    name: CI required
     if: always()
     needs:
       - backend
