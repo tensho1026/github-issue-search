@@ -18,9 +18,9 @@ Go API (Gin)
 GitHub APIs
 ```
 
-The MVP does not persist user or issue data. Storage-facing ports still belong
-in the domain boundary so a future Cloudflare D1 adapter can be added without
-rewriting handlers or business rules.
+The anonymous core does not persist user or issue data. Storage-facing ports
+remain behind application boundaries so the later authenticated Neon
+PostgreSQL adapter cannot leak database access into anonymous handlers.
 
 ## Monorepo boundaries
 
@@ -138,17 +138,23 @@ part of cache keys, application responses, logs, or browser configuration.
 The bounded in-memory cache implements a port so a future adapter can replace
 it. Initial TTLs are deliberately different by data volatility:
 
-| Data               |        TTL |
-| ------------------ | ---------: |
-| GitHub user        | 10 minutes |
-| Profile analysis   | 30 minutes |
-| Issue search       |  5 minutes |
-| Repository details | 15 minutes |
+| Data             |        TTL |
+| ---------------- | ---------: |
+| GitHub user      | 10 minutes |
+| Profile analysis | 30 minutes |
+| Issue search     |  5 minutes |
+| Issue details    |  5 minutes |
 
 Issue search uses `ISSUE_SEARCH_RESULT_LIMIT` (maximum 50),
 `ISSUE_SEARCH_CACHE_TTL` (five minutes by default), and
 `ISSUE_SEARCH_CACHE_CAPACITY` (1000 entries by default). Invalid or excessive
 values fail process startup.
+
+Issue recommendation adds `ISSUE_DETAIL_ANALYSIS_LIMIT` (20 by default),
+`ISSUE_DETAIL_CACHE_TTL` (five minutes), and
+`ISSUE_DETAIL_CACHE_CAPACITY` (500 entries). The full scoring, sampling,
+fallback, and tie-break rules are documented in
+[Issue recommendation and detail analysis](./issue-recommendations.md).
 
 Partial enrichment failures return useful successful items plus typed warnings;
 a missing user or a failed primary search remains a request-level error.
