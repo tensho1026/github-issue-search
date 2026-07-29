@@ -1,6 +1,7 @@
 # IssueScout
 
 [![CI](https://github.com/tensho1026/github-issue-search/actions/workflows/ci.yml/badge.svg)](https://github.com/tensho1026/github-issue-search/actions/workflows/ci.yml)
+[![Security](https://github.com/tensho1026/github-issue-search/actions/workflows/security.yml/badge.svg)](https://github.com/tensho1026/github-issue-search/actions/workflows/security.yml)
 
 IssueScout helps developers find open-source issues they can realistically
 complete. It compares a GitHub user's public technology profile with issue
@@ -24,11 +25,14 @@ and may cache it in memory, but it does not require a database or GitHub OAuth.
 ```
 
 See [the architecture guide](docs/architecture.md) for dependency rules and
-future extension seams.
+future extension seams, [the CI guide](docs/ci.md) for quality gates,
+[secure delivery](docs/delivery.md) for Docker-free releases, and
+[security engineering](docs/security.md) for trust boundaries and incident
+response.
 
 ## Prerequisites
 
-- Node.js 22.13 or newer (Node 24 LTS is recommended)
+- Node.js 22.22 or newer (Node 24 LTS is recommended)
 - pnpm 10
 - Go 1.25
 - A GitHub personal access token is optional for the foundation and will be
@@ -74,10 +78,11 @@ make build
 `make check` runs the complete local gate in the same order expected by CI.
 Generated output is ignored and can be removed with `make clean`.
 
-The strict pull request pipeline additionally enforces coverage, bundle,
-OpenAPI drift, architecture, workflow, contribution metadata, and built-stack
-E2E checks. See [the CI guide](docs/ci.md) for local equivalents, quality
-budgets, artifact retention, and branch protection.
+The strict pull request pipelines additionally enforce coverage, bundle,
+OpenAPI drift, architecture, workflow security, dependency and secret scans,
+contribution metadata, and built-stack E2E checks. See
+[the CI guide](docs/ci.md) for local equivalents, quality budgets, artifact
+retention, and branch protection.
 
 Performance-sensitive code is developed against explicit limits: at most 20
 repositories per profile, 50 search candidates, 20 detailed candidates, three
@@ -88,6 +93,6 @@ See the architecture guide for the staged analysis and caching model.
 
 The repository is being delivered through the scoped GitHub issues in the
 [MVP implementation backlog](https://github.com/tensho1026/github-issue-search/issues).
-The foundation intentionally contains only the application entry points; API
-features, recommendation logic, production UI, tests, and delivery workflows
-are added on their own issue-linked branches.
+Features, recommendation logic, and production UI continue to land through
+their own issue-linked branches. CI, security, and Docker-free release
+automation are maintained as executable repository policy.
