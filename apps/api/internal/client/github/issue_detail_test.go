@@ -137,6 +137,34 @@ func TestGetIssueDetailPreservesPartialFieldsAsUnknown(t *testing.T) {
 	}
 }
 
+func TestPackageManifestTestSignalIsConservative(t *testing.T) {
+	t.Parallel()
+	withTests := `{"scripts":{"test":"vitest run"}}`
+	if state := (graphQLIssueDetailRepository{
+		PackageManifest: &graphQLBlob{
+			TypeName: "Blob",
+			ByteSize: len(withTests),
+			Text:     &withTests,
+		},
+	}).testSignalState(); state != issue.SignalPresent {
+		t.Fatalf("test signal with script = %q", state)
+	}
+	withoutTests := `{"scripts":{"build":"vite build"}}`
+	if state := (graphQLIssueDetailRepository{
+		PackageManifest: &graphQLBlob{
+			TypeName: "Blob",
+			ByteSize: len(withoutTests),
+			Text:     &withoutTests,
+		},
+	}).testSignalState(); state != issue.SignalUnknown {
+		t.Fatalf("test signal without script = %q", state)
+	}
+	if state := (graphQLIssueDetailRepository{}).
+		testSignalState(); state != issue.SignalUnknown {
+		t.Fatalf("test signal without manifest = %q", state)
+	}
+}
+
 func TestGetIssueDetailMapsNotFound(t *testing.T) {
 	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(

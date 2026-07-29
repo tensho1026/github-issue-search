@@ -129,6 +129,10 @@ const (
     testsRoot: object(expression: "HEAD:tests") { __typename }
     testRoot: object(expression: "HEAD:test") { __typename }
     specsRoot: object(expression: "HEAD:spec") { __typename }
+    packageManifest: object(expression: "HEAD:package.json") {
+      __typename
+      ... on Blob { byteSize isBinary text }
+    }
   }
   rateLimit { limit remaining resetAt }
 }`
@@ -412,6 +416,7 @@ type graphQLIssueDetailRepository struct {
 	TestsRoot          *graphQLGitObject         `json:"testsRoot"`
 	TestRoot           *graphQLGitObject         `json:"testRoot"`
 	SpecsRoot          *graphQLGitObject         `json:"specsRoot"`
+	PackageManifest    *graphQLBlob              `json:"packageManifest"`
 }
 
 func (repository *graphQLIssueDetailRepository) UnmarshalJSON(
@@ -433,6 +438,13 @@ func (repository *graphQLIssueDetailRepository) UnmarshalJSON(
 
 type graphQLGitObject struct {
 	TypeName string `json:"__typename"`
+}
+
+type graphQLBlob struct {
+	TypeName string  `json:"__typename"`
+	ByteSize int     `json:"byteSize"`
+	IsBinary bool    `json:"isBinary"`
+	Text     *string `json:"text"`
 }
 
 type graphQLDetailBranch struct {
@@ -643,16 +655,59 @@ func (repository graphQLIssueDetailRepository) repositorySignals(
 			repository.ContributingGitHub,
 		)),
 		repositorySignal(issue.RepositoryCI, state(repository.Workflows)),
-		repositorySignal(issue.RepositoryTests, state(
-			repository.TestsRoot,
-			repository.TestRoot,
-			repository.SpecsRoot,
-		)),
+		repositorySignal(
+			issue.RepositoryTests,
+			repository.testSignalState(),
+		),
 		repositorySignal(issue.RepositoryCodeOfConduct, state(
 			repository.ConductRoot,
 			repository.ConductGitHub,
 		)),
 	}
+}
+
+func (repository graphQLIssueDetailRepository) testSignalState() issue.SignalState {
+	for _, object := range []*graphQLGitObject{
+		repository.TestsRoot,
+		repository.TestRoot,
+		repository.SpecsRoot,
+	} {
+		if object != nil {
+			return issue.SignalPresent
+		}
+	}
+	if packageManifestHasTests(repository.PackageManifest) {
+		return issue.SignalPresent
+	}
+	// Test files can be colocated with source files (notably Go and Rust).
+	// The bounded path probes are therefore insufficient proof of absence.
+	return issue.SignalUnknown
+}
+
+func packageManifestHasTests(manifest *graphQLBlob) bool {
+	if manifest == nil ||
+		manifest.TypeName != "Blob" ||
+		manifest.IsBinary ||
+		manifest.Text == nil ||
+		manifest.ByteSize < 0 ||
+		manifest.ByteSize > maxManifestBytes {
+		return false
+	}
+	var payload struct {
+		Scripts map[string]string `json:"scripts"`
+	}
+	if err := json.Unmarshal([]byte(*manifest.Text), &payload); err != nil {
+		return false
+	}
+	for name, command := range payload.Scripts {
+		normalizedName := strings.ToLower(strings.TrimSpace(name))
+		if (normalizedName == "test" ||
+			strings.HasPrefix(normalizedName, "test:")) &&
+			strings.TrimSpace(command) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func repositorySignal(
