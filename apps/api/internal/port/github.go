@@ -134,6 +134,7 @@ type ProfileAnalysisCache interface {
 type IssueSearchCacheEntry struct {
 	Candidates        []issue.Candidate
 	ExclusionCounts   map[issue.ExclusionReason]int
+	CandidatesChecked int
 	UpstreamTotal     int
 	IncompleteResults bool
 	RateLimit         RateLimit

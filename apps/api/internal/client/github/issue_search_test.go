@@ -191,7 +191,7 @@ func TestSearchIssuesRejectsInvalidLimitsBeforeRequest(t *testing.T) {
 		Username: "octocat",
 	})
 
-	for _, limit := range []int{0, maxIssueSearchResults + 1} {
+	for _, limit := range []int{0, issue.MaximumCandidateResults + 1} {
 		if _, err := client.SearchIssues(
 			context.Background(),
 			criteria,

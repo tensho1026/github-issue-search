@@ -25,6 +25,7 @@ const (
 	MaximumFilterValueRunes  = 64
 	MaximumFilterValueBytes  = 128
 	MaximumUpdatedWithinDays = 3650
+	MaximumCandidateResults  = 50
 	MaximumPageSize          = 50
 )
 

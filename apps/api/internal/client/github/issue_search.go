@@ -17,7 +17,6 @@ import (
 )
 
 const (
-	maxIssueSearchResults       = 50
 	maxIssueSearchQueryBytes    = 1024
 	maxIssueSearchResponseBytes = 8 << 20
 )
@@ -27,10 +26,10 @@ func (c *Client) SearchIssues(
 	criteria issue.SearchCriteria,
 	limit int,
 ) (port.GitHubIssueSearchResult, error) {
-	if limit < 1 || limit > maxIssueSearchResults {
+	if limit < 1 || limit > issue.MaximumCandidateResults {
 		return port.GitHubIssueSearchResult{}, fmt.Errorf(
 			"GitHub issue search limit must be between 1 and %d",
-			maxIssueSearchResults,
+			issue.MaximumCandidateResults,
 		)
 	}
 
