@@ -76,6 +76,11 @@ GitHub search (up to 50 candidates)
   -> final scoring and deterministic ranking
 ```
 
+The pure analysis stage is documented in
+[Rule-based issue analysis](issue-analysis.md), including evidence semantics,
+quality signals, category priority, technology inference, scope bands,
+difficulty, effort, and extension rules.
+
 The implemented discovery stage performs exactly one authenticated GitHub
 GraphQL issue-search request with `first <= 50` and never fans out to
 repository detail endpoints. The query returns each issue and the repository
