@@ -1,0 +1,15 @@
+{
+  "coverage": {
+    "apiStatements": 82,
+    "web": {
+      "branches": 70,
+      "functions": 70,
+      "lines": 70,
+      "statements": 70
+    }
+  },
+  "webBundle": {
+    "maximumSingleJavaScriptGzipKiB": 140,
+    "maximumTotalGzipKiB": 180
+  }
+}

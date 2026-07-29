@@ -10,23 +10,37 @@
     "pnpm": ">=10.0.0"
   },
   "scripts": {
+    "architecture:check": "node scripts/ci/check-architecture.mjs",
     "build": "pnpm run build:web && pnpm run build:api",
     "build:api": "go -C apps/api build -trimpath -o ../../bin/issuescout-api ./cmd/api",
     "build:web": "pnpm --filter @issuescout/web build",
+    "bundle:check": "node scripts/ci/check-web-bundle.mjs",
     "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build",
+    "contracts:lint": "redocly lint packages/contracts/openapi.yaml",
+    "coverage:api": "bash scripts/ci/check-go-coverage.sh",
+    "coverage:web": "pnpm --filter @issuescout/web test:coverage && node scripts/ci/check-web-coverage.mjs",
     "dev:api": "go -C apps/api run ./cmd/api",
     "dev:web": "pnpm --filter @issuescout/web dev",
+    "e2e": "pnpm run build && playwright test --config apps/web/playwright.config.ts",
     "format": "prettier --write . && gofmt -w apps/api",
     "format:check": "prettier --check . && test -z \"$(gofmt -l apps/api)\"",
-    "lint": "pnpm run lint:web && pnpm run lint:api",
+    "lint": "pnpm run lint:web && pnpm run lint:api && pnpm run architecture:check",
     "lint:api": "go -C apps/api vet ./...",
+    "lint:docs": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#apps/web/coverage\"",
     "lint:web": "pnpm --filter @issuescout/web lint",
+    "lint:workflow-policy": "node scripts/ci/check-workflow-policy.mjs",
+    "lint:workflows": "go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 && pnpm run lint:workflow-policy",
+    "quality:strict": "pnpm run check && pnpm run coverage:api && pnpm run coverage:web && pnpm run bundle:check && pnpm run contracts:lint && pnpm run lint:docs && pnpm run lint:workflows",
     "test": "pnpm run test:web && pnpm run test:api",
     "test:api": "go -C apps/api test ./...",
     "test:web": "pnpm --filter @issuescout/web test",
     "typecheck": "pnpm --filter @issuescout/web typecheck"
   },
   "devDependencies": {
-    "prettier": "3.9.6"
+    "@playwright/test": "1.62.0",
+    "@redocly/cli": "2.41.2",
+    "markdownlint-cli2": "0.23.2",
+    "prettier": "3.9.6",
+    "yaml": "2.9.0"
   }
 }
