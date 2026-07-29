@@ -175,3 +175,17 @@ type IssueSearchCache interface {
 		entry IssueSearchCacheEntry,
 	) error
 }
+
+// IssueDetailCache stores normalized public GitHub snapshots by canonical
+// owner, repository, and issue number.
+type IssueDetailCache interface {
+	Get(
+		ctx context.Context,
+		key string,
+	) (GitHubIssueDetailResult, bool, error)
+	Set(
+		ctx context.Context,
+		key string,
+		entry GitHubIssueDetailResult,
+	) error
+}
