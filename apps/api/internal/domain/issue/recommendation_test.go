@@ -2,6 +2,7 @@ package issue
 
 import (
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
@@ -378,5 +379,33 @@ func rankedFixture(
 				Percentage: skill,
 			},
 		},
+	}
+}
+
+func BenchmarkRecommendBounded(b *testing.B) {
+	input := completeRecommendationInput(
+		time.Date(2026, time.July, 30, 12, 0, 0, 0, time.UTC),
+	)
+	input.DesiredSkills = make([]string, MaximumAnalysisDependencies)
+	input.Analysis.RequiredTechnologies = make(
+		[]RequiredTechnology,
+		MaximumAnalysisDependencies,
+	)
+	for index := range MaximumAnalysisDependencies {
+		name := "technology-" + strconv.Itoa(index)
+		input.DesiredSkills[index] = name
+		input.Analysis.RequiredTechnologies[index] = RequiredTechnology{
+			Name:       name,
+			Confidence: ConfidenceHigh,
+			Evidence: []Evidence{{
+				RuleID: "technology.benchmark",
+				Source: EvidenceDependency,
+			}},
+		}
+	}
+
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = Recommend(input)
 	}
 }
