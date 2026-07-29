@@ -180,7 +180,7 @@ func newRecommendationResponse(
 			Name:    component.Name,
 			Score:   component.Score,
 			Maximum: component.Maximum,
-			Reasons: append([]string(nil), component.Reasons...),
+			Reasons: cloneResponseSlice(component.Reasons),
 		})
 	}
 	skills := make(
@@ -217,7 +217,7 @@ func newRecommendationResponse(
 			Denominator: recommendation.SkillMatch.Denominator,
 			Skills:      skills,
 		},
-		Reasons:  append([]string(nil), recommendation.Reasons...),
+		Reasons:  cloneResponseSlice(recommendation.Reasons),
 		Warnings: warnings,
 		Claim: claimEvidenceResponse{
 			Claimed:    recommendation.Claim.Claimed,
@@ -269,7 +269,7 @@ func newIssueAnalysisResponse(
 		RequiredTechnologies: technologies,
 		Category: categoryAssessmentResponse{
 			Primary:    analysis.Category.Primary,
-			Matches:    append([]issue.Category(nil), analysis.Category.Matches...),
+			Matches:    cloneResponseSlice(analysis.Category.Matches),
 			Confidence: analysis.Category.Confidence,
 			Evidence:   newEvidenceResponses(analysis.Category.Evidence),
 		},
@@ -280,7 +280,7 @@ func newIssueAnalysisResponse(
 			Evidence:   newEvidenceResponses(analysis.Difficulty.Evidence),
 		},
 		Scope: changeScopeResponse{
-			Areas: append([]issue.ChangeArea(nil), analysis.Scope.Areas...),
+			Areas: cloneResponseSlice(analysis.Scope.Areas),
 			FileCount: fileCountBandResponse{
 				Minimum: analysis.Scope.FileCount.Minimum,
 				Maximum: maximumPointer,
@@ -447,4 +447,8 @@ func newEvidenceResponses(
 		})
 	}
 	return responses
+}
+
+func cloneResponseSlice[T any](values []T) []T {
+	return append(make([]T, 0, len(values)), values...)
 }

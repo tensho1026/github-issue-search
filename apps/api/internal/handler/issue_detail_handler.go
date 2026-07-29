@@ -202,8 +202,8 @@ func newIssueDetailResponse(
 			Body:      candidate.Issue.Body,
 			URL:       candidate.Issue.URL,
 			State:     candidate.Issue.State,
-			Labels:    append([]string(nil), candidate.Issue.Labels...),
-			Assignees: append([]string(nil), candidate.Issue.Assignees...),
+			Labels:    cloneResponseSlice(candidate.Issue.Labels),
+			Assignees: cloneResponseSlice(candidate.Issue.Assignees),
 			Author: actorResponse{
 				Login: candidate.Issue.AuthorLogin,
 				Type:  candidate.Issue.AuthorType,

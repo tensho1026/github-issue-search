@@ -280,7 +280,7 @@ func newIssueSearchResponse(
 				Number:              candidate.Issue.Number,
 				Title:               candidate.Issue.Title,
 				URL:                 candidate.Issue.URL,
-				Labels:              append([]string(nil), candidate.Issue.Labels...),
+				Labels:              cloneResponseSlice(candidate.Issue.Labels),
 				Comments:            candidate.Issue.Comments,
 				EstimatedDifficulty: ranked.Analysis.Difficulty.Level.Int(),
 				CreatedAt:           candidate.Issue.CreatedAt,
