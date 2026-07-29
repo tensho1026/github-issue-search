@@ -62,7 +62,7 @@ pnpm run lint:workflows
 pnpm run e2e
 ```
 
-`golangci-lint`, `actionlint`, and `shellcheck` are expected developer tools. CI installs or provisions fixed versions. The workflow pins third-party actions by commit SHA; Dependabot proposes controlled SHA updates.
+`golangci-lint`, `actionlint`, and `shellcheck` are expected developer tools. CI installs or provisions fixed versions. The actionlint release archive is checked against its pinned upstream SHA-256 before installation. The workflow pins third-party actions by commit SHA; Dependabot proposes controlled SHA updates.
 
 ## Budgets
 

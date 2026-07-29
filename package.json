@@ -30,7 +30,7 @@
     "lint:docs": "markdownlint-cli2",
     "lint:web": "pnpm --filter @issuescout/web lint",
     "lint:workflow-policy": "node scripts/ci/check-workflow-policy.mjs",
-    "lint:workflows": "go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 && pnpm run lint:workflow-policy",
+    "lint:workflows": "actionlint && pnpm run lint:workflow-policy",
     "quality:strict": "pnpm run check && pnpm run coverage:api && pnpm run coverage:web && pnpm run bundle:check && pnpm run contracts:check && pnpm run lint:docs && pnpm run lint:workflows",
     "test": "pnpm run test:web && pnpm run test:api",
     "test:api": "go -C apps/api test ./...",
