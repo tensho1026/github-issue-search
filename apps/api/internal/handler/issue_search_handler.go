@@ -204,8 +204,9 @@ type issueSearchResponse struct {
 }
 
 type issueSearchItemResponse struct {
-	Repository repositorySearchResponse `json:"repository"`
-	Issue      issueSummaryResponse     `json:"issue"`
+	Repository     repositorySearchResponse `json:"repository"`
+	Issue          issueSummaryResponse     `json:"issue"`
+	Recommendation recommendationResponse   `json:"recommendation"`
 }
 
 type repositorySearchResponse struct {
@@ -240,9 +241,11 @@ type paginationResponse struct {
 }
 
 type searchSummaryResponse struct {
-	CandidatesChecked int                      `json:"candidatesChecked"`
-	UpstreamTotal     int                      `json:"upstreamTotal"`
-	ExcludedByReason  []exclusionCountResponse `json:"excludedByReason"`
+	CandidatesChecked   int                      `json:"candidatesChecked"`
+	UpstreamTotal       int                      `json:"upstreamTotal"`
+	EnrichmentAttempted int                      `json:"enrichmentAttempted"`
+	EnrichmentFailed    int                      `json:"enrichmentFailed"`
+	ExcludedByReason    []exclusionCountResponse `json:"excludedByReason"`
 }
 
 type exclusionCountResponse struct {
@@ -259,7 +262,8 @@ func newIssueSearchResponse(
 	output usecase.SearchIssuesOutput,
 ) issueSearchResponse {
 	items := make([]issueSearchItemResponse, 0, len(output.Items))
-	for _, candidate := range output.Items {
+	for _, ranked := range output.Items {
+		candidate := ranked.Candidate
 		items = append(items, issueSearchItemResponse{
 			Repository: repositorySearchResponse{
 				Owner:         candidate.Repository.Owner,
@@ -278,10 +282,13 @@ func newIssueSearchResponse(
 				URL:                 candidate.Issue.URL,
 				Labels:              append([]string(nil), candidate.Issue.Labels...),
 				Comments:            candidate.Issue.Comments,
-				EstimatedDifficulty: issue.EstimateDifficulty(candidate.Issue.Labels).Int(),
+				EstimatedDifficulty: ranked.Analysis.Difficulty.Level.Int(),
 				CreatedAt:           candidate.Issue.CreatedAt,
 				UpdatedAt:           candidate.Issue.UpdatedAt,
 			},
+			Recommendation: newRecommendationResponse(
+				ranked.Recommendation,
+			),
 		})
 	}
 
@@ -316,9 +323,11 @@ func newIssueSearchResponse(
 			HasNext:    output.Pagination.HasNext,
 		},
 		SearchSummary: searchSummaryResponse{
-			CandidatesChecked: output.CandidatesChecked,
-			UpstreamTotal:     output.UpstreamTotal,
-			ExcludedByReason:  exclusions,
+			CandidatesChecked:   output.CandidatesChecked,
+			UpstreamTotal:       output.UpstreamTotal,
+			EnrichmentAttempted: output.EnrichmentAttempted,
+			EnrichmentFailed:    output.EnrichmentFailed,
+			ExcludedByReason:    exclusions,
 		},
 		Warnings: warnings,
 	}

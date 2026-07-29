@@ -21,25 +21,41 @@ func TestIssueSearchHandlerReturnsNormalizedSearchResponse(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	now := time.Date(2026, time.July, 30, 10, 0, 0, 0, time.UTC)
 	search := &searchIssuesStub{output: usecase.SearchIssuesOutput{
-		Items: []issue.Candidate{{
-			Repository: repository.Summary{
-				Owner:        "example",
-				Name:         "api",
-				FullName:     "example/api",
-				Description:  "A Gin API",
-				URL:          "https://github.com/example/api",
-				Stars:        120,
-				MainLanguage: "Go",
-				UpdatedAt:    now,
+		Items: []issue.RankedIssue{{
+			Candidate: issue.Candidate{
+				Repository: repository.Summary{
+					Owner:        "example",
+					Name:         "api",
+					FullName:     "example/api",
+					Description:  "A Gin API",
+					URL:          "https://github.com/example/api",
+					Stars:        120,
+					MainLanguage: "Go",
+					UpdatedAt:    now,
+				},
+				Issue: issue.Summary{
+					Number:    123,
+					Title:     "Add validation",
+					URL:       "https://github.com/example/api/issues/123",
+					Labels:    []string{"good first issue"},
+					Comments:  2,
+					CreatedAt: now.Add(-time.Hour),
+					UpdatedAt: now,
+				},
 			},
-			Issue: issue.Summary{
-				Number:    123,
-				Title:     "Add validation",
-				URL:       "https://github.com/example/api/issues/123",
-				Labels:    []string{"good first issue"},
-				Comments:  2,
-				CreatedAt: now.Add(-time.Hour),
-				UpdatedAt: now,
+			Analysis: issue.Analysis{
+				Difficulty: issue.DifficultyAssessment{
+					Level: 1,
+					Label: "Very easy",
+				},
+			},
+			Recommendation: issue.Recommendation{
+				Score: 88,
+				SkillMatch: issue.SkillMatchAssessment{
+					Percentage:  100,
+					Matched:     1,
+					Denominator: 1,
+				},
 			},
 		}},
 		Pagination: usecase.SearchIssuesPagination{
@@ -90,6 +106,8 @@ func TestIssueSearchHandlerReturnsNormalizedSearchResponse(t *testing.T) {
 	for _, fragment := range []string{
 		`"fullName":"example/api"`,
 		`"estimatedDifficulty":1`,
+		`"score":88`,
+		`"percentage":100`,
 		`"page":2`,
 		`"totalPages":2`,
 		`"candidatesChecked":8`,
