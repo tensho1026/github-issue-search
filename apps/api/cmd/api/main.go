@@ -10,10 +10,12 @@ import (
 	"syscall"
 
 	"github.com/gin-gonic/gin"
+	githubclient "github.com/tensho1026/github-issue-search/apps/api/internal/client/github"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/config"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/router"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/server"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/transport/response"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/usecase"
 )
 
 func main() {
@@ -25,10 +27,18 @@ func main() {
 	}
 
 	gin.SetMode(gin.ReleaseMode)
+	gitHubClient := githubclient.NewClient(
+		cfg.GitHubAPIBaseURL,
+		cfg.GitHubToken,
+		cfg.GitHubRequestTimeout,
+		logger,
+	)
+	getGitHubUser := usecase.NewGetGitHubUser(gitHubClient)
 	httpHandler, err := router.New(router.Dependencies{
-		Config:    cfg,
-		Logger:    logger,
-		Responder: response.NewResponder(),
+		Config:        cfg,
+		Logger:        logger,
+		Responder:     response.NewResponder(),
+		GetGitHubUser: getGitHubUser,
 	})
 	if err != nil {
 		logger.Error("compose API router", "error", err)

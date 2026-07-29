@@ -38,6 +38,7 @@ func IsGitHubError(err error, kind GitHubErrorKind) bool {
 }
 
 type RateLimit struct {
+	Known     bool
 	Limit     int
 	Remaining int
 	Reset     time.Time

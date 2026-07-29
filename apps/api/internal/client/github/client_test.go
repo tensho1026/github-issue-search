@@ -61,7 +61,8 @@ func TestGetUserNormalizesPayloadAndRateLimit(t *testing.T) {
 		result.Profile.Following != 20 {
 		t.Fatalf("GetUser() profile = %+v", result.Profile)
 	}
-	if result.RateLimit.Limit != 5000 ||
+	if !result.RateLimit.Known ||
+		result.RateLimit.Limit != 5000 ||
 		result.RateLimit.Remaining != 4999 ||
 		!result.RateLimit.Reset.Equal(reset) {
 		t.Fatalf("GetUser() rate limit = %+v", result.RateLimit)
@@ -115,6 +116,11 @@ func TestGetUserMapsNonRetryableStatuses(t *testing.T) {
 			status:    http.StatusForbidden,
 			remaining: "10",
 			wantKind:  port.GitHubErrorUnauthorized,
+		},
+		{
+			name:     "forbidden without rate headers",
+			status:   http.StatusForbidden,
+			wantKind: port.GitHubErrorUnauthorized,
 		},
 		{
 			name:     "bad request",

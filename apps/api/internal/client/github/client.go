@@ -79,6 +79,7 @@ func (c *Client) GetUser(
 	c.logger.Debug(
 		"GitHub user response received",
 		"status", response.StatusCode,
+		"rateLimitKnown", rateLimit.Known,
 		"rateLimitRemaining", rateLimit.Remaining,
 		"rateLimitReset", rateLimit.Reset,
 	)
@@ -178,7 +179,9 @@ func responseError(status int, rateLimit port.RateLimit) error {
 	case status == http.StatusNotFound:
 		return &port.GitHubError{Kind: port.GitHubErrorNotFound}
 	case status == http.StatusTooManyRequests ||
-		(status == http.StatusForbidden && rateLimit.Remaining == 0):
+		(status == http.StatusForbidden &&
+			rateLimit.Known &&
+			rateLimit.Remaining == 0):
 		return &port.GitHubError{
 			Kind:  port.GitHubErrorRateLimited,
 			Reset: rateLimit.Reset,
@@ -194,9 +197,12 @@ func responseError(status int, rateLimit port.RateLimit) error {
 }
 
 func parseRateLimit(header http.Header) port.RateLimit {
-	limit, _ := strconv.Atoi(header.Get("X-RateLimit-Limit"))
-	remaining, _ := strconv.Atoi(header.Get("X-RateLimit-Remaining"))
-	resetUnix, _ := strconv.ParseInt(header.Get("X-RateLimit-Reset"), 10, 64)
+	limitRaw := header.Get("X-RateLimit-Limit")
+	remainingRaw := header.Get("X-RateLimit-Remaining")
+	resetRaw := header.Get("X-RateLimit-Reset")
+	limit, _ := strconv.Atoi(limitRaw)
+	remaining, _ := strconv.Atoi(remainingRaw)
+	resetUnix, _ := strconv.ParseInt(resetRaw, 10, 64)
 
 	var reset time.Time
 	if resetUnix > 0 {
@@ -204,6 +210,7 @@ func parseRateLimit(header http.Header) port.RateLimit {
 	}
 
 	return port.RateLimit{
+		Known:     limitRaw != "" || remainingRaw != "" || resetRaw != "",
 		Limit:     limit,
 		Remaining: remaining,
 		Reset:     reset,

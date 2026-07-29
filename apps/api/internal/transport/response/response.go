@@ -12,8 +12,13 @@ import (
 const errorCodeContextKey = "issuescout.error_code"
 
 type Meta struct {
-	RequestID string    `json:"requestId"`
-	Timestamp time.Time `json:"timestamp"`
+	RequestID          string    `json:"requestId"`
+	Timestamp          time.Time `json:"timestamp"`
+	RateLimitRemaining *int      `json:"rateLimitRemaining,omitempty"`
+}
+
+type MetaOptions struct {
+	RateLimitRemaining *int
 }
 
 type successEnvelope struct {
@@ -45,7 +50,19 @@ func NewResponderWithClock(now func() time.Time) Responder {
 }
 
 func (r Responder) Data(ctx *gin.Context, status int, data any) {
-	ctx.JSON(status, successEnvelope{Data: data, Meta: r.meta(ctx)})
+	r.DataWithMeta(ctx, status, data, MetaOptions{})
+}
+
+func (r Responder) DataWithMeta(
+	ctx *gin.Context,
+	status int,
+	data any,
+	options MetaOptions,
+) {
+	ctx.JSON(
+		status,
+		successEnvelope{Data: data, Meta: r.meta(ctx, options)},
+	)
 }
 
 func (r Responder) Error(ctx *gin.Context, err error) {
@@ -56,7 +73,7 @@ func (r Responder) Error(ctx *gin.Context, err error) {
 			Code:    applicationError.Code,
 			Message: applicationError.Message,
 		},
-		Meta: r.meta(ctx),
+		Meta: r.meta(ctx, MetaOptions{}),
 	})
 }
 
@@ -74,9 +91,10 @@ func ErrorCode(ctx *gin.Context) string {
 	return errorCode
 }
 
-func (r Responder) meta(ctx *gin.Context) Meta {
+func (r Responder) meta(ctx *gin.Context, options MetaOptions) Meta {
 	return Meta{
-		RequestID: requestcontext.RequestID(ctx.Request.Context()),
-		Timestamp: r.now().UTC(),
+		RequestID:          requestcontext.RequestID(ctx.Request.Context()),
+		Timestamp:          r.now().UTC(),
+		RateLimitRemaining: options.RateLimitRemaining,
 	}
 }

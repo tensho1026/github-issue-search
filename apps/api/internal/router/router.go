@@ -10,12 +10,14 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/handler"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/middleware"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/transport/response"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/usecase"
 )
 
 type Dependencies struct {
-	Config    config.Config
-	Logger    *slog.Logger
-	Responder response.Responder
+	Config        config.Config
+	Logger        *slog.Logger
+	Responder     response.Responder
+	GetGitHubUser usecase.GetGitHubUser
 }
 
 // New composes concrete HTTP dependencies. Feature handlers are constructed by
@@ -23,6 +25,9 @@ type Dependencies struct {
 func New(dependencies Dependencies) (http.Handler, error) {
 	if dependencies.Logger == nil {
 		return nil, fmt.Errorf("compose router: logger is required")
+	}
+	if dependencies.GetGitHubUser == nil {
+		return nil, fmt.Errorf("compose router: get GitHub user usecase is required")
 	}
 
 	engine := gin.New()
@@ -39,6 +44,10 @@ func New(dependencies Dependencies) (http.Handler, error) {
 	)
 
 	healthHandler := handler.NewHealthHandler(dependencies.Responder)
+	gitHubUserHandler := handler.NewGitHubUserHandler(
+		dependencies.GetGitHubUser,
+		dependencies.Responder,
+	)
 	api := engine.Group("/api")
 	api.GET(
 		"/health",
@@ -47,6 +56,14 @@ func New(dependencies Dependencies) (http.Handler, error) {
 			dependencies.Responder,
 		),
 		healthHandler.Check,
+	)
+	api.GET(
+		"/github/users/:username",
+		middleware.Timeout(
+			dependencies.Config.NormalRequestTimeout,
+			dependencies.Responder,
+		),
+		gitHubUserHandler.Get,
 	)
 
 	engine.NoRoute(dependencies.Responder.NotFound)
