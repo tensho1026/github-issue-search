@@ -20,7 +20,13 @@ for (const filename of workflowFiles) {
   const source = await readFile(path.join(workflowDirectory, filename), "utf8");
   const workflow = parse(source);
 
-  if (Object.hasOwn(workflow, "pull_request_target")) {
+  const events = workflow.on;
+  if (
+    events === "pull_request_target" ||
+    (events &&
+      typeof events === "object" &&
+      Object.hasOwn(events, "pull_request_target"))
+  ) {
     violations.push(`${relativePath}: pull_request_target is forbidden`);
   }
   if (!workflow.permissions || typeof workflow.permissions !== "object") {
