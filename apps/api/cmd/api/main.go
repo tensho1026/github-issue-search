@@ -1,14 +1,18 @@
 package main
 
 import (
-	"errors"
+	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/config"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/router"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/server"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/transport/response"
 )
 
@@ -31,7 +35,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	server := &http.Server{
+	httpServer := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           httpHandler,
 		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
@@ -40,9 +44,27 @@ func main() {
 		IdleTimeout:       cfg.IdleTimeout,
 	}
 
-	logger.Info("starting IssueScout API", "address", server.Addr)
+	listener, err := net.Listen("tcp", httpServer.Addr)
+	if err != nil {
+		logger.Error("listen for API traffic", "error", err)
+		os.Exit(1)
+	}
+	logger.Info("starting IssueScout API", "address", listener.Addr().String())
 
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	processContext, stop := signal.NotifyContext(
+		context.Background(),
+		os.Interrupt,
+		syscall.SIGTERM,
+	)
+	defer stop()
+
+	if err := server.Run(
+		processContext,
+		httpServer,
+		listener,
+		cfg.ShutdownTimeout,
+		logger,
+	); err != nil {
 		logger.Error("IssueScout API stopped unexpectedly", "error", err)
 		os.Exit(1)
 	}
