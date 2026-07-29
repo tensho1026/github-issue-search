@@ -30,7 +30,6 @@ func CORS(allowedOrigins []string, responder response.Responder) gin.HandlerFunc
 		}
 
 		ctx.Header("Access-Control-Allow-Origin", origin)
-		ctx.Header("Access-Control-Allow-Credentials", "false")
 		ctx.Header(
 			"Access-Control-Allow-Headers",
 			"Accept, Authorization, Content-Type, X-Request-ID",

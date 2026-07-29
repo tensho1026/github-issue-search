@@ -14,10 +14,14 @@ func RequestLogger(logger *slog.Logger) gin.HandlerFunc {
 		startedAt := time.Now()
 		ctx.Next()
 
+		path := ctx.FullPath()
+		if path == "" {
+			path = ctx.Request.URL.Path
+		}
 		attributes := []any{
 			"requestId", requestcontext.RequestID(ctx.Request.Context()),
 			"method", ctx.Request.Method,
-			"path", ctx.FullPath(),
+			"path", path,
 			"status", ctx.Writer.Status(),
 			"latencyMs", time.Since(startedAt).Milliseconds(),
 			"userAgent", ctx.Request.UserAgent(),

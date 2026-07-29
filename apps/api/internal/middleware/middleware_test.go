@@ -70,6 +70,9 @@ func TestCORSAllowsConfiguredOriginAndRejectsOtherOrigins(t *testing.T) {
 	if got := allowedRecorder.Header().Get("Access-Control-Allow-Origin"); got != allowed.Header.Get("Origin") {
 		t.Fatalf("allow origin = %q", got)
 	}
+	if got := allowedRecorder.Header().Get("Access-Control-Allow-Credentials"); got != "" {
+		t.Fatalf("allow credentials = %q, want omitted", got)
+	}
 
 	denied := httptest.NewRequest(http.MethodGet, "/", nil)
 	denied.Header.Set("Origin", "https://attacker.example")
@@ -168,8 +171,8 @@ func TestRequestLoggerUsesStructuredSafeFields(t *testing.T) {
 		RequestIDWithGenerator(func() string { return "req_log" }),
 		RequestLogger(logger),
 	)
-	engine.GET("/", func(ctx *gin.Context) { ctx.Status(http.StatusNoContent) })
-	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	engine.NoRoute(func(ctx *gin.Context) { ctx.Status(http.StatusNotFound) })
+	request := httptest.NewRequest(http.MethodGet, "/missing", nil)
 	request.Header.Set("Authorization", "Bearer must-not-appear")
 	recorder := httptest.NewRecorder()
 
@@ -179,7 +182,9 @@ func TestRequestLoggerUsesStructuredSafeFields(t *testing.T) {
 	if err := json.NewDecoder(bytes.NewReader(logs.Bytes())).Decode(&entry); err != nil {
 		t.Fatalf("decode log: %v", err)
 	}
-	if entry["requestId"] != "req_log" || entry["status"] != float64(http.StatusNoContent) {
+	if entry["requestId"] != "req_log" ||
+		entry["status"] != float64(http.StatusNotFound) ||
+		entry["path"] != "/missing" {
 		t.Fatalf("log entry = %+v", entry)
 	}
 	if strings.Contains(logs.String(), "must-not-appear") {
