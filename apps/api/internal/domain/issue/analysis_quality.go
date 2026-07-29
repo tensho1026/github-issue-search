@@ -89,7 +89,8 @@ var qualityRules = []qualityRule{
 		key:    QualityScreenshot,
 		ruleID: "quality.screenshot",
 		terms: []string{
-			"screenshot", "screen shot", "image", "video",
+			"screenshot", "screen shot", "attached image", "image below",
+			"visual evidence", "screen recording", "attached video",
 			"スクリーンショット", "画像", "動画",
 		},
 		customMatch: func(input normalizedAnalysisInput) bool {
@@ -182,10 +183,10 @@ func assessQuality(
 		score = (presentCount*100 + applicableCount/2) / applicableCount
 	}
 	confidence := ConfidenceMedium
-	if input.bodyRuneCount >= 300 && !input.bodyWasTruncated {
+	if input.bodyRuneCount >= 300 && !input.textWasTruncated {
 		confidence = ConfidenceHigh
 	}
-	if input.bodyWasTruncated {
+	if input.textWasTruncated {
 		confidence = ConfidenceLow
 	}
 	return QualityAssessment{

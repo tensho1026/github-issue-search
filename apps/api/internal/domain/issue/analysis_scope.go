@@ -140,9 +140,7 @@ func estimateChangeScope(
 	}
 
 	databaseChange := SignalAbsent
-	if input.bodyRuneCount < 20 {
-		databaseChange = SignalUnknown
-	} else if explicitNoDatabaseChange {
+	if explicitNoDatabaseChange {
 		evidence = append(evidence, Evidence{
 			RuleID:      "scope.explicit-no-database-change",
 			Source:      EvidenceBody,
@@ -158,6 +156,8 @@ func estimateChangeScope(
 			Source:      EvidenceBody,
 			Description: "Database or schema evidence indicates a database change.",
 		})
+	} else if input.bodyRuneCount < 20 || input.textWasTruncated {
+		databaseChange = SignalUnknown
 	}
 
 	fileCount := estimateFileCount(input, category, areas)
@@ -168,11 +168,11 @@ func estimateChangeScope(
 	})
 	slices.SortFunc(evidence, compareEvidence)
 	confidence := ConfidenceMedium
-	if input.bodyRuneCount < 80 || input.bodyWasTruncated {
+	if input.bodyRuneCount < 80 || input.textWasTruncated {
 		confidence = ConfidenceLow
 	}
 	if relatedFilePattern.MatchString(input.body) &&
-		!input.bodyWasTruncated {
+		!input.textWasTruncated {
 		confidence = ConfidenceHigh
 	}
 	return ChangeScope{

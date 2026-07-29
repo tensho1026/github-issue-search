@@ -152,6 +152,23 @@ func TestAnalyzeIssueClassifiesEverySupportedCategory(t *testing.T) {
 	}
 }
 
+func TestAnalyzeIssueUnderstandsNamespacedLabels(t *testing.T) {
+	for _, label := range []string{"type: bug", "kind/bug"} {
+		result := AnalyzeIssue(AnalysisInput{
+			Candidate: analysisCandidate(
+				"Correct the behavior",
+				"Provide a focused correction with an expected result and verification plan.",
+				[]string{label},
+				"Go",
+				0,
+			),
+		})
+		if result.Category.Primary != CategoryBug {
+			t.Errorf("label %q category = %+v", label, result.Category)
+		}
+	}
+}
+
 func TestAnalyzeIssueInfersAndDeduplicatesRequiredTechnologies(t *testing.T) {
 	input := AnalysisInput{
 		Candidate: analysisCandidate(
@@ -386,6 +403,26 @@ func TestAnalyzeIssueHonorsExplicitNoDatabaseChangeAndDifficultyFloor(
 	}
 }
 
+func TestAnalyzeIssueDoesNotTreatContainerImageAsScreenshot(t *testing.T) {
+	result := AnalyzeIssue(AnalysisInput{
+		Candidate: analysisCandidate(
+			"Fix container build failure",
+			"The Docker image currently fails to build. Expected behavior is a reproducible artifact. Add a regression test.",
+			[]string{"bug", "devops"},
+			"Go",
+			0,
+		),
+	})
+	screenshot := qualitySignalByKey(
+		t,
+		result.Quality,
+		QualityScreenshot,
+	)
+	if screenshot.State != SignalAbsent {
+		t.Fatalf("screenshot = %+v", screenshot)
+	}
+}
+
 func TestAnalyzeIssueIsStableBoundedAndDoesNotMutateInput(t *testing.T) {
 	labels := make([]string, MaximumAnalysisLabels+20)
 	labels[0] = "backend"
@@ -426,8 +463,14 @@ func TestAnalyzeIssueIsStableBoundedAndDoesNotMutateInput(t *testing.T) {
 	if len(normalized.body) > MaximumAnalysisTextBytes ||
 		len(normalized.labels) > MaximumAnalysisLabels ||
 		len(normalized.dependencies) > MaximumAnalysisDependencies ||
-		!normalized.bodyWasTruncated {
+		!normalized.textWasTruncated {
 		t.Fatalf("normalized bounds = %+v", normalized)
+	}
+	if first.Scope.DatabaseChange != SignalUnknown {
+		t.Fatalf(
+			"truncated content produced a definitive DB result: %+v",
+			first.Scope,
+		)
 	}
 	encoded, err := json.Marshal(first)
 	if err != nil {

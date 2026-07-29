@@ -17,7 +17,7 @@ type normalizedAnalysisInput struct {
 	commentCount          int
 	hasMaintainerGuidance bool
 	bodyRuneCount         int
-	bodyWasTruncated      bool
+	textWasTruncated      bool
 }
 
 func normalizeAnalysisInput(input AnalysisInput) normalizedAnalysisInput {
@@ -52,7 +52,7 @@ func normalizeAnalysisInput(input AnalysisInput) normalizedAnalysisInput {
 		commentCount:          max(input.Candidate.Issue.Comments, 0),
 		hasMaintainerGuidance: input.HasMaintainerGuidance,
 		bodyRuneCount:         utf8.RuneCountInString(body),
-		bodyWasTruncated:      titleTruncated || bodyTruncated,
+		textWasTruncated:      titleTruncated || bodyTruncated,
 	}
 }
 
@@ -155,9 +155,22 @@ func isNormalizedTermCharacter(character rune) bool {
 func hasAnyLabel(input normalizedAnalysisInput, labels ...string) bool {
 	for _, actual := range input.labels {
 		for _, expected := range labels {
-			if actual == expected {
+			if labelMatches(actual, expected) {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+func labelMatches(actual string, expected string) bool {
+	if actual == expected {
+		return true
+	}
+	for _, separator := range []string{":", "/"} {
+		_, suffix, found := strings.Cut(actual, separator)
+		if found && strings.TrimSpace(suffix) == expected {
+			return true
 		}
 	}
 	return false

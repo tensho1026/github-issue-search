@@ -36,7 +36,7 @@ var technologyRules = []technologyRule{
 	{name: "SQL", kind: TechnologyCapability, textTerms: []string{"sql", "database query"}, dependencies: []string{}},
 	{name: "Svelte", kind: TechnologyFramework, textTerms: []string{"svelte", "sveltekit"}, dependencies: []string{"svelte", "@sveltejs/kit"}},
 	{name: "Terraform", kind: TechnologyPlatform, textTerms: []string{"terraform", "infrastructure as code"}, dependencies: []string{}},
-	{name: "Testing", kind: TechnologyPractice, textTerms: []string{"test", "testing", "regression", "unit test", "integration test"}, dependencies: []string{"vitest", "jest", "pytest", "testify"}},
+	{name: "Testing", kind: TechnologyPractice, textTerms: []string{"test", "tests", "testing", "regression", "unit test", "integration test"}, dependencies: []string{"vitest", "jest", "pytest", "testify"}},
 	{name: "TypeScript", kind: TechnologyLanguage, textTerms: []string{"typescript"}, dependencies: []string{"typescript"}},
 	{name: "Vue", kind: TechnologyFramework, textTerms: []string{"vue", "vue.js", "vuejs"}, dependencies: []string{"vue"}},
 }

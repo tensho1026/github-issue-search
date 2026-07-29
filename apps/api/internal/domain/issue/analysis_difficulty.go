@@ -120,10 +120,10 @@ func estimateAnalysisDifficulty(
 	level = min(max(level, 1), 5)
 
 	confidence := ConfidenceMedium
-	if quality.Score >= 65 && !input.bodyWasTruncated {
+	if quality.Score >= 65 && !input.textWasTruncated {
 		confidence = ConfidenceHigh
 	}
-	if quality.Confidence == ConfidenceLow || input.bodyWasTruncated {
+	if quality.Confidence == ConfidenceLow || input.textWasTruncated {
 		confidence = ConfidenceLow
 	}
 	if input.hasMaintainerGuidance &&
