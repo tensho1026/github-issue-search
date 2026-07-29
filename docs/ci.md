@@ -11,17 +11,20 @@ flowchart TD
     Changes --> Frontend["Frontend"]
     Changes --> Backend["Backend"]
     Changes --> Contract["API contracts"]
+    Changes --> Delivery["Docker-free release artifacts"]
     Changes --> Docs["Documentation"]
     Changes --> E2E["Built-stack E2E"]
-    Repo --> Required["CI / required"]
+    Security["Security workflow"] --> SecurityRequired["Security required"]
+    Repo --> Required["CI required"]
     Frontend --> Required
     Backend --> Required
     Contract --> Required
+    Delivery --> Required
     Docs --> Required
     E2E --> Required
 ```
 
-Change detection avoids unrelated expensive work, but `CI / required` always runs. It accepts an individual job only when that job succeeds or was legitimately skipped. A failure or cancellation fails the aggregate status, so branch protection needs one stable required check instead of a changing list of path-aware checks.
+Change detection avoids unrelated expensive work, but `CI required` always runs. It accepts an individual job only when that job succeeds or was legitimately skipped. A failure or cancellation fails the aggregate status, so branch protection needs one stable required check instead of a changing list of path-aware checks.
 
 ## Enforced gates
 
@@ -31,6 +34,7 @@ Change detection avoids unrelated expensive work, but `CI / required` always run
 | Frontend           | Type-aware ESLint, strict TypeScript, Vitest coverage, production build, gzip bundle budget                                      |
 | Backend            | golangci-lint, race detector, atomic coverage, production build                                                                  |
 | API contracts      | Redocly OpenAPI lint and bidirectional Gin route drift                                                                           |
+| Release artifacts  | Cross-compiled API and static web archives, checksums, manifests, packaged smoke test                                            |
 | Documentation      | markdownlint across repository-owned Markdown                                                                                    |
 | End-to-end         | Production Vite preview and compiled Go API in Chromium                                                                          |
 
@@ -91,14 +95,14 @@ Draft pull requests may retain incomplete self-review boxes. The metadata gate r
 Configure the `main` branch with:
 
 1. Require a pull request before merging.
-2. Require `CI / required` and require branches to be up to date.
+2. Require `CI required` and `Security required`, and require branches to be up to date.
 3. Require conversation resolution.
 4. Apply protection to administrators.
 5. Block force pushes and branch deletion.
 6. Require one approval in a multi-maintainer team. A single-maintainer repository may use zero required approvals while retaining the automated gate and explicit self-review.
 7. Do not require linear history while merge commits are the documented strategy.
 
-Repository Actions permissions should default to read-only. Allow GitHub Actions to create pull requests only for an explicitly reviewed automation use case. Release and deployment write permissions belong in dedicated workflows with protected environments, not in pull request CI.
+Repository Actions permissions should default to read-only. Allow GitHub Actions to create pull requests only for an explicitly reviewed automation use case. Release write permissions belong in a dedicated workflow with a protected environment, not in pull request CI. IssueScout intentionally uses Docker-free release archives.
 
 ## Updating actions
 

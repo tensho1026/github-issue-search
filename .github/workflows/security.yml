@@ -1,0 +1,157 @@
+name: Security
+
+on:
+  pull_request:
+    types:
+      - opened
+      - ready_for_review
+      - reopened
+      - synchronize
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "17 1 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  TRIVY_VERSION: v0.72.0
+
+jobs:
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          license-check: true
+          retry-on-snapshot-warnings: true
+          vulnerability-check: true
+
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - go
+          - javascript-typescript
+    steps:
+      - name: Check out the exact revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install the repository Go toolchain
+        if: matrix.language == 'go'
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          cache-dependency-path: apps/api/go.sum
+          go-version-file: apps/api/go.mod
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+
+      - name: Build analyzed source
+        uses: github/codeql-action/autobuild@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4
+
+      - name: Analyze source
+        uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4
+        with:
+          category: /language:${{ matrix.language }}
+
+  repository-scan:
+    name: Dependencies, secrets, and configuration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the exact revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Scan repository
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          exit-code: "1"
+          format: table
+          ignore-unfixed: true
+          scan-ref: .
+          scan-type: fs
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          version: ${{ env.TRIVY_VERSION }}
+
+  workflow-audit:
+    name: GitHub Actions audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the exact revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Audit workflow attack surface
+        uses: zizmorcore/zizmor-action@6fc4b006235f201fdab3722e17240ab420d580e5 # v0.6.1
+        with:
+          advanced-security: false
+          annotations: true
+          min-confidence: medium
+          min-severity: medium
+          persona: pedantic
+          version: 1.28.0
+
+  required:
+    name: Security required
+    if: always()
+    needs:
+      - codeql
+      - dependency-review
+      - repository-scan
+      - workflow-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Enforce security results
+        env:
+          CODEQL_RESULT: ${{ needs.codeql.result }}
+          DEPENDENCY_RESULT: ${{ needs.dependency-review.result }}
+          REPOSITORY_RESULT: ${{ needs.repository-scan.result }}
+          WORKFLOW_RESULT: ${{ needs.workflow-audit.result }}
+        run: |
+          for result in \
+            "${CODEQL_RESULT}" \
+            "${DEPENDENCY_RESULT}" \
+            "${REPOSITORY_RESULT}" \
+            "${WORKFLOW_RESULT}"; do
+            case "${result}" in
+              success | skipped) ;;
+              *)
+                echo "Required security dependency ended with status: ${result}" >&2
+                exit 1
+                ;;
+            esac
+          done

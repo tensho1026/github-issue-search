@@ -10,6 +10,12 @@ const workflowFiles = (await readdir(workflowDirectory))
   .filter((file) => /\.ya?ml$/.test(file))
   .sort();
 const violations = [];
+const jobWritePermissionAllowlist = new Map([
+  ["release.yml/publish/attestations", "write"],
+  ["release.yml/publish/contents", "write"],
+  ["release.yml/publish/id-token", "write"],
+  ["security.yml/codeql/security-events", "write"],
+]);
 
 if (workflowFiles.length === 0) {
   violations.push("No GitHub Actions workflows were found.");
@@ -46,11 +52,29 @@ for (const filename of workflowFiles) {
 
   for (const [jobName, job] of Object.entries(workflow.jobs ?? {})) {
     for (const [scope, access] of Object.entries(job.permissions ?? {})) {
-      if (access === "write" || access === "write-all") {
+      const allowlistedAccess = jobWritePermissionAllowlist.get(
+        `${filename}/${jobName}/${scope}`,
+      );
+      if (
+        (access === "write" || access === "write-all") &&
+        access !== allowlistedAccess
+      ) {
         violations.push(
-          `${relativePath}: job ${jobName} grants ${scope} write permission`,
+          `${relativePath}: job ${jobName} grants unapproved ${scope} write permission`,
         );
       }
+    }
+    if (
+      Object.entries(job.permissions ?? {}).some(
+        ([scope, access]) =>
+          access === "write" &&
+          ["attestations", "contents", "id-token", "packages"].includes(scope),
+      ) &&
+      !job.environment
+    ) {
+      violations.push(
+        `${relativePath}: privileged job ${jobName} must use a protected environment`,
+      );
     }
     if (
       typeof job["timeout-minutes"] !== "number" ||

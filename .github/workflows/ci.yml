@@ -34,6 +34,7 @@ jobs:
     outputs:
       backend: ${{ steps.scopes.outputs.backend }}
       contracts: ${{ steps.scopes.outputs.contracts }}
+      delivery: ${{ steps.scopes.outputs.delivery }}
       docs: ${{ steps.scopes.outputs.docs }}
       e2e: ${{ steps.scopes.outputs.e2e }}
       frontend: ${{ steps.scopes.outputs.frontend }}
@@ -99,7 +100,7 @@ jobs:
         run: pnpm run lint:workflows
 
       - name: Lint shell scripts
-        run: shellcheck scripts/ci/*.sh
+        run: find scripts -type f -name '*.sh' -print0 | xargs -0 shellcheck
 
       - name: Lint Markdown
         run: pnpm run lint:docs
@@ -257,6 +258,60 @@ jobs:
           path: packages/contracts/openapi.yaml
           retention-days: 14
 
+  delivery:
+    name: Docker-free release artifacts
+    needs:
+      - changes
+    if: needs.changes.outputs.delivery == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the exact revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          run_install: false
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          cache-dependency-path: apps/api/go.sum
+          go-version-file: apps/api/go.mod
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build, verify, and smoke-test release archives
+        env:
+          VERSION: v0.0.0-ci.${{ github.run_id }}
+        run: |
+          bash scripts/release/build-api-artifacts.sh "${VERSION}" artifacts/release
+          bash scripts/release/build-web-artifact.sh "${VERSION}" artifacts/release
+          bash scripts/release/write-checksums.sh artifacts/release
+          node scripts/release/verify-artifacts.mjs artifacts/release "${VERSION}"
+          bash scripts/release/smoke-artifacts.sh artifacts/release "${VERSION}"
+
+      - name: Upload release-build evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          if-no-files-found: warn
+          name: release-build-${{ github.run_id }}
+          path: artifacts/release
+          retention-days: 7
+
   docs:
     name: Documentation
     needs:
@@ -342,12 +397,13 @@ jobs:
           retention-days: 7
 
   required:
-    name: required
+    name: CI required
     if: always()
     needs:
       - backend
       - changes
       - contracts
+      - delivery
       - docs
       - e2e
       - frontend
@@ -360,6 +416,7 @@ jobs:
           BACKEND_RESULT: ${{ needs.backend.result }}
           CHANGES_RESULT: ${{ needs.changes.result }}
           CONTRACTS_RESULT: ${{ needs.contracts.result }}
+          DELIVERY_RESULT: ${{ needs.delivery.result }}
           DOCS_RESULT: ${{ needs.docs.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
           FRONTEND_RESULT: ${{ needs.frontend.result }}
@@ -369,6 +426,7 @@ jobs:
             "${BACKEND_RESULT}" \
             "${CHANGES_RESULT}" \
             "${CONTRACTS_RESULT}" \
+            "${DELIVERY_RESULT}" \
             "${DOCS_RESULT}" \
             "${E2E_RESULT}" \
             "${FRONTEND_RESULT}" \
