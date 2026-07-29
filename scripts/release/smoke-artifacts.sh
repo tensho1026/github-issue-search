@@ -13,7 +13,8 @@ readonly temporary_directory
 api_pid=""
 web_pid=""
 
-# shellcheck disable=SC2329
+# The EXIT trap invokes this function indirectly.
+# shellcheck disable=SC2317,SC2329
 cleanup() {
   if [[ -n "${api_pid}" ]]; then
     kill "${api_pid}" >/dev/null 2>&1 || true
