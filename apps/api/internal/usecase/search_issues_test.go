@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -46,7 +47,7 @@ func TestSearchIssuesFiltersPaginatesAndCachesCandidates(t *testing.T) {
 		t.Fatalf("Execute(first) error = %v", err)
 	}
 	if len(first.Items) != 1 ||
-		first.Items[0].Issue.Number != 1 ||
+		first.Items[0].Candidate.Issue.Number != 1 ||
 		first.Pagination != (SearchIssuesPagination{
 			Page:       1,
 			PerPage:    1,
@@ -74,14 +75,14 @@ func TestSearchIssuesFiltersPaginatesAndCachesCandidates(t *testing.T) {
 		t.Fatalf("Execute(second) error = %v", err)
 	}
 	if len(second.Items) != 1 ||
-		second.Items[0].Issue.Number != 2 ||
+		second.Items[0].Candidate.Issue.Number != 2 ||
 		second.Pagination.HasNext ||
 		!second.CacheHit ||
 		searcher.callCount() != 1 {
 		t.Fatalf("second output = %+v, calls = %d", second, searcher.callCount())
 	}
 
-	second.Items[0].Issue.Labels[0] = "mutated"
+	second.Items[0].Candidate.Issue.Labels[0] = "mutated"
 	third, err := usecase.Execute(context.Background(), SearchIssuesInput{
 		Criteria:   criteria,
 		Pagination: searchPagination(t, 2, 1),
@@ -89,7 +90,7 @@ func TestSearchIssuesFiltersPaginatesAndCachesCandidates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute(third) error = %v", err)
 	}
-	if third.Items[0].Issue.Labels[0] != "good first issue" {
+	if third.Items[0].Candidate.Issue.Labels[0] != "good first issue" {
 		t.Fatalf("cached output was mutated = %+v", third.Items[0])
 	}
 }
@@ -198,6 +199,119 @@ func TestSearchIssuesReturnsEmptyOutOfRangePage(t *testing.T) {
 	}
 }
 
+func TestSearchIssuesEnrichesBoundedCandidatesAndRanksDeterministically(
+	t *testing.T,
+) {
+	t.Parallel()
+	now := time.Date(2026, time.July, 30, 12, 0, 0, 0, time.UTC)
+	searcher := &issueSearcherStub{result: port.GitHubIssueSearchResult{
+		Candidates: []issue.Candidate{
+			searchCandidate(now, 1, 10),
+			searchCandidate(now, 2, 20),
+			searchCandidate(now, 3, 30),
+			searchCandidate(now, 4, 40),
+		},
+		TotalCount: 4,
+	}}
+	recommender := &searchRecommenderStub{
+		now:    now,
+		scores: map[int]int{1: 40, 2: 90},
+		delay:  5 * time.Millisecond,
+	}
+	cache, err := memory.NewIssueSearch(10, time.Hour)
+	if err != nil {
+		t.Fatalf("NewIssueSearch() error = %v", err)
+	}
+	contract, err := NewSearchIssues(
+		searcher,
+		cache,
+		50,
+		WithIssueRecommendationEnrichment(recommender, 2, 2),
+	)
+	if err != nil {
+		t.Fatalf("NewSearchIssues() error = %v", err)
+	}
+	output, err := contract.Execute(context.Background(), SearchIssuesInput{
+		Criteria: searchCriteria(t, issue.SearchCriteriaOptions{
+			Username:  "octocat",
+			Languages: []string{"Go"},
+		}),
+		Pagination: searchPagination(t, 1, 4),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	numbers := make([]int, 0, len(output.Items))
+	for _, item := range output.Items {
+		numbers = append(numbers, item.Candidate.Issue.Number)
+	}
+	want := []int{2, 1, 4, 3}
+	if !slices.Equal(numbers, want) ||
+		output.EnrichmentAttempted != 2 ||
+		output.EnrichmentFailed != 0 ||
+		recommender.Calls() != 2 ||
+		recommender.MaxActive() > 2 {
+		t.Fatalf(
+			"numbers = %v, output = %+v, calls = %d, max active = %d",
+			numbers,
+			output,
+			recommender.Calls(),
+			recommender.MaxActive(),
+		)
+	}
+}
+
+func TestSearchIssuesFallsBackWhenOptionalEnrichmentFails(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	searcher := &issueSearcherStub{result: port.GitHubIssueSearchResult{
+		Candidates: []issue.Candidate{searchCandidate(now, 1, 20)},
+		TotalCount: 1,
+	}}
+	recommender := &searchRecommenderStub{
+		now:        now,
+		failNumber: 1,
+	}
+	cache, err := memory.NewIssueSearch(10, time.Hour)
+	if err != nil {
+		t.Fatalf("NewIssueSearch() error = %v", err)
+	}
+	contract, err := NewSearchIssues(
+		searcher,
+		cache,
+		50,
+		WithIssueRecommendationEnrichment(recommender, 1, 1),
+	)
+	if err != nil {
+		t.Fatalf("NewSearchIssues() error = %v", err)
+	}
+	output, err := contract.Execute(context.Background(), SearchIssuesInput{
+		Criteria: searchCriteria(
+			t,
+			issue.SearchCriteriaOptions{Username: "octocat"},
+		),
+		Pagination: searchPagination(t, 1, 20),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if output.EnrichmentFailed != 1 ||
+		!output.IncompleteResults ||
+		len(output.Items) != 1 {
+		t.Fatalf("output = %+v", output)
+	}
+	foundWarning := false
+	for _, warning := range output.Items[0].Recommendation.Warnings {
+		if warning.Code == "detail_enrichment_unavailable" {
+			foundWarning = true
+		}
+	}
+	if !foundWarning {
+		t.Fatalf("warnings = %+v", output.Items[0].Recommendation.Warnings)
+	}
+}
+
 func TestSearchIssuesMapsErrors(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -292,6 +406,32 @@ func TestNewSearchIssuesRejectsInvalidDependencies(t *testing.T) {
 			}
 		})
 	}
+
+	recommender := &searchRecommenderStub{}
+	for name, option := range map[string]SearchIssuesOption{
+		"missing recommender": WithIssueRecommendationEnrichment(nil, 1, 1),
+		"invalid analysis limit": WithIssueRecommendationEnrichment(
+			recommender,
+			51,
+			1,
+		),
+		"invalid concurrency": WithIssueRecommendationEnrichment(
+			recommender,
+			2,
+			3,
+		),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := NewSearchIssues(
+				searcher,
+				cache,
+				50,
+				option,
+			); err == nil {
+				t.Fatal("NewSearchIssues() option error = nil")
+			}
+		})
+	}
 }
 
 type issueSearcherStub struct {
@@ -303,6 +443,92 @@ type issueSearcherStub struct {
 	release chan struct{}
 	calls   int
 	limit   int
+}
+
+type searchRecommenderStub struct {
+	mu         sync.Mutex
+	now        time.Time
+	scores     map[int]int
+	failNumber int
+	delay      time.Duration
+	calls      int
+	active     int
+	maxActive  int
+}
+
+func (stub *searchRecommenderStub) Execute(
+	ctx context.Context,
+	input RecommendIssueInput,
+) (RecommendIssueOutput, error) {
+	stub.mu.Lock()
+	stub.calls++
+	stub.active++
+	if stub.active > stub.maxActive {
+		stub.maxActive = stub.active
+	}
+	stub.mu.Unlock()
+	defer func() {
+		stub.mu.Lock()
+		stub.active--
+		stub.mu.Unlock()
+	}()
+
+	if stub.delay > 0 {
+		timer := time.NewTimer(stub.delay)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			return RecommendIssueOutput{}, ctx.Err()
+		}
+	}
+	if input.Reference.Number() == stub.failNumber {
+		return RecommendIssueOutput{}, &port.GitHubError{
+			Kind: port.GitHubErrorUpstream,
+		}
+	}
+	score := stub.scores[input.Reference.Number()]
+	candidate := searchCandidate(
+		stub.now,
+		input.Reference.Number(),
+		input.Reference.Number()*10,
+	)
+	return RecommendIssueOutput{
+		Item: issue.RankedIssue{
+			Candidate: candidate,
+			Recommendation: issue.Recommendation{
+				Score: score,
+			},
+		},
+		RateLimit: port.RateLimit{
+			Known:     true,
+			Remaining: 40 - input.Reference.Number(),
+		},
+	}, nil
+}
+
+func (stub *searchRecommenderStub) EvaluateCandidate(
+	candidate issue.Candidate,
+	_ []string,
+) issue.RankedIssue {
+	return issue.RankedIssue{
+		Candidate: candidate,
+		Recommendation: issue.Recommendation{
+			Score: candidate.Issue.Number,
+		},
+	}
+}
+
+func (stub *searchRecommenderStub) Calls() int {
+	stub.mu.Lock()
+	defer stub.mu.Unlock()
+	return stub.calls
+}
+
+func (stub *searchRecommenderStub) MaxActive() int {
+	stub.mu.Lock()
+	defer stub.mu.Unlock()
+	return stub.maxActive
 }
 
 func (stub *issueSearcherStub) SearchIssues(
