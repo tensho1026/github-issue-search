@@ -1,0 +1,6 @@
+node_modules
+dist
+coverage
+bin
+apps/api/.env.example
+apps/web/.env.example
