@@ -142,15 +142,16 @@ func (c *Client) GetIssueDetail(
 	repositoryName string,
 	issueNumber int,
 ) (port.GitHubIssueDetailResult, error) {
-	if err := validateIssueDetailIdentity(owner, repositoryName, issueNumber); err != nil {
+	reference, err := issue.NewReference(owner, repositoryName, issueNumber)
+	if err != nil {
 		return port.GitHubIssueDetailResult{}, err
 	}
 	requestBody, err := json.Marshal(graphQLIssueDetailRequest{
 		Query: graphQLIssueDetailDocument,
 		Variables: graphQLIssueDetailVariables{
-			Owner:       owner,
-			Name:        repositoryName,
-			Number:      issueNumber,
+			Owner:       reference.Owner(),
+			Name:        reference.RepositoryName(),
+			Number:      reference.Number(),
 			SampleSize:  issueDetailSampleSize,
 			CommentSize: issueDetailCommentSize,
 		},
@@ -212,64 +213,6 @@ func (c *Client) GetIssueDetail(
 		"rateLimitRemaining", result.RateLimit.Remaining,
 	)
 	return result, nil
-}
-
-func validateIssueDetailIdentity(
-	owner string,
-	repositoryName string,
-	issueNumber int,
-) error {
-	if !validGitHubOwner(owner) {
-		return fmt.Errorf("GitHub repository owner is invalid")
-	}
-	if !validGitHubRepositoryName(repositoryName) {
-		return fmt.Errorf("GitHub repository name is invalid")
-	}
-	if issueNumber < 1 {
-		return fmt.Errorf("GitHub issue number must be positive")
-	}
-	return nil
-}
-
-func validGitHubOwner(value string) bool {
-	if value == "" || len(value) > 39 ||
-		strings.TrimSpace(value) != value ||
-		strings.HasPrefix(value, "-") ||
-		strings.HasSuffix(value, "-") ||
-		strings.Contains(value, "--") {
-		return false
-	}
-	for _, character := range value {
-		if (character >= 'a' && character <= 'z') ||
-			(character >= 'A' && character <= 'Z') ||
-			(character >= '0' && character <= '9') ||
-			character == '-' {
-			continue
-		}
-		return false
-	}
-	return true
-}
-
-func validGitHubRepositoryName(value string) bool {
-	if value == "" || len(value) > 100 ||
-		strings.TrimSpace(value) != value ||
-		value == "." ||
-		value == ".." {
-		return false
-	}
-	for _, character := range value {
-		if (character >= 'a' && character <= 'z') ||
-			(character >= 'A' && character <= 'Z') ||
-			(character >= '0' && character <= '9') ||
-			character == '-' ||
-			character == '_' ||
-			character == '.' {
-			continue
-		}
-		return false
-	}
-	return true
 }
 
 func decodeGraphQLIssueDetailResponse(
