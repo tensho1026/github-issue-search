@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/issue"
 )
 
 const (
@@ -20,7 +22,9 @@ const (
 	defaultProfileRepositoryLimit       = 20
 	defaultProfileAnalysisCacheTTL      = 30 * time.Minute
 	defaultProfileAnalysisCacheCapacity = 500
-	defaultIssueSearchResultLimit       = 50
+	defaultIssueSearchResultLimit       = issue.MaximumCandidateResults
+	defaultIssueSearchCacheTTL          = 5 * time.Minute
+	defaultIssueSearchCacheCapacity     = 1000
 	defaultIssueDetailAnalysisLimit     = 20
 	defaultManifestFileLimit            = 3
 )
@@ -40,6 +44,8 @@ type Config struct {
 	ProfileAnalysisCacheTTL      time.Duration
 	ProfileAnalysisCacheCapacity int
 	IssueSearchResultLimit       int
+	IssueSearchCacheTTL          time.Duration
+	IssueSearchCacheCapacity     int
 	IssueDetailAnalysisLimit     int
 	ManifestFileLimit            int
 	UseGitHubAPIMock             bool
@@ -127,7 +133,26 @@ func Load() (Config, error) {
 		"ISSUE_SEARCH_RESULT_LIMIT",
 		defaultIssueSearchResultLimit,
 		1,
-		50,
+		issue.MaximumCandidateResults,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+
+	issueSearchCacheTTL, err := parseDuration(
+		"ISSUE_SEARCH_CACHE_TTL",
+		defaultIssueSearchCacheTTL,
+		24*time.Hour,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+
+	issueSearchCacheCapacity, err := parseInt(
+		"ISSUE_SEARCH_CACHE_CAPACITY",
+		defaultIssueSearchCacheCapacity,
+		1,
+		10_000,
 	)
 	if err != nil {
 		return Config{}, err
@@ -169,6 +194,8 @@ func Load() (Config, error) {
 		ProfileAnalysisCacheTTL:      profileAnalysisCacheTTL,
 		ProfileAnalysisCacheCapacity: profileCacheCapacity,
 		IssueSearchResultLimit:       issueSearchResultLimit,
+		IssueSearchCacheTTL:          issueSearchCacheTTL,
+		IssueSearchCacheCapacity:     issueSearchCacheCapacity,
 		IssueDetailAnalysisLimit:     issueDetailAnalysisLimit,
 		ManifestFileLimit:            manifestFileLimit,
 		UseGitHubAPIMock:             useGitHubAPIMock,

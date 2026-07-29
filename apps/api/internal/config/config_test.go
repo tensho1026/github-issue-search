@@ -19,6 +19,8 @@ var configurationKeys = []string{
 	"PROFILE_ANALYSIS_CACHE_TTL",
 	"PROFILE_ANALYSIS_CACHE_CAPACITY",
 	"ISSUE_SEARCH_RESULT_LIMIT",
+	"ISSUE_SEARCH_CACHE_TTL",
+	"ISSUE_SEARCH_CACHE_CAPACITY",
 	"ISSUE_DETAIL_ANALYSIS_LIMIT",
 	"MANIFEST_FILE_LIMIT",
 	"USE_GITHUB_API_MOCK",
@@ -51,6 +53,10 @@ func TestLoadUsesSafeDefaults(t *testing.T) {
 		cfg.ProfileAnalysisCacheCapacity != defaultProfileAnalysisCacheCapacity {
 		t.Fatalf("Load() profile cache defaults = %+v", cfg)
 	}
+	if cfg.IssueSearchCacheTTL != defaultIssueSearchCacheTTL ||
+		cfg.IssueSearchCacheCapacity != defaultIssueSearchCacheCapacity {
+		t.Fatalf("Load() issue search cache defaults = %+v", cfg)
+	}
 }
 
 func TestLoadReadsConfiguredValues(t *testing.T) {
@@ -68,6 +74,8 @@ func TestLoadReadsConfiguredValues(t *testing.T) {
 	t.Setenv("PROFILE_ANALYSIS_CACHE_TTL", "45m")
 	t.Setenv("PROFILE_ANALYSIS_CACHE_CAPACITY", "750")
 	t.Setenv("ISSUE_SEARCH_RESULT_LIMIT", "30")
+	t.Setenv("ISSUE_SEARCH_CACHE_TTL", "4m")
+	t.Setenv("ISSUE_SEARCH_CACHE_CAPACITY", "900")
 	t.Setenv("ISSUE_DETAIL_ANALYSIS_LIMIT", "10")
 	t.Setenv("MANIFEST_FILE_LIMIT", "2")
 	t.Setenv("USE_GITHUB_API_MOCK", "true")
@@ -86,6 +94,8 @@ func TestLoadReadsConfiguredValues(t *testing.T) {
 		cfg.ProfileAnalysisCacheTTL != 45*time.Minute ||
 		cfg.ProfileAnalysisCacheCapacity != 750 ||
 		cfg.IssueSearchResultLimit != 30 ||
+		cfg.IssueSearchCacheTTL != 4*time.Minute ||
+		cfg.IssueSearchCacheCapacity != 900 ||
 		cfg.IssueDetailAnalysisLimit != 10 ||
 		cfg.ManifestFileLimit != 2 ||
 		!cfg.UseGitHubAPIMock {
@@ -164,6 +174,18 @@ func TestLoadRejectsInvalidConfiguration(t *testing.T) {
 			key:     "ISSUE_SEARCH_RESULT_LIMIT",
 			value:   "51",
 			message: "ISSUE_SEARCH_RESULT_LIMIT",
+		},
+		{
+			name:    "search cache TTL",
+			key:     "ISSUE_SEARCH_CACHE_TTL",
+			value:   "25h",
+			message: "ISSUE_SEARCH_CACHE_TTL",
+		},
+		{
+			name:    "search cache capacity",
+			key:     "ISSUE_SEARCH_CACHE_CAPACITY",
+			value:   "0",
+			message: "ISSUE_SEARCH_CACHE_CAPACITY",
 		},
 		{
 			name:     "detail exceeds search",
