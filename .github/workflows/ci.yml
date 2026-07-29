@@ -343,6 +343,7 @@ jobs:
     if: always()
     needs:
       - backend
+      - changes
       - contracts
       - docs
       - e2e
@@ -354,6 +355,7 @@ jobs:
       - name: Enforce applicable job results
         env:
           BACKEND_RESULT: ${{ needs.backend.result }}
+          CHANGES_RESULT: ${{ needs.changes.result }}
           CONTRACTS_RESULT: ${{ needs.contracts.result }}
           DOCS_RESULT: ${{ needs.docs.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
@@ -362,6 +364,7 @@ jobs:
         run: |
           for result in \
             "${BACKEND_RESULT}" \
+            "${CHANGES_RESULT}" \
             "${CONTRACTS_RESULT}" \
             "${DOCS_RESULT}" \
             "${E2E_RESULT}" \

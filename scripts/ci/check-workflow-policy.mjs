@@ -45,6 +45,13 @@ for (const filename of workflowFiles) {
   }
 
   for (const [jobName, job] of Object.entries(workflow.jobs ?? {})) {
+    for (const [scope, access] of Object.entries(job.permissions ?? {})) {
+      if (access === "write" || access === "write-all") {
+        violations.push(
+          `${relativePath}: job ${jobName} grants ${scope} write permission`,
+        );
+      }
+    }
     if (
       typeof job["timeout-minutes"] !== "number" ||
       job["timeout-minutes"] <= 0
