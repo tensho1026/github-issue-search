@@ -1,0 +1,153 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Protected promotion environment
+        required: true
+        type: environment
+      health_url:
+        description: HTTPS endpoint to verify after the provider handoff
+        required: true
+        type: string
+      release_tag:
+        description: Published semantic-version release tag
+        required: true
+        type: string
+      dry_run:
+        description: Validate inputs without environment access or network effects
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate promotion contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out promotion tooling
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Validate release, environment, and endpoint
+        env:
+          ENVIRONMENT_NAME: ${{ inputs.environment }}
+          HEALTH_URL: ${{ inputs.health_url }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          node scripts/deploy/validate-promotion.mjs \
+            "${ENVIRONMENT_NAME}" \
+            "${RELEASE_TAG}" \
+            "${HEALTH_URL}"
+
+  dry-run:
+    name: Confirm non-promoting dry run
+    if: inputs.dry_run
+    needs:
+      - validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Record validated contract
+        env:
+          ENVIRONMENT_NAME: ${{ inputs.environment }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          {
+            echo "## Promotion dry run"
+            echo
+            echo "- Environment: \`${ENVIRONMENT_NAME}\`"
+            echo "- Release: \`${RELEASE_TAG}\`"
+            echo "- No protected environment, release download, promotion, or smoke request was used."
+          } >>"${GITHUB_STEP_SUMMARY}"
+
+  promote:
+    name: Verify provider handoff
+    if: ${{ !inputs.dry_run }}
+    needs:
+      - validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ inputs.health_url }}
+    permissions:
+      attestations: read
+      contents: read
+    steps:
+      - name: Check out promotion tooling
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Download published release evidence
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          mkdir -p artifacts
+          gh release download "${RELEASE_TAG}" --dir artifacts
+
+      - name: Verify checksums, manifests, and attestations
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          node scripts/release/verify-artifacts.mjs artifacts "${RELEASE_TAG}"
+          gh attestation verify artifacts/*.tar.gz --repo "${GITHUB_REPOSITORY}"
+
+      - name: Re-scan promoted release files
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          exit-code: "1"
+          format: table
+          ignore-unfixed: true
+          scan-ref: artifacts
+          scan-type: fs
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          version: v0.72.0
+
+      - name: Record provider-neutral promotion
+        env:
+          ENVIRONMENT_NAME: ${{ inputs.environment }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          jq -n \
+            --arg commit "${GITHUB_SHA}" \
+            --arg environment "${ENVIRONMENT_NAME}" \
+            --arg release "${RELEASE_TAG}" \
+            --arg runId "${GITHUB_RUN_ID}" \
+            '{
+              schemaVersion: 1,
+              release: $release,
+              environment: $environment,
+              workflowCommit: $commit,
+              runId: $runId
+            }' >promotion-manifest.json
+
+      - name: Verify environment health after provider handoff
+        env:
+          HEALTH_URL: ${{ inputs.health_url }}
+        run: bash scripts/deploy/smoke-endpoint.sh "${HEALTH_URL}"
+
+      - name: Upload promotion and rollback evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          if-no-files-found: warn
+          name: promotion-${{ inputs.environment }}-${{ github.run_id }}
+          path: |
+            artifacts/SHA256SUMS
+            promotion-manifest.json
+          retention-days: 90
