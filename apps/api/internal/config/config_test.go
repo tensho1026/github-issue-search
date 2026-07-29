@@ -16,6 +16,8 @@ var configurationKeys = []string{
 	"GITHUB_REQUEST_TIMEOUT",
 	"GITHUB_API_MAX_CONCURRENCY",
 	"PROFILE_ANALYSIS_REPOSITORY_LIMIT",
+	"PROFILE_ANALYSIS_CACHE_TTL",
+	"PROFILE_ANALYSIS_CACHE_CAPACITY",
 	"ISSUE_SEARCH_RESULT_LIMIT",
 	"ISSUE_DETAIL_ANALYSIS_LIMIT",
 	"MANIFEST_FILE_LIMIT",
@@ -45,6 +47,10 @@ func TestLoadUsesSafeDefaults(t *testing.T) {
 	if cfg.GitHubMaxConcurrency != defaultGitHubMaxConcurrency {
 		t.Fatalf("Load().GitHubMaxConcurrency = %d", cfg.GitHubMaxConcurrency)
 	}
+	if cfg.ProfileAnalysisCacheTTL != defaultProfileAnalysisCacheTTL ||
+		cfg.ProfileAnalysisCacheCapacity != defaultProfileAnalysisCacheCapacity {
+		t.Fatalf("Load() profile cache defaults = %+v", cfg)
+	}
 }
 
 func TestLoadReadsConfiguredValues(t *testing.T) {
@@ -59,6 +65,8 @@ func TestLoadReadsConfiguredValues(t *testing.T) {
 	t.Setenv("GITHUB_REQUEST_TIMEOUT", "7s")
 	t.Setenv("GITHUB_API_MAX_CONCURRENCY", "3")
 	t.Setenv("PROFILE_ANALYSIS_REPOSITORY_LIMIT", "12")
+	t.Setenv("PROFILE_ANALYSIS_CACHE_TTL", "45m")
+	t.Setenv("PROFILE_ANALYSIS_CACHE_CAPACITY", "750")
 	t.Setenv("ISSUE_SEARCH_RESULT_LIMIT", "30")
 	t.Setenv("ISSUE_DETAIL_ANALYSIS_LIMIT", "10")
 	t.Setenv("MANIFEST_FILE_LIMIT", "2")
@@ -75,6 +83,8 @@ func TestLoadReadsConfiguredValues(t *testing.T) {
 	if cfg.GitHubRequestTimeout != 7*time.Second ||
 		cfg.GitHubMaxConcurrency != 3 ||
 		cfg.ProfileRepositoryLimit != 12 ||
+		cfg.ProfileAnalysisCacheTTL != 45*time.Minute ||
+		cfg.ProfileAnalysisCacheCapacity != 750 ||
 		cfg.IssueSearchResultLimit != 30 ||
 		cfg.IssueDetailAnalysisLimit != 10 ||
 		cfg.ManifestFileLimit != 2 ||
@@ -136,6 +146,18 @@ func TestLoadRejectsInvalidConfiguration(t *testing.T) {
 			key:     "PROFILE_ANALYSIS_REPOSITORY_LIMIT",
 			value:   "21",
 			message: "PROFILE_ANALYSIS_REPOSITORY_LIMIT",
+		},
+		{
+			name:    "profile cache TTL",
+			key:     "PROFILE_ANALYSIS_CACHE_TTL",
+			value:   "25h",
+			message: "PROFILE_ANALYSIS_CACHE_TTL",
+		},
+		{
+			name:    "profile cache capacity",
+			key:     "PROFILE_ANALYSIS_CACHE_CAPACITY",
+			value:   "0",
+			message: "PROFILE_ANALYSIS_CACHE_CAPACITY",
 		},
 		{
 			name:    "search limit",

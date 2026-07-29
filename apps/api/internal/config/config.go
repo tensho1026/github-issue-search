@@ -12,15 +12,17 @@ import (
 )
 
 const (
-	defaultPort                     = "8080"
-	defaultAllowedOrigins           = "http://127.0.0.1:5173"
-	defaultGitHubAPIBaseURL         = "https://api.github.com"
-	defaultGitHubRequestTimeout     = 10 * time.Second
-	defaultGitHubMaxConcurrency     = 5
-	defaultProfileRepositoryLimit   = 20
-	defaultIssueSearchResultLimit   = 50
-	defaultIssueDetailAnalysisLimit = 20
-	defaultManifestFileLimit        = 3
+	defaultPort                         = "8080"
+	defaultAllowedOrigins               = "http://127.0.0.1:5173"
+	defaultGitHubAPIBaseURL             = "https://api.github.com"
+	defaultGitHubRequestTimeout         = 10 * time.Second
+	defaultGitHubMaxConcurrency         = 5
+	defaultProfileRepositoryLimit       = 20
+	defaultProfileAnalysisCacheTTL      = 30 * time.Minute
+	defaultProfileAnalysisCacheCapacity = 500
+	defaultIssueSearchResultLimit       = 50
+	defaultIssueDetailAnalysisLimit     = 20
+	defaultManifestFileLimit            = 3
 )
 
 var errInvalidConfig = errors.New("invalid configuration")
@@ -28,25 +30,27 @@ var errInvalidConfig = errors.New("invalid configuration")
 // Config is the immutable process-level configuration assembled at startup.
 // Secrets remain server-side and callers must never serialize this type.
 type Config struct {
-	Port                      string
-	AllowedOrigins            []string
-	GitHubToken               string
-	GitHubAPIBaseURL          *url.URL
-	GitHubRequestTimeout      time.Duration
-	GitHubMaxConcurrency      int
-	ProfileRepositoryLimit    int
-	IssueSearchResultLimit    int
-	IssueDetailAnalysisLimit  int
-	ManifestFileLimit         int
-	UseGitHubAPIMock          bool
-	ReadHeaderTimeout         time.Duration
-	ReadTimeout               time.Duration
-	WriteTimeout              time.Duration
-	IdleTimeout               time.Duration
-	ShutdownTimeout           time.Duration
-	NormalRequestTimeout      time.Duration
-	ProfileRequestTimeout     time.Duration
-	IssueSearchRequestTimeout time.Duration
+	Port                         string
+	AllowedOrigins               []string
+	GitHubToken                  string
+	GitHubAPIBaseURL             *url.URL
+	GitHubRequestTimeout         time.Duration
+	GitHubMaxConcurrency         int
+	ProfileRepositoryLimit       int
+	ProfileAnalysisCacheTTL      time.Duration
+	ProfileAnalysisCacheCapacity int
+	IssueSearchResultLimit       int
+	IssueDetailAnalysisLimit     int
+	ManifestFileLimit            int
+	UseGitHubAPIMock             bool
+	ReadHeaderTimeout            time.Duration
+	ReadTimeout                  time.Duration
+	WriteTimeout                 time.Duration
+	IdleTimeout                  time.Duration
+	ShutdownTimeout              time.Duration
+	NormalRequestTimeout         time.Duration
+	ProfileRequestTimeout        time.Duration
+	IssueSearchRequestTimeout    time.Duration
 }
 
 // Load reads and validates all process configuration once. Optional values
@@ -74,6 +78,7 @@ func Load() (Config, error) {
 	gitHubRequestTimeout, err := parseDuration(
 		"GITHUB_REQUEST_TIMEOUT",
 		defaultGitHubRequestTimeout,
+		time.Minute,
 	)
 	if err != nil {
 		return Config{}, err
@@ -94,6 +99,25 @@ func Load() (Config, error) {
 		defaultProfileRepositoryLimit,
 		1,
 		20,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+
+	profileAnalysisCacheTTL, err := parseDuration(
+		"PROFILE_ANALYSIS_CACHE_TTL",
+		defaultProfileAnalysisCacheTTL,
+		24*time.Hour,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+
+	profileCacheCapacity, err := parseInt(
+		"PROFILE_ANALYSIS_CACHE_CAPACITY",
+		defaultProfileAnalysisCacheCapacity,
+		1,
+		10_000,
 	)
 	if err != nil {
 		return Config{}, err
@@ -135,25 +159,27 @@ func Load() (Config, error) {
 	}
 
 	return Config{
-		Port:                      port,
-		AllowedOrigins:            allowedOrigins,
-		GitHubToken:               os.Getenv("GITHUB_TOKEN"),
-		GitHubAPIBaseURL:          gitHubAPIBaseURL,
-		GitHubRequestTimeout:      gitHubRequestTimeout,
-		GitHubMaxConcurrency:      gitHubMaxConcurrency,
-		ProfileRepositoryLimit:    profileRepositoryLimit,
-		IssueSearchResultLimit:    issueSearchResultLimit,
-		IssueDetailAnalysisLimit:  issueDetailAnalysisLimit,
-		ManifestFileLimit:         manifestFileLimit,
-		UseGitHubAPIMock:          useGitHubAPIMock,
-		ReadHeaderTimeout:         5 * time.Second,
-		ReadTimeout:               20 * time.Second,
-		WriteTimeout:              20 * time.Second,
-		IdleTimeout:               60 * time.Second,
-		ShutdownTimeout:           10 * time.Second,
-		NormalRequestTimeout:      5 * time.Second,
-		ProfileRequestTimeout:     15 * time.Second,
-		IssueSearchRequestTimeout: 15 * time.Second,
+		Port:                         port,
+		AllowedOrigins:               allowedOrigins,
+		GitHubToken:                  os.Getenv("GITHUB_TOKEN"),
+		GitHubAPIBaseURL:             gitHubAPIBaseURL,
+		GitHubRequestTimeout:         gitHubRequestTimeout,
+		GitHubMaxConcurrency:         gitHubMaxConcurrency,
+		ProfileRepositoryLimit:       profileRepositoryLimit,
+		ProfileAnalysisCacheTTL:      profileAnalysisCacheTTL,
+		ProfileAnalysisCacheCapacity: profileCacheCapacity,
+		IssueSearchResultLimit:       issueSearchResultLimit,
+		IssueDetailAnalysisLimit:     issueDetailAnalysisLimit,
+		ManifestFileLimit:            manifestFileLimit,
+		UseGitHubAPIMock:             useGitHubAPIMock,
+		ReadHeaderTimeout:            5 * time.Second,
+		ReadTimeout:                  20 * time.Second,
+		WriteTimeout:                 20 * time.Second,
+		IdleTimeout:                  60 * time.Second,
+		ShutdownTimeout:              10 * time.Second,
+		NormalRequestTimeout:         5 * time.Second,
+		ProfileRequestTimeout:        15 * time.Second,
+		IssueSearchRequestTimeout:    15 * time.Second,
 	}, nil
 }
 
@@ -227,14 +253,24 @@ func isLoopbackHTTP(parsed *url.URL) bool {
 	return host == "localhost" || net.ParseIP(host).IsLoopback()
 }
 
-func parseDuration(key string, fallback time.Duration) (time.Duration, error) {
+func parseDuration(
+	key string,
+	fallback time.Duration,
+	maximum time.Duration,
+) (time.Duration, error) {
 	raw := os.Getenv(key)
 	if raw == "" {
 		return fallback, nil
 	}
 	value, err := time.ParseDuration(raw)
-	if err != nil || value <= 0 || value > time.Minute {
-		return 0, configError(key, "must be a positive duration no greater than 1m")
+	if err != nil || value <= 0 || value > maximum {
+		return 0, configError(
+			key,
+			fmt.Sprintf(
+				"must be a positive duration no greater than %s",
+				maximum,
+			),
+		)
 	}
 
 	return value, nil

@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/cache/memory"
 	githubclient "github.com/tensho1026/github-issue-search/apps/api/internal/client/github"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/config"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/router"
@@ -37,11 +38,27 @@ func main() {
 		gitHubClient,
 		cfg.ProfileRepositoryLimit,
 	)
+	profileAnalysisCache, err := memory.NewProfileAnalysis(
+		cfg.ProfileAnalysisCacheCapacity,
+		cfg.ProfileAnalysisCacheTTL,
+	)
+	if err != nil {
+		logger.Error("compose profile analysis cache", "error", err)
+		os.Exit(1)
+	}
+	analyzeGitHubProfile := usecase.NewAnalyzeGitHubProfile(
+		gitHubClient,
+		profileAnalysisCache,
+		cfg.ProfileRepositoryLimit,
+		cfg.ManifestFileLimit,
+		cfg.GitHubMaxConcurrency,
+	)
 	httpHandler, err := router.New(router.Dependencies{
-		Config:        cfg,
-		Logger:        logger,
-		Responder:     response.NewResponder(),
-		GetGitHubUser: getGitHubUser,
+		Config:               cfg,
+		Logger:               logger,
+		Responder:            response.NewResponder(),
+		GetGitHubUser:        getGitHubUser,
+		AnalyzeGitHubProfile: analyzeGitHubProfile,
 	})
 	if err != nil {
 		logger.Error("compose API router", "error", err)
