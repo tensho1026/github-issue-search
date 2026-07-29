@@ -11,6 +11,9 @@ const workflowFiles = (await readdir(workflowDirectory))
   .sort();
 const violations = [];
 const jobWritePermissionAllowlist = new Map([
+  ["release.yml/publish/attestations", "write"],
+  ["release.yml/publish/contents", "write"],
+  ["release.yml/publish/id-token", "write"],
   ["security.yml/codeql/security-events", "write"],
 ]);
 

@@ -44,6 +44,13 @@ const outputs = {
     /^\.github\/(?:ISSUE_TEMPLATE|PULL_REQUEST_TEMPLATE|CODEOWNERS)/,
     ...shared,
   ]),
+  delivery: matches([
+    /^apps\/(?:api|web)\//,
+    /^scripts\/(?:deploy|release)\//,
+    /^\.github\/workflows\/(?:deploy|release|security)\.ya?ml$/,
+    /^LICENSE$/,
+    ...shared,
+  ]),
   e2e: matches([/^apps\/(?:api|web)\//, /^e2e\//, ...shared]),
   frontend: matches([/^apps\/web\//, ...shared]),
 };
