@@ -2,6 +2,7 @@ package router
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -11,7 +12,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/config"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/user"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/transport/response"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/usecase"
 )
 
 func TestHealthRouteUsesStandardEnvelopeAndHeaders(t *testing.T) {
@@ -81,14 +85,27 @@ func newTestRouter(t *testing.T) http.Handler {
 	gin.SetMode(gin.TestMode)
 	var logs bytes.Buffer
 	router, err := New(Dependencies{
-		Config:    testConfig(t),
-		Logger:    slog.New(slog.NewJSONHandler(&logs, nil)),
-		Responder: response.NewResponder(),
+		Config:        testConfig(t),
+		Logger:        slog.New(slog.NewJSONHandler(&logs, nil)),
+		Responder:     response.NewResponder(),
+		GetGitHubUser: routerGetGitHubUserStub{},
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
 	return router
+}
+
+type routerGetGitHubUserStub struct{}
+
+func (routerGetGitHubUserStub) Execute(
+	context.Context,
+	user.Username,
+) (usecase.GetGitHubUserOutput, error) {
+	return usecase.GetGitHubUserOutput{
+		Profile:   user.Profile{Login: "octocat"},
+		RateLimit: port.RateLimit{Known: true, Remaining: 42},
+	}, nil
 }
 
 func testConfig(t *testing.T) config.Config {

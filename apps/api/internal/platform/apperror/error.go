@@ -9,13 +9,14 @@ import (
 type Code string
 
 const (
-	CodeInvalidRequest  Code = "INVALID_REQUEST"
-	CodeNotFound        Code = "NOT_FOUND"
-	CodeForbiddenOrigin Code = "FORBIDDEN_ORIGIN"
-	CodeRequestTimeout  Code = "REQUEST_TIMEOUT"
-	CodeRateLimit       Code = "GITHUB_RATE_LIMIT_EXCEEDED"
-	CodeGitHubAPI       Code = "GITHUB_API_ERROR"
-	CodeInternal        Code = "INTERNAL_SERVER_ERROR"
+	CodeInvalidRequest     Code = "INVALID_REQUEST"
+	CodeNotFound           Code = "NOT_FOUND"
+	CodeGitHubUserNotFound Code = "GITHUB_USER_NOT_FOUND"
+	CodeForbiddenOrigin    Code = "FORBIDDEN_ORIGIN"
+	CodeRequestTimeout     Code = "REQUEST_TIMEOUT"
+	CodeRateLimit          Code = "GITHUB_RATE_LIMIT_EXCEEDED"
+	CodeGitHubAPI          Code = "GITHUB_API_ERROR"
+	CodeInternal           Code = "INTERNAL_SERVER_ERROR"
 )
 
 // Error carries safe client information while retaining an internal cause.

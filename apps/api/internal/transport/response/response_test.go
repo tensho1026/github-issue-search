@@ -60,6 +60,32 @@ func TestResponderHidesUnknownError(t *testing.T) {
 	}
 }
 
+func TestResponderWritesOptionalRateLimitMetadata(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	remaining := 42
+
+	NewResponder().DataWithMeta(
+		ctx,
+		http.StatusOK,
+		gin.H{"status": "ok"},
+		MetaOptions{RateLimitRemaining: &remaining},
+	)
+
+	var body struct {
+		Meta Meta `json:"meta"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.Meta.RateLimitRemaining == nil ||
+		*body.Meta.RateLimitRemaining != remaining {
+		t.Fatalf("rate limit metadata = %+v", body.Meta.RateLimitRemaining)
+	}
+}
+
 func contains(value, substring string) bool {
 	for index := 0; index+len(substring) <= len(value); index++ {
 		if value[index:index+len(substring)] == substring {
