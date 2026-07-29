@@ -19,6 +19,11 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/usecase"
 )
 
+var (
+	buildCommit  = "unknown"
+	buildVersion = "development"
+)
+
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	cfg, err := config.Load()
@@ -84,7 +89,15 @@ func main() {
 		logger.Error("listen for API traffic", "error", err)
 		os.Exit(1)
 	}
-	logger.Info("starting IssueScout API", "address", listener.Addr().String())
+	logger.Info(
+		"starting IssueScout API",
+		"address",
+		listener.Addr().String(),
+		"commit",
+		buildCommit,
+		"version",
+		buildVersion,
+	)
 
 	processContext, stop := signal.NotifyContext(
 		context.Background(),
