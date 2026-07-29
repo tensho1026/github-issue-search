@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -299,13 +300,30 @@ func (usecase *searchIssues) recommendCandidates(
 	if usecase.recommender != nil {
 		limit = min(usecase.analysisLimit, len(candidates))
 	}
-	meta := issueRecommendationMeta{attempted: limit}
+	meta := issueRecommendationMeta{}
 	detailOutputs := make([]RecommendIssueOutput, limit)
 	detailErrors := make([]error, limit)
+	leaderFor := make([]int, limit)
+	leaders := make([]int, 0, limit)
+	leaderByRepository := make(map[string]int, limit)
+	for index := range limit {
+		candidate := candidates[index]
+		key := strings.ToLower(
+			candidate.Repository.Owner + "/" + candidate.Repository.Name,
+		)
+		if leader, exists := leaderByRepository[key]; exists {
+			leaderFor[index] = leader
+			continue
+		}
+		leaderByRepository[key] = index
+		leaderFor[index] = index
+		leaders = append(leaders, index)
+	}
+	meta.attempted = len(leaders)
 
 	group, groupContext := errgroup.WithContext(ctx)
 	group.SetLimit(usecase.maxConcurrency)
-	for index := range limit {
+	for _, index := range leaders {
 		index := index
 		group.Go(func() error {
 			candidate := candidates[index]
@@ -341,12 +359,31 @@ func (usecase *searchIssues) recommendCandidates(
 	}
 
 	for index, candidate := range candidates {
-		if index < limit && detailErrors[index] == nil {
-			output := detailOutputs[index]
-			ranked[index] = output.Item
-			meta.incomplete = meta.incomplete || output.Incomplete
-			meta.rateLimit = mergeRateLimits(meta.rateLimit, output.RateLimit)
-			continue
+		if index < limit {
+			leader := leaderFor[index]
+			if detailErrors[leader] == nil {
+				output := detailOutputs[leader]
+				if index == leader {
+					ranked[index] = output.Item
+					meta.rateLimit = mergeRateLimits(
+						meta.rateLimit,
+						output.RateLimit,
+					)
+				} else {
+					ranked[index] = sharedRepositoryRecommendation(
+						candidate,
+						output.Item.Recommendation,
+						desiredSkills,
+						usecase.now(),
+					)
+				}
+				meta.incomplete = meta.incomplete || output.Incomplete
+				continue
+			}
+			if index == leader {
+				meta.failed++
+				meta.incomplete = true
+			}
 		}
 		ranked[index] = fallbackRecommendation(
 			usecase,
@@ -354,12 +391,39 @@ func (usecase *searchIssues) recommendCandidates(
 			desiredSkills,
 			index < limit,
 		)
-		if index < limit {
-			meta.failed++
-			meta.incomplete = true
-		}
 	}
 	return issue.RankIssues(ranked), meta, nil
+}
+
+func sharedRepositoryRecommendation(
+	candidate issue.Candidate,
+	repositoryRecommendation issue.Recommendation,
+	desiredSkills []string,
+	now time.Time,
+) issue.RankedIssue {
+	ranked := evaluateIssueRecommendation(
+		candidate,
+		repositoryRecommendation.RepositorySignals,
+		repositoryRecommendation.Activity,
+		issue.DetectClaim(nil, true),
+		desiredSkills,
+		now,
+	)
+	ranked.Recommendation.Warnings = append(
+		ranked.Recommendation.Warnings,
+		issue.Warning{
+			Code:     "claim_evidence_unavailable",
+			Severity: issue.SeverityInfo,
+			Message: "Repository evidence was reused, but this issue's " +
+				"comment window was not inspected",
+			Evidence: []issue.Evidence{{
+				RuleID:      "recommendation.claim.unavailable",
+				Source:      issue.EvidenceDerived,
+				Description: "claim detection was not run for this list candidate",
+			}},
+		},
+	)
+	return ranked
 }
 
 func fallbackRecommendation(

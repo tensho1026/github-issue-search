@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"slices"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -213,6 +214,12 @@ func TestSearchIssuesEnrichesBoundedCandidatesAndRanksDeterministically(
 		},
 		TotalCount: 4,
 	}}
+	for index := range searcher.result.Candidates {
+		suffix := strconv.Itoa(index + 1)
+		searcher.result.Candidates[index].Repository.Name = "repo-" + suffix
+		searcher.result.Candidates[index].Repository.FullName =
+			"example/repo-" + suffix
+	}
 	recommender := &searchRecommenderStub{
 		now:    now,
 		scores: map[int]int{1: 40, 2: 90},
@@ -259,6 +266,67 @@ func TestSearchIssuesEnrichesBoundedCandidatesAndRanksDeterministically(
 			recommender.Calls(),
 			recommender.MaxActive(),
 		)
+	}
+}
+
+func TestSearchIssuesReusesRepositoryInspectionWithinWindow(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	searcher := &issueSearcherStub{result: port.GitHubIssueSearchResult{
+		Candidates: []issue.Candidate{
+			searchCandidate(now, 1, 20),
+			searchCandidate(now, 2, 20),
+			searchCandidate(now, 3, 20),
+		},
+		TotalCount: 3,
+	}}
+	recommender := &searchRecommenderStub{
+		now:    now,
+		scores: map[int]int{1: 80},
+	}
+	cache, err := memory.NewIssueSearch(10, time.Hour)
+	if err != nil {
+		t.Fatalf("NewIssueSearch() error = %v", err)
+	}
+	contract, err := NewSearchIssues(
+		searcher,
+		cache,
+		50,
+		WithIssueRecommendationEnrichment(recommender, 3, 2),
+	)
+	if err != nil {
+		t.Fatalf("NewSearchIssues() error = %v", err)
+	}
+	output, err := contract.Execute(context.Background(), SearchIssuesInput{
+		Criteria: searchCriteria(t, issue.SearchCriteriaOptions{
+			Username:  "octocat",
+			Languages: []string{"Go"},
+		}),
+		Pagination: searchPagination(t, 1, 20),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if recommender.Calls() != 1 ||
+		output.EnrichmentAttempted != 1 ||
+		output.EnrichmentFailed != 0 ||
+		len(output.Items) != 3 {
+		t.Fatalf(
+			"output = %+v, calls = %d",
+			output,
+			recommender.Calls(),
+		)
+	}
+	sharedWarnings := 0
+	for _, item := range output.Items {
+		for _, warning := range item.Recommendation.Warnings {
+			if warning.Code == "claim_evidence_unavailable" {
+				sharedWarnings++
+			}
+		}
+	}
+	if sharedWarnings != 2 {
+		t.Fatalf("shared claim warnings = %d, want 2", sharedWarnings)
 	}
 }
 
@@ -493,11 +561,23 @@ func (stub *searchRecommenderStub) Execute(
 		input.Reference.Number(),
 		input.Reference.Number()*10,
 	)
+	candidate.Repository.Owner = input.Reference.Owner()
+	candidate.Repository.Name = input.Reference.RepositoryName()
+	candidate.Repository.FullName = input.Reference.Owner() + "/" +
+		input.Reference.RepositoryName()
 	return RecommendIssueOutput{
 		Item: issue.RankedIssue{
 			Candidate: candidate,
 			Recommendation: issue.Recommendation{
 				Score: score,
+				RepositorySignals: []issue.RepositorySignal{{
+					Key:   issue.RepositoryREADME,
+					State: issue.SignalPresent,
+				}},
+				Activity: issue.ActivityMetrics{
+					LastMeaningfulUpdate: stub.now,
+					CI:                   issue.CIStateSuccess,
+				},
 			},
 		},
 		RateLimit: port.RateLimit{
