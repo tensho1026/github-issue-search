@@ -9,11 +9,13 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/config"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/issue"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/profile"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/repository"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/user"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/transport/response"
@@ -124,6 +126,35 @@ func TestIssueSearchRouteUsesStandardEnvelope(t *testing.T) {
 	}
 }
 
+func TestIssueDetailRouteUsesStandardEnvelope(t *testing.T) {
+	router := newTestRouter(t)
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/issues/acme/rocket/42?skills=Go",
+		nil,
+	)
+	request.Header.Set("X-Request-ID", "req_detail")
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	for _, fragment := range []string{
+		`"fullName":"acme/rocket"`,
+		`"number":42`,
+		`"score":80`,
+		`"inspection":{"incomplete":false}`,
+		`"rateLimitRemaining":39`,
+		`"requestId":"req_detail"`,
+	} {
+		if !strings.Contains(recorder.Body.String(), fragment) {
+			t.Errorf("body missing %s: %s", fragment, recorder.Body.String())
+		}
+	}
+}
+
 func TestNewRequiresLogger(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfg := testConfig(t)
@@ -149,6 +180,7 @@ func newTestRouter(t *testing.T) http.Handler {
 		GetGitHubUser:        routerGetGitHubUserStub{},
 		AnalyzeGitHubProfile: routerAnalyzeGitHubProfileStub{},
 		SearchIssues:         routerSearchIssuesStub{},
+		RecommendIssue:       routerRecommendIssueStub{},
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -200,6 +232,41 @@ func (routerSearchIssuesStub) Execute(
 			Remaining: 40,
 		},
 	}, nil
+}
+
+type routerRecommendIssueStub struct{}
+
+func (routerRecommendIssueStub) Execute(
+	_ context.Context,
+	input usecase.RecommendIssueInput,
+) (usecase.RecommendIssueOutput, error) {
+	return usecase.RecommendIssueOutput{
+		Item: issue.RankedIssue{
+			Candidate: issue.Candidate{
+				Repository: repository.Summary{
+					Owner: input.Reference.Owner(),
+					Name:  input.Reference.RepositoryName(),
+					FullName: input.Reference.Owner() + "/" +
+						input.Reference.RepositoryName(),
+					UpdatedAt: time.Now().UTC(),
+				},
+				Issue: issue.Summary{
+					Number:    input.Reference.Number(),
+					CreatedAt: time.Now().UTC(),
+					UpdatedAt: time.Now().UTC(),
+				},
+			},
+			Recommendation: issue.Recommendation{Score: 80},
+		},
+		RateLimit: port.RateLimit{Known: true, Remaining: 39},
+	}, nil
+}
+
+func (routerRecommendIssueStub) EvaluateCandidate(
+	candidate issue.Candidate,
+	_ []string,
+) issue.RankedIssue {
+	return issue.RankedIssue{Candidate: candidate}
 }
 
 func testConfig(t *testing.T) config.Config {
