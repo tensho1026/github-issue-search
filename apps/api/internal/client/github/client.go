@@ -42,6 +42,7 @@ type Client struct {
 	logger     *slog.Logger
 	sleep      sleepFunc
 	backoff    backoffFunc
+	now        func() time.Time
 }
 
 func NewClient(
@@ -63,6 +64,7 @@ func NewClient(
 		logger:  logger,
 		sleep:   sleepWithContext,
 		backoff: exponentialBackoff,
+		now:     time.Now,
 	}
 }
 
@@ -488,6 +490,7 @@ type repositoryFileResponse struct {
 
 type owner struct {
 	Login string `json:"login"`
+	Type  string `json:"type"`
 }
 
 func (r repositoryResponse) toDomain() repository.Summary {
@@ -517,3 +520,4 @@ func (r repositoryResponse) toDomain() repository.Summary {
 var _ port.GitHubUserReader = (*Client)(nil)
 var _ port.GitHubRepositoryReader = (*Client)(nil)
 var _ port.GitHubProfileAnalysisReader = (*Client)(nil)
+var _ port.GitHubIssueSearcher = (*Client)(nil)
