@@ -130,3 +130,23 @@ type ProfileAnalysisCache interface {
 		entry ProfileAnalysisCacheEntry,
 	) error
 }
+
+type IssueSearchCacheEntry struct {
+	Candidates        []issue.Candidate
+	ExclusionCounts   map[issue.ExclusionReason]int
+	UpstreamTotal     int
+	IncompleteResults bool
+	RateLimit         RateLimit
+}
+
+type IssueSearchCache interface {
+	Get(
+		ctx context.Context,
+		key string,
+	) (IssueSearchCacheEntry, bool, error)
+	Set(
+		ctx context.Context,
+		key string,
+		entry IssueSearchCacheEntry,
+	) error
+}
