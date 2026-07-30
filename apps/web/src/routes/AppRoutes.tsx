@@ -15,6 +15,11 @@ const ProfilePage = lazy(async () => {
   return { default: module.ProfilePage };
 });
 
+const IssueSearchPage = lazy(async () => {
+  const module = await import("../pages/IssueSearchPage");
+  return { default: module.IssueSearchPage };
+});
+
 const NotFoundPage = lazy(async () => {
   const module = await import("../pages/NotFoundPage");
   return { default: module.NotFoundPage };
@@ -58,6 +63,14 @@ export function AppRoutes() {
               </LazyPage>
             }
             path={appRoutes.profilePattern}
+          />
+          <Route
+            element={
+              <LazyPage>
+                <IssueSearchPage />
+              </LazyPage>
+            }
+            path={appRoutes.search}
           />
           <Route
             element={

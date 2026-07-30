@@ -36,13 +36,25 @@ export const appConfig = Object.freeze({
 
 export const appRoutes = Object.freeze({
   home: "/",
+  issuePattern: "/issues/:owner/:repository/:issueNumber",
+  issue(owner: string, repository: string, issueNumber: number): string {
+    return `/issues/${encodeURIComponent(owner)}/${encodeURIComponent(
+      repository,
+    )}/${issueNumber}`;
+  },
   profilePattern: "/profiles/:username",
   profile(username: string): string {
     return `/profiles/${encodeURIComponent(username)}`;
   },
+  search: "/search",
 });
 
 export const externalLinks = Object.freeze({
+  gitHubIssue(owner: string, repository: string, issueNumber: number): string {
+    return `https://github.com/${encodeURIComponent(
+      owner,
+    )}/${encodeURIComponent(repository)}/issues/${issueNumber}`;
+  },
   gitHubProfile(username: string): string {
     return `https://github.com/${encodeURIComponent(username)}`;
   },
@@ -54,5 +66,15 @@ export const profileEndpoints = Object.freeze({
   },
   user(username: string): `/${string}` {
     return `/api/github/users/${encodeURIComponent(username)}`;
+  },
+});
+
+export const issueEndpoints = Object.freeze({
+  search(page: number, perPage: number): `/${string}` {
+    const query = new URLSearchParams({
+      page: page.toString(),
+      perPage: perPage.toString(),
+    });
+    return `/api/issues/search?${query.toString()}`;
   },
 });

@@ -8,20 +8,21 @@ independent of future authenticated database features.
 
 ```mermaid
 flowchart LR
-    Form["React Hook Form<br/>username input"] -->|valid submit| URL["React Router<br/>/profiles/:username"]
-    URL --> Queries["TanStack Query<br/>profile + analysis"]
+    Form["React Hook Form<br/>validated inputs"] -->|valid submit| URL["React Router<br/>profile path or search query"]
+    URL --> Queries["TanStack Query<br/>profile, analysis, or ranked issues"]
     Queries --> Client["Typed API client<br/>generated contract types"]
     Client --> API["IssueScout API"]
     Queries --> Cache["Bounded browser query cache"]
     Queries --> View["Pure view selectors"]
-    View --> Dashboard["Accessible profile dashboard"]
+    View --> Dashboard["Accessible profile or search view"]
     Local["Local component state"] --> Sort["Language sort only"]
 ```
 
 The ownership rules are deliberate:
 
 - React Hook Form owns input value, validation messages, and submission state.
-- React Router owns the selected username because the result must be linkable.
+- React Router owns profile usernames plus validated search filters and
+  pagination because both journeys must be linkable.
 - TanStack Query owns remote data, cache lifetime, retry policy, and request
   cancellation.
 - Component state owns only transient presentation such as language ordering.
@@ -47,8 +48,10 @@ which:
 - retries at most one transient failure and never retries validation,
   forbidden, not-found, or rate-limit responses.
 
-The profile and analysis requests run concurrently. Navigating away aborts both
-requests, so obsolete work cannot continue updating the route.
+The profile and analysis requests run concurrently. Ranked issue search uses an
+idempotent typed POST behind a TanStack Query abstraction. Navigating away
+aborts obsolete profile and search requests, so stale work cannot update the
+route.
 
 ## Component system
 
@@ -61,7 +64,8 @@ decorative by default unless an accessible label is explicitly required.
 The shared primitives include:
 
 - buttons, inputs, labels, fields, cards, badges, alerts, and skeletons;
-- keyboard-accessible Dialog, Popover, Select, and Tooltip components;
+- keyboard-accessible Dialog, Popover, Select, Tooltip, multi-select,
+  Checkbox, Slider, and server-driven pagination components;
 - a semantic icon adapter and `cn` class utility;
 - a responsive application shell with skip navigation, visible focus rings,
   mobile navigation, and light/dark themes.
@@ -87,6 +91,44 @@ tokens instead of embedding one-off color values.
 Partial analysis warnings remain visible alongside successful evidence rather
 than replacing the entire result with an error.
 
+## Ranked issue search
+
+The `/search` page uses the URL as the only durable client-side search state.
+Repeated `language`, `framework`, and `label` parameters preserve typed
+multi-select values; scalar criteria and `page`/`perPage` are validated before
+the query hook is enabled. `search=1` is the explicit execution marker. A
+prefilled profile link intentionally omits it so users can review the detected
+technologies before consuming GitHub API capacity.
+
+```mermaid
+flowchart LR
+    Profile["Profile evidence"] --> Prefill["Prefilled /search URL"]
+    Prefill --> Form["Validated filter form"]
+    Form -->|submit| URL["Canonical query string + search=1"]
+    URL --> Query["Cancellation-aware POST query"]
+    Query --> API["Server ranking and pagination"]
+    API --> Cards["Ordered recommendation cards"]
+    Cards --> Detail["Lazy detail route"]
+```
+
+The UI never sorts recommendation items. It uses the API's order and
+`pagination` object as the source of truth. Presentation-only mappings for
+score tones, skill status, and warning severity live in one model rather than
+being repeated across cards.
+
+| Search state     | User experience                                            |
+| ---------------- | ---------------------------------------------------------- |
+| Before search    | Editable prefilled/default criteria; zero search requests  |
+| Invalid URL      | Focused correction guidance; query remains disabled        |
+| Loading          | Named skeleton status without stale layout collapse        |
+| Success          | Ordered explainable cards and server pagination            |
+| No results       | Concrete suggestions for broadening filters                |
+| Partial evidence | Successful cards plus an explicit bounded-evidence warning |
+| User not found   | Username-specific correction without automatic retries     |
+| Rate limited     | Stable URL and reset guidance without retry storms         |
+| Upstream/timeout | Request ID and a manual retry action                       |
+| Page transition  | Prior page remains visible while the next page is fetched  |
+
 ## Accessibility verification
 
 Semantic headings, lists, links, progress bars, form descriptions, and status
@@ -98,6 +140,10 @@ technology output. Dedicated interaction tests verify:
 - arrow-key selection in Radix Select;
 - tooltip content exposed on focus;
 - skip navigation and mobile navigation in production Chromium.
+- mobile search Popover filtering, Escape dismissal, and trigger focus
+  restoration;
+- search submission request shape plus back/forward restoration of server
+  pagination.
 
 Reduced-motion preferences disable nonessential animation.
 
@@ -113,6 +159,7 @@ Measured gzip sizes on 2026-07-30:
 | ----------------------------------------------- | -------------: | ---------: |
 | UI system before landing/profile feature routes |     123.83 KiB | within cap |
 | Landing and complete profile journey            |     160.84 KiB | 117.62 KiB |
+| Profile plus ranked issue search journey        |     175.35 KiB | 118.32 KiB |
 | Enforced maximum                                |     180.00 KiB | 140.00 KiB |
 
 Run `pnpm run build:web && pnpm run bundle:check` after frontend dependency or
@@ -130,6 +177,6 @@ pnpm run bundle:check
 pnpm run e2e
 ```
 
-The E2E journey uses the production Vite build and compiled Go API. Profile
-responses are intercepted with contract-shaped fixtures so browser behavior is
-deterministic and does not consume GitHub rate limits.
+The E2E journey uses the production Vite build and compiled Go API. Profile and
+issue-search responses are intercepted with contract-shaped fixtures so
+browser behavior is deterministic and does not consume GitHub rate limits.

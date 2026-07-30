@@ -18,6 +18,7 @@ import {
   AlertTitle,
 } from "../../../components/ui/alert";
 import { Badge } from "../../../components/ui/badge";
+import { Button } from "../../../components/ui/button";
 import {
   Card,
   CardContent,
@@ -26,6 +27,10 @@ import {
   CardTitle,
 } from "../../../components/ui/card";
 import { Icon } from "../../../components/ui/icon";
+import {
+  createDefaultSearchFilters,
+  encodeSearchParams,
+} from "../../issue-search/model/search-filters";
 import {
   Select,
   SelectContent,
@@ -75,6 +80,17 @@ export function ProfileDashboard({ snapshot }: ProfileDashboardProps) {
     [analysis],
   );
   const repositories = useMemo(() => featuredRepositories(user), [user]);
+  const issueSearchTarget = useMemo(() => {
+    const filters = createDefaultSearchFilters(user.login);
+    filters.languages = analysis.languages
+      .map((language) => language.name)
+      .slice(0, 10);
+    filters.frameworks = analysis.frameworks.slice(0, 10);
+    return {
+      pathname: appRoutes.search,
+      search: encodeSearchParams(filters, false).toString(),
+    };
+  }, [analysis.frameworks, analysis.languages, user.login]);
   const rateLimitRemaining = [
     userMeta.rateLimitRemaining,
     analysisMeta.rateLimitRemaining,
@@ -212,6 +228,29 @@ export function ProfileDashboard({ snapshot }: ProfileDashboardProps) {
           ))}
         </div>
       ) : null}
+
+      <Card className="mt-5 overflow-hidden border-accent/20">
+        <CardHeader className="sm:flex sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-mono text-xs tracking-[0.16em] text-accent uppercase">
+              Next step
+            </p>
+            <CardTitle className="mt-2">
+              Turn this profile into a bounded issue search
+            </CardTitle>
+            <CardDescription>
+              Detected languages and frameworks are prefilled. Review every
+              filter before GitHub search begins.
+            </CardDescription>
+          </div>
+          <Button asChild className="mt-3 shrink-0 sm:mt-0">
+            <Link to={issueSearchTarget}>
+              Find matching issues
+              <Icon icon={ArrowUpRight} />
+            </Link>
+          </Button>
+        </CardHeader>
+      </Card>
 
       <section
         aria-labelledby="languages-heading"

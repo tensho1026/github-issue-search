@@ -14,6 +14,8 @@
     "e2e/**/*.ts",
     "eslint.config.js",
     "playwright.config.ts",
+    "src/shared/api/generated/**/*.ts",
+    "src/test/issue-fixtures.ts",
     "vite.config.ts"
   ]
 }

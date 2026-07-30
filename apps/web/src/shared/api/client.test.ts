@@ -18,14 +18,38 @@ describe("createApiClient", () => {
         signal: controller.signal,
       }),
     ).resolves.toEqual({ data: { status: "ok" } });
-    expect(request).toHaveBeenCalledWith(
-      "/api/health",
-      expect.objectContaining({
-        headers: { Accept: "application/json" },
-        method: "GET",
-        signal: controller.signal,
+    expect(request).toHaveBeenCalledWith("/api/health", expect.any(Object));
+    const options = request.mock.calls[0]?.[1];
+    expect(options).toMatchObject({
+      method: "GET",
+      signal: controller.signal,
+    });
+    expect(new Headers(options?.headers).get("Accept")).toBe(
+      "application/json",
+    );
+  });
+
+  it("serializes typed POST bodies as JSON", async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ data: { items: [] } }), {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
       }),
     );
+    const client = createApiClient(request);
+
+    await client.post("/api/issues/search?page=1&perPage=20", {
+      username: "octocat",
+    });
+
+    const options = request.mock.calls[0]?.[1];
+    expect(options).toMatchObject({
+      body: JSON.stringify({ username: "octocat" }),
+      method: "POST",
+    });
+    const headers = new Headers(options?.headers);
+    expect(headers.get("Accept")).toBe("application/json");
+    expect(headers.get("Content-Type")).toBe("application/json");
   });
 
   it("normalizes the shared API error envelope", async () => {
