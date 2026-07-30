@@ -35,6 +35,25 @@ export function IssueSearchBeforeState() {
   );
 }
 
+export function IssueSearchInvalidState() {
+  return (
+    <Card>
+      <CardContent className="grid justify-items-center gap-4 p-8 text-center sm:p-12">
+        <span className="grid size-14 place-items-center rounded-2xl bg-danger-soft text-danger">
+          <Icon className="size-6" icon={SearchX} />
+        </span>
+        <div>
+          <h2 className="text-xl font-semibold">Fix the shared search URL</h2>
+          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
+            No API request was sent. Correct the highlighted filter values and
+            submit to replace this invalid URL with a validated one.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function IssueSearchLoadingState() {
   return (
     <div
