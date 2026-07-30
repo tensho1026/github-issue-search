@@ -135,13 +135,13 @@ func (c *Client) SearchRepositories(
 	}
 
 	var payload graphQLRepositorySearchEnvelope
-	if err := decodeBoundedJSON(
+	if decodeErr := decodeBoundedJSON(
 		response.Body,
 		maxRepositorySearchResponseBytes,
 		"GitHub GraphQL repository search response",
 		&payload,
-	); err != nil {
-		return port.GitHubRepositoryDiscoveryResult{}, err
+	); decodeErr != nil {
+		return port.GitHubRepositoryDiscoveryResult{}, decodeErr
 	}
 	rateLimit, err := normalizeGraphQLRateLimit(
 		payload.Data.RateLimit,
@@ -216,13 +216,13 @@ func (c *Client) EnrichRepositories(
 	}
 
 	var payload graphQLRepositoryEnrichmentEnvelope
-	if err := decodeBoundedJSON(
+	if decodeErr := decodeBoundedJSON(
 		response.Body,
 		maxRepositoryEnrichmentResponseBytes,
 		"GitHub GraphQL repository enrichment response",
 		&payload,
-	); err != nil {
-		return port.GitHubRepositoryEnrichmentResult{}, err
+	); decodeErr != nil {
+		return port.GitHubRepositoryEnrichmentResult{}, decodeErr
 	}
 	rateLimit, err := enrichmentRateLimit(payload.Data, headerRateLimit)
 	if err != nil {

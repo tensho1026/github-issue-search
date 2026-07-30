@@ -32,8 +32,8 @@ func TestRepositoryDiscoveryCacheReturnsIndependentCopies(t *testing.T) {
 			},
 		}},
 	}
-	if err := cache.Set(context.Background(), "key", entry); err != nil {
-		t.Fatalf("Set() error = %v", err)
+	if setErr := cache.Set(context.Background(), "key", entry); setErr != nil {
+		t.Fatalf("Set() error = %v", setErr)
 	}
 
 	first, found, err := cache.Get(context.Background(), "key")

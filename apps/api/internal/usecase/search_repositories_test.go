@@ -60,7 +60,10 @@ func TestSearchRepositoriesFiltersEnrichesSortsPaginatesAndCaches(
 	if err != nil {
 		t.Fatalf("NewSearchRepositories() error = %v", err)
 	}
-	implementation := contract.(*searchRepositories)
+	implementation, ok := contract.(*searchRepositories)
+	if !ok {
+		t.Fatalf("NewSearchRepositories() type = %T", contract)
+	}
 	implementation.now = func() time.Time { return now }
 	hasJapanese := true
 	minimumStars := 10
@@ -140,7 +143,11 @@ func TestSearchRepositoriesDegradesOptionalEnrichmentFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSearchRepositories() error = %v", err)
 	}
-	contract.(*searchRepositories).now = func() time.Time { return now }
+	implementation, ok := contract.(*searchRepositories)
+	if !ok {
+		t.Fatalf("NewSearchRepositories() type = %T", contract)
+	}
+	implementation.now = func() time.Time { return now }
 	criteria, _ := repository.NewDiscoveryCriteria(
 		repository.DiscoveryCriteriaOptions{},
 	)
