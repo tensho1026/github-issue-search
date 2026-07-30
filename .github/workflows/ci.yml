@@ -301,14 +301,24 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build, verify, and smoke-test release archives
+      - name: Build and verify release archives
         env:
           VERSION: v0.0.0-ci.${{ github.run_id }}
         run: |
-          bash scripts/release/build-api-artifacts.sh "${VERSION}" artifacts/release
-          bash scripts/release/build-web-artifact.sh "${VERSION}" artifacts/release
-          bash scripts/release/write-checksums.sh artifacts/release
-          node scripts/release/verify-artifacts.mjs artifacts/release "${VERSION}"
+          bash scripts/release/build-release.sh "${VERSION}" artifacts/release
+
+      - name: Prove independent build reproducibility
+        env:
+          VERSION: v0.0.0-ci.${{ github.run_id }}
+        run: |
+          node scripts/release/check-reproducibility.mjs \
+            "${VERSION}" \
+            artifacts/release
+
+      - name: Smoke-test native release processes
+        env:
+          VERSION: v0.0.0-ci.${{ github.run_id }}
+        run: |
           bash scripts/release/smoke-artifacts.sh artifacts/release "${VERSION}"
 
       - name: Upload release-build evidence

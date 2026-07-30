@@ -72,8 +72,11 @@ python3 -m http.server \
 web_pid="$!"
 
 for _ in {1..30}; do
+  api_headers="${temporary_directory}/api-headers"
   api_response="$(
     curl --fail --show-error --silent \
+      --dump-header "${api_headers}" \
+      --header "X-Request-ID: artifact-smoke-readiness" \
       "http://127.0.0.1:18080/api/health" 2>/dev/null || true
   )"
   web_response="$(
@@ -81,8 +84,23 @@ for _ in {1..30}; do
       "http://127.0.0.1:14173/" 2>/dev/null || true
   )"
   if [[ "${api_response}" == *'"status":"ok"'* ]] &&
+    [[ "${api_response}" == *'"requestId":"artifact-smoke-readiness"'* ]] &&
+    grep -Eiq '^x-request-id: artifact-smoke-readiness\r?$' "${api_headers}" &&
     [[ "${web_response}" == *"<title>IssueScout</title>"* ]]; then
-    echo "Release API binary and static web bundle passed smoke tests."
+    kill "${api_pid}"
+    set +e
+    wait "${api_pid}"
+    api_status="$?"
+    set -e
+    api_pid=""
+    if [[ "${api_status}" -ne 0 ]] ||
+      ! grep -q '"msg":"shutting down IssueScout API"' \
+        "${temporary_directory}/api.log"; then
+      cat "${temporary_directory}/api.log" >&2
+      echo "release API did not shut down gracefully" >&2
+      exit 1
+    fi
+    echo "Release API and web passed readiness, correlation, and graceful shutdown smoke tests."
     exit 0
   fi
   sleep 1
