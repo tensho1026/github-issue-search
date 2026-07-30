@@ -172,6 +172,8 @@ type GitHubReader interface {
 	GitHubProfileAnalysisReader
 	GitHubIssueSearcher
 	GitHubIssueDetailReader
+	GitHubRepositoryDiscoverySearcher
+	GitHubRepositoryDiscoveryEnricher
 }
 
 type ProfileAnalysisCacheEntry struct {

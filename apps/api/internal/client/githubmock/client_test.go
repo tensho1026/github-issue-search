@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/issue"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/repository"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/user"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
 )
@@ -66,6 +67,30 @@ func TestClientSupportsCompleteSuccessJourney(t *testing.T) {
 		search.Candidates[0].Issue.Number != fixtureIssue ||
 		search.TotalCount != 1 {
 		t.Fatalf("SearchIssues() = %+v", search)
+	}
+
+	repositorySearch, err := client.SearchRepositories(
+		context.Background(),
+		mustRepositoryCriteria(t),
+		20,
+	)
+	if err != nil {
+		t.Fatalf("SearchRepositories() error = %v", err)
+	}
+	if len(repositorySearch.Candidates) != 1 ||
+		repositorySearch.Candidates[0].License != "MIT" {
+		t.Fatalf("SearchRepositories() = %+v", repositorySearch)
+	}
+	enrichment, err := client.EnrichRepositories(
+		context.Background(),
+		[]repository.Summary{repositorySearch.Candidates[0].Repository},
+	)
+	if err != nil {
+		t.Fatalf("EnrichRepositories() error = %v", err)
+	}
+	if !enrichment.Items["octocat/typed-service"].READMEAvailable ||
+		!enrichment.Items["octocat/typed-service"].ContributingAvailable {
+		t.Fatalf("EnrichRepositories() = %+v", enrichment)
 	}
 
 	detail, err := client.GetIssueDetail(
@@ -188,6 +213,17 @@ func mustCriteria(t *testing.T, username string) issue.SearchCriteria {
 	})
 	if err != nil {
 		t.Fatalf("NewSearchCriteria() error = %v", err)
+	}
+	return criteria
+}
+
+func mustRepositoryCriteria(t *testing.T) repository.DiscoveryCriteria {
+	t.Helper()
+	criteria, err := repository.NewDiscoveryCriteria(
+		repository.DiscoveryCriteriaOptions{},
+	)
+	if err != nil {
+		t.Fatalf("NewDiscoveryCriteria() error = %v", err)
 	}
 	return criteria
 }
