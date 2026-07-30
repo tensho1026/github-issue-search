@@ -57,25 +57,6 @@ func TestClientSupportsCompleteSuccessJourney(t *testing.T) {
 		t.Fatalf("GetProfileAnalysis() = %+v", analysis)
 	}
 
-	languages, err := client.GetRepositoryLanguages(
-		context.Background(),
-		fixtureOwner,
-		fixtureRepository,
-	)
-	if err != nil || languages.Languages["TypeScript"] != 650 {
-		t.Fatalf("GetRepositoryLanguages() = %+v, %v", languages, err)
-	}
-
-	manifest, err := client.GetRepositoryFile(
-		context.Background(),
-		fixtureOwner,
-		fixtureRepository,
-		"package.json",
-	)
-	if err != nil || !manifest.Exists || len(manifest.Content) == 0 {
-		t.Fatalf("GetRepositoryFile() = %+v, %v", manifest, err)
-	}
-
 	criteria := mustCriteria(t, successUsername)
 	search, err := client.SearchIssues(context.Background(), criteria, 20)
 	if err != nil {

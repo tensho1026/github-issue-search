@@ -273,7 +273,8 @@ func analyzeRepositoryCollection(
 	}
 	active := 0
 	for _, observation := range collection.Repositories {
-		if !repositoryLastUsed(observation.Repository).Before(windowStart) {
+		if !observation.Repository.IsArchived &&
+			!repositoryLastUsed(observation.Repository).Before(windowStart) {
 			active++
 		}
 	}

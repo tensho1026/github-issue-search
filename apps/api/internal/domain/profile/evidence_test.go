@@ -118,7 +118,6 @@ func TestAnalyzeSnapshotSeparatesExactSampledAndUnavailableEvidence(
 			RepositoriesTouched: CountEvidence{
 				Available: true,
 				Value:     2,
-				Complete:  true,
 			},
 		},
 	}
@@ -259,6 +258,36 @@ func TestAnalyzeSnapshotRepresentsUnavailableContributionSegments(t *testing.T) 
 	}
 }
 
+func TestAnalyzeSnapshotDoesNotPresentArchivedRepositoriesAsRecent(
+	t *testing.T,
+) {
+	now := time.Date(2026, time.July, 30, 12, 0, 0, 0, time.UTC)
+	archived := profileObservation(
+		"community/archived",
+		"Rust",
+		now.Add(-time.Hour),
+		nil,
+	)
+	archived.Repository.IsArchived = true
+	analysis := AnalyzeSnapshot(ProfileSnapshot{
+		Username:   "octocat",
+		WindowFrom: now.AddDate(-1, 0, 0),
+		WindowTo:   now,
+		Contributed: RepositoryCollection{
+			Available:    true,
+			Repositories: []RepositoryObservation{archived},
+			Total:        1,
+			TotalKnown:   true,
+			Limit:        20,
+		},
+	})
+
+	if analysis.RepositoryEvidence.Contributed.ActiveInWindow != 0 ||
+		len(analysis.RecentTechnologies) != 0 {
+		t.Fatalf("analysis = %+v", analysis)
+	}
+}
+
 func TestTopLanguageSharesKeepsPercentageTotalBounded(t *testing.T) {
 	languages := make([]LanguageShare, 0, 12)
 	for index := range 12 {
@@ -316,3 +345,126 @@ func findProficiency(
 	t.Fatalf("technology %q not found in %+v", name, proficiency)
 	return TechnologyProficiency{}
 }
+
+func BenchmarkAnalyzeProfileSnapshotBounded(b *testing.B) {
+	now := time.Date(2026, time.July, 30, 12, 0, 0, 0, time.UTC)
+	owned := make([]RepositoryObservation, 0, 20)
+	contributed := make([]RepositoryObservation, 0, 20)
+	starred := make([]RepositoryObservation, 0, 20)
+	forked := make([]RepositoryObservation, 0, 20)
+	languages := map[string]int64{
+		"C#":         100,
+		"C++":        100,
+		"Go":         100,
+		"Java":       100,
+		"JavaScript": 100,
+		"Kotlin":     100,
+		"Python":     100,
+		"Ruby":       100,
+		"Rust":       100,
+		"TypeScript": 100,
+	}
+	for index := range 20 {
+		suffix := string(rune('a' + index))
+		owned = append(owned, profileObservation(
+			"octocat/owned-"+suffix,
+			"TypeScript",
+			now.Add(-time.Duration(index)*time.Hour),
+			languages,
+			Manifest{
+				Path: "package.json",
+				Content: []byte(
+					`{"dependencies":{"next":"16","react":"19","tailwindcss":"4"}}`,
+				),
+			},
+		))
+		contributed = append(contributed, profileObservation(
+			"community/contributed-"+suffix,
+			"Go",
+			now.Add(-time.Duration(index)*time.Hour),
+			nil,
+		))
+		starred = append(starred, profileObservation(
+			"community/starred-"+suffix,
+			"Rust",
+			now.Add(-time.Duration(index)*time.Hour),
+			nil,
+		))
+		forked = append(forked, profileObservation(
+			"octocat/forked-"+suffix,
+			"Python",
+			now.Add(-time.Duration(index)*time.Hour),
+			nil,
+		))
+	}
+	snapshot := ProfileSnapshot{
+		Username:   "octocat",
+		WindowFrom: now.AddDate(0, 0, -AnalysisWindowDays),
+		WindowTo:   now,
+		Owned: boundedBenchmarkCollection(
+			owned,
+			100,
+		),
+		Contributed: boundedBenchmarkCollection(
+			contributed,
+			100,
+		),
+		Starred: RepositoryCollection{
+			Available:    true,
+			Repositories: starred,
+			Limit:        20,
+			HasMore:      true,
+		},
+		Forked: boundedBenchmarkCollection(
+			forked,
+			100,
+		),
+		Contributions: ContributionSnapshot{
+			Available: true,
+			Commits: CountEvidence{
+				Available: true,
+				Value:     500,
+			},
+			IssuesOpened: CountEvidence{
+				Available: true,
+				Value:     50,
+				Complete:  true,
+			},
+			PullRequestsOpened: CountEvidence{
+				Available: true,
+				Value:     80,
+				Complete:  true,
+			},
+			PullRequestReviews: CountEvidence{
+				Available: true,
+				Value:     120,
+			},
+			RepositoriesTouched: CountEvidence{
+				Available: true,
+				Value:     100,
+			},
+		},
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		profileAnalysisBenchmarkSink = AnalyzeSnapshot(snapshot)
+	}
+}
+
+func boundedBenchmarkCollection(
+	repositories []RepositoryObservation,
+	total int,
+) RepositoryCollection {
+	return RepositoryCollection{
+		Available:    true,
+		Repositories: repositories,
+		Total:        total,
+		TotalKnown:   true,
+		Limit:        20,
+		HasMore:      true,
+	}
+}
+
+var profileAnalysisBenchmarkSink Analysis

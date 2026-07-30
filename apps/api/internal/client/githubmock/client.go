@@ -96,57 +96,6 @@ func (client *Client) ListRepositories(
 	return []repository.Summary{item}, client.rateLimit(), nil
 }
 
-// GetRepositoryLanguages returns normalized language bytes for the fixture.
-func (client *Client) GetRepositoryLanguages(
-	ctx context.Context,
-	owner string,
-	name string,
-) (port.GitHubLanguagesResult, error) {
-	if err := ctx.Err(); err != nil {
-		return port.GitHubLanguagesResult{}, err
-	}
-	if !isFixtureRepository(owner, name) &&
-		!isEmptyFixtureRepository(owner, name) {
-		return port.GitHubLanguagesResult{}, notFound()
-	}
-	return port.GitHubLanguagesResult{
-		Languages: map[string]int64{
-			"TypeScript": 650,
-			"Go":         350,
-		},
-		RateLimit: client.rateLimit(),
-	}, nil
-}
-
-// GetRepositoryFile returns the only manifest required by the fixture.
-func (client *Client) GetRepositoryFile(
-	ctx context.Context,
-	owner string,
-	name string,
-	filePath string,
-) (port.GitHubRepositoryFileResult, error) {
-	if err := ctx.Err(); err != nil {
-		return port.GitHubRepositoryFileResult{}, err
-	}
-	if !isFixtureRepository(owner, name) &&
-		!isEmptyFixtureRepository(owner, name) {
-		return port.GitHubRepositoryFileResult{}, notFound()
-	}
-	if filePath != "package.json" {
-		return port.GitHubRepositoryFileResult{
-			Exists:    false,
-			RateLimit: client.rateLimit(),
-		}, nil
-	}
-	return port.GitHubRepositoryFileResult{
-		Content: []byte(
-			`{"dependencies":{"react":"19.2.0","typescript":"6.0.0"}}`,
-		),
-		Exists:    true,
-		RateLimit: client.rateLimit(),
-	}, nil
-}
-
 // GetProfileAnalysis returns one fresh, public-only extended profile snapshot.
 func (client *Client) GetProfileAnalysis(
 	ctx context.Context,
@@ -205,7 +154,6 @@ func (client *Client) GetProfileAnalysis(
 			},
 			RepositoriesTouched: profile.CountEvidence{
 				Available: true,
-				Complete:  true,
 			},
 		},
 	}
@@ -472,11 +420,6 @@ func isFixtureProfile(username string) bool {
 func isFixtureRepository(owner, name string) bool {
 	return strings.EqualFold(owner, fixtureOwner) &&
 		strings.EqualFold(name, fixtureRepository)
-}
-
-func isEmptyFixtureRepository(owner, name string) bool {
-	return strings.EqualFold(owner, emptyUsername) &&
-		strings.EqualFold(name, "empty-project")
 }
 
 func signal(

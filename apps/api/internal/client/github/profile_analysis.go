@@ -30,60 +30,97 @@ const (
   $pullRequestQuery: String!
   $issueQuery: String!
 ) {
-  user(login: $login) {
+  repositoryOwner(login: $login) {
+    __typename
     login
-    ownedRepositories: repositories(
-      first: $repositoryLimit
-      privacy: PUBLIC
-      ownerAffiliations: [OWNER]
-      isFork: false
-      isArchived: false
-      orderBy: { field: PUSHED_AT, direction: DESC }
-    ) {
-      totalCount
-      pageInfo { hasNextPage }
-      nodes { ...OwnedProfileRepository }
-    }
-    forkedRepositories: repositories(
-      first: $repositoryLimit
-      privacy: PUBLIC
-      ownerAffiliations: [OWNER]
-      isFork: true
-      isArchived: false
-      orderBy: { field: PUSHED_AT, direction: DESC }
-    ) {
-      totalCount
-      pageInfo { hasNextPage }
-      nodes { ...ProfileRepository }
-    }
-    contributedRepositories: repositoriesContributedTo(
-      first: $repositoryLimit
-      privacy: PUBLIC
-      includeUserRepositories: false
-      contributionTypes: [COMMIT, ISSUE, PULL_REQUEST, PULL_REQUEST_REVIEW]
-      orderBy: { field: PUSHED_AT, direction: DESC }
-    ) {
-      totalCount
-      pageInfo { hasNextPage }
-      nodes { ...ProfileRepository }
-    }
-    starredRepositories(
-      first: $repositoryLimit
-      orderBy: { field: STARRED_AT, direction: DESC }
-    ) {
-      pageInfo { hasNextPage }
-      nodes { ...ProfileRepository }
-    }
-    contributionsCollection(from: $windowFrom, to: $windowTo) {
+    ... on User {
+      ownedRepositories: repositories(
+        first: $repositoryLimit
+        privacy: PUBLIC
+        ownerAffiliations: [OWNER]
+        isFork: false
+        isArchived: false
+        orderBy: { field: PUSHED_AT, direction: DESC }
+      ) {
+        totalCount
+        pageInfo { hasNextPage }
+        nodes { ...OwnedProfileRepository }
+      }
+      forkedRepositories: repositories(
+        first: $repositoryLimit
+        privacy: PUBLIC
+        ownerAffiliations: [OWNER]
+        isFork: true
+        isArchived: false
+        orderBy: { field: PUSHED_AT, direction: DESC }
+      ) {
+        totalCount
+        pageInfo { hasNextPage }
+        nodes { ...ProfileRepository }
+      }
+      contributedRepositories: repositoriesContributedTo(
+        first: $repositoryLimit
+        privacy: PUBLIC
+        includeUserRepositories: false
+        contributionTypes: [COMMIT, ISSUE, PULL_REQUEST, PULL_REQUEST_REVIEW]
+        orderBy: { field: PUSHED_AT, direction: DESC }
+      ) {
+        totalCount
+        pageInfo { hasNextPage }
+        nodes { ...ProfileRepository }
+      }
+      starredRepositories(
+        first: $repositoryLimit
+        orderBy: { field: STARRED_AT, direction: DESC }
+      ) {
+        pageInfo { hasNextPage }
+        nodes { ...ProfileRepository }
+      }
+      contributionsCollection(from: $windowFrom, to: $windowTo) {
       commitContributionsByRepository(maxRepositories: $repositoryLimit) {
-        repository { visibility }
+        repository { id visibility }
+        contributions { totalCount }
+      }
+      issueContributionsByRepository(maxRepositories: $repositoryLimit) {
+        repository { id visibility }
+        contributions { totalCount }
+      }
+      pullRequestContributionsByRepository(
+        maxRepositories: $repositoryLimit
+      ) {
+        repository { id visibility }
         contributions { totalCount }
       }
       pullRequestReviewContributionsByRepository(
         maxRepositories: $repositoryLimit
       ) {
-        repository { visibility }
+        repository { id visibility }
         contributions { totalCount }
+        }
+      }
+    }
+    ... on Organization {
+      ownedRepositories: repositories(
+        first: $repositoryLimit
+        privacy: PUBLIC
+        isFork: false
+        isArchived: false
+        orderBy: { field: PUSHED_AT, direction: DESC }
+      ) {
+        totalCount
+        pageInfo { hasNextPage }
+        nodes { ...OwnedProfileRepository }
+      }
+      forkedRepositories: repositories(
+        first: $repositoryLimit
+        privacy: PUBLIC
+        isFork: true
+        isArchived: false
+        orderBy: { field: PUSHED_AT, direction: DESC }
+      ) {
+        totalCount
+        pageInfo { hasNextPage }
+        nodes { ...ProfileRepository }
       }
     }
   }
@@ -325,7 +362,7 @@ func normalizeGraphQLProfileAnalysis(
 	windowTo time.Time,
 	rateLimit port.RateLimit,
 ) (port.GitHubProfileAnalysisResult, error) {
-	if payload.Data.User == nil {
+	if payload.Data.Owner == nil {
 		if profileErrorsContainNotFound(payload.Errors) {
 			return port.GitHubProfileAnalysisResult{}, &port.GitHubError{
 				Kind:  port.GitHubErrorNotFound,
@@ -343,7 +380,7 @@ func normalizeGraphQLProfileAnalysis(
 			errors.New("does not contain user data"),
 		)
 	}
-	normalizedUsername, err := user.ParseUsername(payload.Data.User.Login)
+	normalizedUsername, err := user.ParseUsername(payload.Data.Owner.Login)
 	if err != nil ||
 		!strings.EqualFold(
 			normalizedUsername.String(),
@@ -355,9 +392,26 @@ func normalizeGraphQLProfileAnalysis(
 		)
 	}
 
-	warnings := make([]profile.Warning, 0, 8)
+	if payload.Data.Owner.TypeName != "User" &&
+		payload.Data.Owner.TypeName != "Organization" {
+		return port.GitHubProfileAnalysisResult{}, upstreamDecodeError(
+			"GitHub GraphQL profile analysis response",
+			fmt.Errorf(
+				"contains unsupported repository owner type %q",
+				payload.Data.Owner.TypeName,
+			),
+		)
+	}
+	warnings := make([]profile.Warning, 0, 9)
+	if payload.Data.Owner.TypeName == "Organization" {
+		warnings = append(warnings, profile.Warning{
+			Code: "organization_activity_unavailable",
+			Message: "Personal stars and contribution activity do not apply " +
+				"to organization profiles",
+		})
+	}
 	owned, collectionWarnings, err := normalizeProfileRepositoryConnection(
-		payload.Data.User.Owned,
+		payload.Data.Owner.Owned,
 		profile.RepositoryOwned,
 		repositoryLimit,
 		manifestLimit,
@@ -368,7 +422,7 @@ func normalizeGraphQLProfileAnalysis(
 	}
 	warnings = append(warnings, collectionWarnings...)
 	contributed, collectionWarnings, err := normalizeProfileRepositoryConnection(
-		payload.Data.User.Contributed,
+		payload.Data.Owner.Contributed,
 		profile.RepositoryContributed,
 		repositoryLimit,
 		manifestLimit,
@@ -379,7 +433,7 @@ func normalizeGraphQLProfileAnalysis(
 	}
 	warnings = append(warnings, collectionWarnings...)
 	starred, collectionWarnings, err := normalizeProfileRepositoryConnection(
-		payload.Data.User.Starred,
+		payload.Data.Owner.Starred,
 		profile.RepositoryStarred,
 		repositoryLimit,
 		manifestLimit,
@@ -390,7 +444,7 @@ func normalizeGraphQLProfileAnalysis(
 	}
 	warnings = append(warnings, collectionWarnings...)
 	forked, collectionWarnings, err := normalizeProfileRepositoryConnection(
-		payload.Data.User.Forked,
+		payload.Data.Owner.Forked,
 		profile.RepositoryForked,
 		repositoryLimit,
 		manifestLimit,
@@ -401,11 +455,16 @@ func normalizeGraphQLProfileAnalysis(
 	}
 	warnings = append(warnings, collectionWarnings...)
 
+	pullRequestSearch := payload.Data.AuthoredPullRequests
+	issueSearch := payload.Data.AuthoredIssues
+	if payload.Data.Owner.TypeName == "Organization" {
+		pullRequestSearch = nil
+		issueSearch = nil
+	}
 	contributions, contributionWarnings, err := normalizeProfileContributions(
-		payload.Data.User.Contributions,
-		payload.Data.AuthoredPullRequests,
-		payload.Data.AuthoredIssues,
-		contributed,
+		payload.Data.Owner.Contributions,
+		pullRequestSearch,
+		issueSearch,
 		repositoryLimit,
 	)
 	if err != nil {
@@ -520,7 +579,6 @@ func normalizeProfileContributions(
 	contributions *graphQLProfileContributions,
 	pullRequestSearch *graphQLProfileSearch,
 	issueSearch *graphQLProfileSearch,
-	contributed profile.RepositoryCollection,
 	repositoryLimit int,
 ) (profile.ContributionSnapshot, []profile.Warning, error) {
 	warnings := make([]profile.Warning, 0, 3)
@@ -553,6 +611,21 @@ func normalizeProfileContributions(
 		result.PullRequestReviews = profile.CountEvidence{
 			Available: true,
 			Value:     reviews,
+			Complete:  false,
+		}
+		repositoriesTouched, err := countPublicContributionRepositories(
+			repositoryLimit,
+			contributions.Commits,
+			contributions.Issues,
+			contributions.PullRequests,
+			contributions.Reviews,
+		)
+		if err != nil {
+			return profile.ContributionSnapshot{}, nil, err
+		}
+		result.RepositoriesTouched = profile.CountEvidence{
+			Available: true,
+			Value:     repositoriesTouched,
 			Complete:  false,
 		}
 		result.Available = true
@@ -593,14 +666,6 @@ func normalizeProfileContributions(
 		}
 		result.Available = true
 	}
-	if contributed.Available && contributed.TotalKnown {
-		result.RepositoriesTouched = profile.CountEvidence{
-			Available: true,
-			Value:     contributed.Total,
-			Complete:  true,
-		}
-		result.Available = true
-	}
 	return result, warnings, nil
 }
 
@@ -627,6 +692,37 @@ func sumPublicContributionGroups(
 		}
 	}
 	return total, nil
+}
+
+func countPublicContributionRepositories(
+	repositoryLimit int,
+	groupCollections ...[]graphQLProfileContributionGroup,
+) (int, error) {
+	repositoryIDs := make(map[string]struct{})
+	for _, groups := range groupCollections {
+		if len(groups) > repositoryLimit {
+			return 0, upstreamDecodeError(
+				"GitHub GraphQL profile contribution response",
+				errors.New("contains too many contribution repository groups"),
+			)
+		}
+		for _, group := range groups {
+			if group.Repository.Visibility != "PUBLIC" {
+				continue
+			}
+			repositoryID := strings.TrimSpace(group.Repository.ID)
+			if repositoryID == "" {
+				return 0, upstreamDecodeError(
+					"GitHub GraphQL profile contribution response",
+					errors.New(
+						"contains public contribution without repository identity",
+					),
+				)
+			}
+			repositoryIDs[repositoryID] = struct{}{}
+		}
+	}
+	return len(repositoryIDs), nil
 }
 
 func profileErrorsContainNotFound(errors []graphQLError) bool {
@@ -661,7 +757,7 @@ type graphQLProfileAnalysisVariables struct {
 
 type graphQLProfileAnalysisEnvelope struct {
 	Data struct {
-		User                 *graphQLProfileUser   `json:"user"`
+		Owner                *graphQLProfileOwner  `json:"repositoryOwner"`
 		AuthoredPullRequests *graphQLProfileSearch `json:"authoredPullRequests"`
 		AuthoredIssues       *graphQLProfileSearch `json:"authoredIssues"`
 		RateLimit            *graphQLRateLimit     `json:"rateLimit"`
@@ -669,7 +765,8 @@ type graphQLProfileAnalysisEnvelope struct {
 	Errors []graphQLError `json:"errors"`
 }
 
-type graphQLProfileUser struct {
+type graphQLProfileOwner struct {
+	TypeName      string                              `json:"__typename"`
 	Login         string                              `json:"login"`
 	Owned         *graphQLProfileRepositoryConnection `json:"ownedRepositories"`
 	Contributed   *graphQLProfileRepositoryConnection `json:"contributedRepositories"`
@@ -730,12 +827,15 @@ type graphQLProfileManifest struct {
 }
 
 type graphQLProfileContributions struct {
-	Commits []graphQLProfileContributionGroup `json:"commitContributionsByRepository"`
-	Reviews []graphQLProfileContributionGroup `json:"pullRequestReviewContributionsByRepository"`
+	Commits      []graphQLProfileContributionGroup `json:"commitContributionsByRepository"`
+	Issues       []graphQLProfileContributionGroup `json:"issueContributionsByRepository"`
+	PullRequests []graphQLProfileContributionGroup `json:"pullRequestContributionsByRepository"`
+	Reviews      []graphQLProfileContributionGroup `json:"pullRequestReviewContributionsByRepository"`
 }
 
 type graphQLProfileContributionGroup struct {
 	Repository struct {
+		ID         string `json:"id"`
 		Visibility string `json:"visibility"`
 	} `json:"repository"`
 	Contributions graphQLTotalCount `json:"contributions"`

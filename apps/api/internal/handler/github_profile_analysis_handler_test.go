@@ -60,7 +60,7 @@ func TestGitHubProfileAnalysisHandlerGet(t *testing.T) {
 					},
 					RepositoriesTouched: profile.CountMetric{
 						Value:  2,
-						Status: profile.EvidenceExact,
+						Status: profile.EvidenceSampled,
 					},
 				},
 				OSSExperience: profile.OSSExperience{

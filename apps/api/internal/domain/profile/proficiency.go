@@ -91,6 +91,9 @@ func accumulateCollectionTechnologies(
 	includeFrameworks bool,
 ) {
 	for _, observation := range collection.Repositories {
+		if observation.Repository.IsArchived {
+			continue
+		}
 		lastUsed := repositoryLastUsed(observation.Repository)
 		if lastUsed.Before(windowStart) {
 			continue
@@ -458,10 +461,10 @@ func analyzeOSSExperience(
 	case score > 0:
 		level = "emerging"
 	}
-	exact := contributions.PullRequestsOpened.Status == EvidenceExact &&
-		contributions.RepositoriesTouched.Status == EvidenceExact
 	confidence := ConfidenceLow
-	if exact && score >= 40 {
+	if contributions.PullRequestsOpened.Status == EvidenceExact &&
+		contributions.RepositoriesTouched.Status != EvidenceUnavailable &&
+		score >= 40 {
 		confidence = ConfidenceHigh
 	} else if score > 0 {
 		confidence = ConfidenceMedium

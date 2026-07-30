@@ -96,7 +96,6 @@ func TestAnalyzeGitHubProfileBuildsExtendedSnapshotAndCachesIt(
 					RepositoriesTouched: profile.CountEvidence{
 						Available: true,
 						Value:     1,
-						Complete:  true,
 					},
 				},
 			},

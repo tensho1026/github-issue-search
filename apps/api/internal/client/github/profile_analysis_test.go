@@ -127,7 +127,8 @@ func TestGetProfileAnalysisUsesOnePublicBoundedGraphQLSnapshot(
 		contributions.PullRequestsOpened.Value != 4 ||
 		!contributions.PullRequestsOpened.Complete ||
 		contributions.IssuesOpened.Value != 2 ||
-		contributions.RepositoriesTouched.Value != 2 {
+		contributions.RepositoriesTouched.Value != 2 ||
+		contributions.RepositoriesTouched.Complete {
 		t.Fatalf("contributions = %+v", contributions)
 	}
 	if len(result.Snapshot.Warnings) != 1 ||
@@ -140,7 +141,8 @@ func TestGetProfileAnalysisUsesOnePublicBoundedGraphQLSnapshot(
 func TestGetProfileAnalysisPreservesTypedPartialSegments(t *testing.T) {
 	server := jsonServer(`{
 		"data":{
-			"user":{
+			"repositoryOwner":{
+				"__typename":"User",
 				"login":"octocat",
 				"ownedRepositories":null,
 				"contributedRepositories":{
@@ -184,7 +186,7 @@ func TestGetProfileAnalysisPreservesTypedPartialSegments(t *testing.T) {
 		!result.Snapshot.Contributed.Available ||
 		result.Snapshot.Contributions.Commits.Available ||
 		result.Snapshot.Contributions.PullRequestsOpened.Available ||
-		!result.Snapshot.Contributions.RepositoriesTouched.Available {
+		result.Snapshot.Contributions.RepositoriesTouched.Available {
 		t.Fatalf("snapshot = %+v", result.Snapshot)
 	}
 	codes := make([]string, 0, len(result.Snapshot.Warnings))
@@ -207,7 +209,7 @@ func TestGetProfileAnalysisPreservesTypedPartialSegments(t *testing.T) {
 func TestGetProfileAnalysisMapsMissingUser(t *testing.T) {
 	server := jsonServer(`{
 		"data":{
-			"user":null,
+			"repositoryOwner":null,
 			"authoredPullRequests":{"issueCount":0},
 			"authoredIssues":{"issueCount":0}
 		},
@@ -229,10 +231,85 @@ func TestGetProfileAnalysisMapsMissingUser(t *testing.T) {
 	}
 }
 
+func TestGetProfileAnalysisSupportsOrganizationRepositoryEvidence(
+	t *testing.T,
+) {
+	server := jsonServer(`{
+		"data":{
+			"repositoryOwner":{
+				"__typename":"Organization",
+				"login":"github",
+				"ownedRepositories":{
+					"totalCount":1,
+					"pageInfo":{"hasNextPage":false},
+					"nodes":[{
+						"databaseId":1,
+						"owner":{"login":"github"},
+						"name":"roadmap",
+						"nameWithOwner":"github/roadmap",
+						"url":"https://github.com/github/roadmap",
+						"stargazerCount":1000,
+						"forkCount":100,
+						"issues":{"totalCount":10},
+						"isFork":false,
+						"isArchived":false,
+						"primaryLanguage":{"name":"TypeScript"},
+						"updatedAt":"2026-07-30T00:00:00Z",
+						"visibility":"PUBLIC",
+						"languages":{
+							"totalSize":100,
+							"edges":[{
+								"size":100,
+								"node":{"name":"TypeScript"}
+							}]
+						}
+					}]
+				},
+				"forkedRepositories":{
+					"totalCount":0,
+					"pageInfo":{"hasNextPage":false},
+					"nodes":[]
+				}
+			},
+			"authoredPullRequests":{"issueCount":99},
+			"authoredIssues":{"issueCount":99}
+		}
+	}`)
+	defer server.Close()
+
+	result, err := newTestClient(t, server.URL, "").GetProfileAnalysis(
+		context.Background(),
+		"github",
+		20,
+		3,
+	)
+	if err != nil {
+		t.Fatalf("GetProfileAnalysis() error = %v", err)
+	}
+	if len(result.Snapshot.Owned.Repositories) != 1 ||
+		result.Snapshot.Owned.Repositories[0].Languages["TypeScript"] != 100 ||
+		!result.Snapshot.Forked.Available ||
+		result.Snapshot.Contributed.Available ||
+		result.Snapshot.Starred.Available ||
+		result.Snapshot.Contributions.Available {
+		t.Fatalf("organization snapshot = %+v", result.Snapshot)
+	}
+	codes := make([]string, 0, len(result.Snapshot.Warnings))
+	for _, warning := range result.Snapshot.Warnings {
+		codes = append(codes, warning.Code)
+	}
+	if !containsString(codes, "organization_activity_unavailable") ||
+		!containsString(codes, "contributed_repositories_unavailable") ||
+		!containsString(codes, "starred_repositories_unavailable") {
+		t.Fatalf("organization warnings = %v", codes)
+	}
+}
+
 func TestGetProfileAnalysisRejectsNonPublicRequiredRepository(t *testing.T) {
 	server := jsonServer(`{
 		"data":{
-			"user":{
+			"repositoryOwner":{
+				"__typename":"User",
 				"login":"octocat",
 				"ownedRepositories":{
 					"totalCount":1,
@@ -333,7 +410,8 @@ func containsString(values []string, expected string) bool {
 
 const completeProfileAnalysisFixture = `{
 	"data":{
-		"user":{
+		"repositoryOwner":{
+			"__typename":"User",
 			"login":"octocat",
 			"ownedRepositories":{
 				"totalCount":2,
@@ -444,16 +522,24 @@ const completeProfileAnalysisFixture = `{
 			"contributionsCollection":{
 				"commitContributionsByRepository":[
 					{
-						"repository":{"visibility":"PUBLIC"},
+						"repository":{"id":"R1","visibility":"PUBLIC"},
 						"contributions":{"totalCount":7}
 					},
 					{
-						"repository":{"visibility":"PRIVATE"},
+						"repository":{"id":"PRIVATE1","visibility":"PRIVATE"},
 						"contributions":{"totalCount":100}
 					}
 				],
+				"issueContributionsByRepository":[{
+					"repository":{"id":"R2","visibility":"PUBLIC"},
+					"contributions":{"totalCount":2}
+				}],
+				"pullRequestContributionsByRepository":[{
+					"repository":{"id":"R2","visibility":"PUBLIC"},
+					"contributions":{"totalCount":4}
+				}],
 				"pullRequestReviewContributionsByRepository":[{
-					"repository":{"visibility":"PUBLIC"},
+					"repository":{"id":"R1","visibility":"PUBLIC"},
 					"contributions":{"totalCount":3}
 				}]
 			}

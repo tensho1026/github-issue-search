@@ -3,7 +3,6 @@ package github
 import (
 	"context"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -190,123 +189,6 @@ func (c *Client) ListRepositories(
 	}
 
 	return repositories, rateLimit, nil
-}
-
-func (c *Client) GetRepositoryLanguages(
-	ctx context.Context,
-	owner string,
-	name string,
-) (port.GitHubLanguagesResult, error) {
-	endpoint := c.repositoryEndpoint(owner, name, "languages")
-	response, err := c.do(ctx, endpoint.String())
-	if err != nil {
-		return port.GitHubLanguagesResult{}, err
-	}
-	defer response.Body.Close()
-
-	rateLimit := parseRateLimit(response.Header)
-	if statusErr := responseError(response.StatusCode, rateLimit); statusErr != nil {
-		return port.GitHubLanguagesResult{}, statusErr
-	}
-
-	languages := make(map[string]int64)
-	decoder := json.NewDecoder(io.LimitReader(response.Body, maxResponseBytes))
-	if decodeErr := decoder.Decode(&languages); decodeErr != nil {
-		return port.GitHubLanguagesResult{}, upstreamDecodeError(
-			"GitHub language response",
-			decodeErr,
-		)
-	}
-	for language, count := range languages {
-		if strings.TrimSpace(language) == "" || count < 0 {
-			return port.GitHubLanguagesResult{}, upstreamDecodeError(
-				"GitHub language response",
-				fmt.Errorf("contains invalid language byte count"),
-			)
-		}
-	}
-
-	return port.GitHubLanguagesResult{
-		Languages: languages,
-		RateLimit: rateLimit,
-	}, nil
-}
-
-func (c *Client) GetRepositoryFile(
-	ctx context.Context,
-	owner string,
-	name string,
-	filePath string,
-) (port.GitHubRepositoryFileResult, error) {
-	endpoint := c.repositoryEndpoint(owner, name, "contents", filePath)
-	response, err := c.do(ctx, endpoint.String())
-	if err != nil {
-		return port.GitHubRepositoryFileResult{}, err
-	}
-	defer response.Body.Close()
-
-	rateLimit := parseRateLimit(response.Header)
-	if response.StatusCode == http.StatusNotFound {
-		return port.GitHubRepositoryFileResult{
-			Exists:    false,
-			RateLimit: rateLimit,
-		}, nil
-	}
-	if statusErr := responseError(response.StatusCode, rateLimit); statusErr != nil {
-		return port.GitHubRepositoryFileResult{}, statusErr
-	}
-
-	var payload repositoryFileResponse
-	decoder := json.NewDecoder(io.LimitReader(response.Body, maxResponseBytes))
-	if decodeErr := decoder.Decode(&payload); decodeErr != nil {
-		return port.GitHubRepositoryFileResult{}, upstreamDecodeError(
-			"GitHub repository file response",
-			decodeErr,
-		)
-	}
-	if payload.Encoding != "base64" {
-		return port.GitHubRepositoryFileResult{}, upstreamDecodeError(
-			"GitHub repository file response",
-			fmt.Errorf("unsupported content encoding %q", payload.Encoding),
-		)
-	}
-
-	content, decodeErr := base64.StdEncoding.DecodeString(payload.Content)
-	if decodeErr != nil {
-		return port.GitHubRepositoryFileResult{}, upstreamDecodeError(
-			"GitHub repository file content",
-			decodeErr,
-		)
-	}
-	if len(content) > maxManifestBytes {
-		return port.GitHubRepositoryFileResult{}, upstreamDecodeError(
-			"GitHub repository file response",
-			fmt.Errorf("decoded content exceeds %d bytes", maxManifestBytes),
-		)
-	}
-
-	return port.GitHubRepositoryFileResult{
-		Content:   content,
-		Exists:    true,
-		RateLimit: rateLimit,
-	}, nil
-}
-
-func (c *Client) repositoryEndpoint(
-	owner string,
-	name string,
-	segments ...string,
-) url.URL {
-	endpoint := *c.baseURL
-	parts := []string{
-		endpoint.Path,
-		"repos",
-		url.PathEscape(owner),
-		url.PathEscape(name),
-	}
-	parts = append(parts, segments...)
-	endpoint.Path = path.Join(parts...)
-	return endpoint
 }
 
 func upstreamDecodeError(description string, err error) error {
@@ -504,11 +386,6 @@ type repositoryResponse struct {
 	DefaultBranch string     `json:"default_branch"`
 	UpdatedAt     time.Time  `json:"updated_at"`
 	PushedAt      *time.Time `json:"pushed_at"`
-}
-
-type repositoryFileResponse struct {
-	Content  string `json:"content"`
-	Encoding string `json:"encoding"`
 }
 
 type owner struct {

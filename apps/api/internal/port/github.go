@@ -52,17 +52,6 @@ type GitHubUserResult struct {
 	RateLimit RateLimit
 }
 
-type GitHubLanguagesResult struct {
-	Languages map[string]int64
-	RateLimit RateLimit
-}
-
-type GitHubRepositoryFileResult struct {
-	Content   []byte
-	Exists    bool
-	RateLimit RateLimit
-}
-
 type GitHubProfileAnalysisResult struct {
 	Snapshot  profile.ProfileSnapshot
 	RateLimit RateLimit
