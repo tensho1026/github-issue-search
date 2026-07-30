@@ -112,7 +112,7 @@ Measured gzip sizes on 2026-07-30:
 | Checkpoint                                      | Total JS + CSS | Largest JS |
 | ----------------------------------------------- | -------------: | ---------: |
 | UI system before landing/profile feature routes |     123.83 KiB | within cap |
-| Landing and complete profile journey            |     164.70 KiB | 120.45 KiB |
+| Landing and complete profile journey            |     160.84 KiB | 117.62 KiB |
 | Enforced maximum                                |     180.00 KiB | 140.00 KiB |
 
 Run `pnpm run build:web && pnpm run bundle:check` after frontend dependency or
