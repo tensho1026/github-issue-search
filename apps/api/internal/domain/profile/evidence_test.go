@@ -136,6 +136,9 @@ func TestAnalyzeSnapshotSeparatesExactSampledAndUnavailableEvidence(
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("languages = %+v, want %+v", got, want)
 	}
+	if analysis.LanguageStatus != EvidenceSampled {
+		t.Fatalf("language status = %q, want sampled", analysis.LanguageStatus)
+	}
 	if got, want := analysis.Frameworks, []string{"Gin", "React"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("frameworks = %v, want %v", got, want)
 	}
@@ -249,12 +252,54 @@ func TestAnalyzeSnapshotRepresentsUnavailableContributionSegments(t *testing.T) 
 
 	if analysis.Contributions.Commits.Status != EvidenceUnavailable ||
 		analysis.RepositoryEvidence.Owned.Status != EvidenceUnavailable ||
+		analysis.LanguageStatus != EvidenceUnavailable ||
 		analysis.OSSExperience.Level != "unavailable" ||
 		analysis.OSSExperience.Confidence != ConfidenceUnavailable ||
 		len(analysis.Languages) != 0 ||
 		len(analysis.Frameworks) != 0 ||
 		len(analysis.Proficiency) != 0 {
 		t.Fatalf("analysis = %+v", analysis)
+	}
+}
+
+func TestAnalyzeSnapshotMarksTruncatedLanguageEdgesAsSampled(t *testing.T) {
+	now := time.Date(2026, time.July, 30, 12, 0, 0, 0, time.UTC)
+	observation := profileObservation(
+		"octocat/polyglot",
+		"Go",
+		now.Add(-time.Hour),
+		map[string]int64{"Go": 900, "TypeScript": 100},
+	)
+	observation.LanguagesComplete = false
+	analysis := AnalyzeSnapshot(ProfileSnapshot{
+		Username:   "octocat",
+		WindowFrom: now.AddDate(-1, 0, 0),
+		WindowTo:   now,
+		Owned: RepositoryCollection{
+			Available:    true,
+			Repositories: []RepositoryObservation{observation},
+			Total:        1,
+			TotalKnown:   true,
+			Limit:        20,
+		},
+		Contributed: RepositoryCollection{
+			Available:  true,
+			TotalKnown: true,
+			Limit:      20,
+		},
+		Forked: RepositoryCollection{
+			Available:  true,
+			TotalKnown: true,
+			Limit:      20,
+		},
+	})
+
+	if analysis.LanguageStatus != EvidenceSampled {
+		t.Fatalf("language status = %q, want sampled", analysis.LanguageStatus)
+	}
+	goProficiency := findProficiency(t, analysis.Proficiency, "Go")
+	if goProficiency.Evidence[0].Status != EvidenceSampled {
+		t.Fatalf("language evidence = %+v", goProficiency.Evidence[0])
 	}
 }
 
@@ -326,8 +371,9 @@ func profileObservation(
 			MainLanguage: mainLanguage,
 			UpdatedAt:    updatedAt,
 		},
-		Languages: languages,
-		Manifests: manifests,
+		Languages:         languages,
+		LanguagesComplete: languages != nil,
+		Manifests:         manifests,
 	}
 }
 

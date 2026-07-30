@@ -26,6 +26,7 @@ type Warning struct {
 type Analysis struct {
 	Username             user.Username
 	Languages            []LanguageShare
+	LanguageStatus       EvidenceStatus
 	Frameworks           []string
 	RecentTechnologies   []RecentTechnology
 	Contributions        ContributionAnalysis

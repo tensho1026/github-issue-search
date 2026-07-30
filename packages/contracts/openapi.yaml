@@ -572,6 +572,7 @@ components:
         - analysisWindow
         - contributions
         - frameworks
+        - languageStatus
         - languages
         - ossExperience
         - proficiency
@@ -587,6 +588,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/LanguageShare"
+        languageStatus:
+          allOf:
+            - $ref: "#/components/schemas/EvidenceStatus"
+          description: |
+            Completeness of the aggregate language percentages. `sampled`
+            indicates that at least one repository had languages outside its
+            ten-edge GraphQL sample or the owned repository collection was
+            capped.
         frameworks:
           type: array
           maxItems: 20

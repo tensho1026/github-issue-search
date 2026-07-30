@@ -58,6 +58,14 @@ export type ProfileAnalysisEnvelope = {
 export type ProfileAnalysis = {
   username: string;
   languages: Array<LanguageShare>;
+  /**
+   * Completeness of the aggregate language percentages. `sampled`
+   * indicates that at least one repository had languages outside its
+   * ten-edge GraphQL sample or the owned repository collection was
+   * capped.
+   *
+   */
+  languageStatus: EvidenceStatus;
   frameworks: Array<string>;
   recentTechnologies: Array<RecentTechnology>;
   contributions: ContributionAnalysis;

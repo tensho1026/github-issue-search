@@ -61,6 +61,7 @@ export const profileAnalysisFixture: ProfileAnalysisEnvelope = {
       { name: "TypeScript", percentage: 65 },
       { name: "Go", percentage: 35 },
     ],
+    languageStatus: "exact",
     ossExperience: {
       confidence: "high",
       evidence: [

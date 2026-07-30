@@ -87,7 +87,9 @@ counted as active or recently used technology.
 Owned repository language bytes produce the primary language percentages using
 the largest-remainder method. Percentages always sum to 100. The response keeps
 the nine leading languages and combines the remainder as `Other` when more
-than ten languages are observed.
+than ten languages are observed. `languageStatus` is `sampled` when the owned
+repository collection is capped or when a repository's ten GraphQL language
+edges do not cover its reported total bytes; otherwise it is `exact`.
 
 Framework evidence comes only from supported conventional manifests in active
 owned repositories. Recent technology uses the newest push/update timestamp

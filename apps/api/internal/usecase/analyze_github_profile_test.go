@@ -43,6 +43,7 @@ func TestAnalyzeGitHubProfileBuildsExtendedSnapshotAndCachesIt(
 							"Go":         750,
 							"TypeScript": 250,
 						},
+						LanguagesComplete: true,
 						Manifests: []profile.Manifest{{
 							Path: "go.mod",
 							Content: []byte(
@@ -118,6 +119,7 @@ func TestAnalyzeGitHubProfileBuildsExtendedSnapshotAndCachesIt(
 		output.Analysis.Languages[0] != (profile.LanguageShare{
 			Name: "Go", Percentage: 75,
 		}) ||
+		output.Analysis.LanguageStatus != profile.EvidenceExact ||
 		len(output.Analysis.Frameworks) != 1 ||
 		output.Analysis.Frameworks[0] != "Gin" ||
 		output.Analysis.Contributions.PullRequestsOpened.Value != 5 ||

@@ -100,6 +100,7 @@ func TestGetProfileAnalysisUsesOnePublicBoundedGraphQLSnapshot(
 		!result.Snapshot.Owned.HasMore ||
 		result.Snapshot.Owned.Repositories[0].Languages["Go"] != 800 ||
 		result.Snapshot.Owned.Repositories[0].Languages["TypeScript"] != 200 ||
+		!result.Snapshot.Owned.Repositories[0].LanguagesComplete ||
 		len(result.Snapshot.Owned.Repositories[0].Manifests) != 1 ||
 		result.Snapshot.Owned.Repositories[0].Manifests[0].Path != "go.mod" {
 		t.Fatalf("owned repositories = %+v", result.Snapshot.Owned)

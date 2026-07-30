@@ -40,6 +40,7 @@
         "percentage": 35
       }
     ],
+    "languageStatus": "exact",
     "ossExperience": {
       "confidence": "high",
       "evidence": [
@@ -50,7 +51,7 @@
         },
         {
           "kind": "contributed_repositories",
-          "status": "exact",
+          "status": "sampled",
           "value": 1
         },
         {

@@ -60,6 +60,7 @@ func (h GitHubProfileAnalysisHandler) Get(ctx *gin.Context) {
 type githubProfileAnalysisResponse struct {
 	Username             string                          `json:"username"`
 	Languages            []languageShareResponse         `json:"languages"`
+	LanguageStatus       string                          `json:"languageStatus"`
 	Frameworks           []string                        `json:"frameworks"`
 	RecentTechnologies   []recentTechnologyResponse      `json:"recentTechnologies"`
 	Contributions        contributionAnalysisResponse    `json:"contributions"`
@@ -166,9 +167,10 @@ func newGitHubProfileAnalysisResponse(
 	copy(frameworks, analysis.Frameworks)
 
 	return githubProfileAnalysisResponse{
-		Username:   analysis.Username.String(),
-		Languages:  newLanguageShareResponses(analysis.Languages),
-		Frameworks: frameworks,
+		Username:       analysis.Username.String(),
+		Languages:      newLanguageShareResponses(analysis.Languages),
+		LanguageStatus: string(analysis.LanguageStatus),
+		Frameworks:     frameworks,
 		RecentTechnologies: newRecentTechnologyResponses(
 			analysis.RecentTechnologies,
 		),

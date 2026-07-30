@@ -358,7 +358,7 @@ func proficiencyEvidence(
 		{
 			Kind:   "language_share_percentage",
 			Value:  accumulator.languageShare,
-			Status: collectionStatus(snapshot.Owned),
+			Status: languageEvidenceStatus(snapshot.Owned),
 		},
 		{
 			Kind:   "owned_repositories",
@@ -394,6 +394,23 @@ func collectionStatus(collection RepositoryCollection) EvidenceStatus {
 	}
 	if collectionIncomplete(collection) {
 		return EvidenceSampled
+	}
+	return EvidenceExact
+}
+
+func languageEvidenceStatus(
+	collection RepositoryCollection,
+) EvidenceStatus {
+	if !collection.Available {
+		return EvidenceUnavailable
+	}
+	if collectionIncomplete(collection) {
+		return EvidenceSampled
+	}
+	for _, observation := range collection.Repositories {
+		if !observation.LanguagesComplete {
+			return EvidenceSampled
+		}
 	}
 	return EvidenceExact
 }

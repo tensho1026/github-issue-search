@@ -164,6 +164,7 @@ func (client *Client) GetProfileAnalysis(
 				"TypeScript": 650,
 				"Go":         350,
 			},
+			LanguagesComplete: true,
 			Manifests: []profile.Manifest{{
 				Path: "package.json",
 				Content: []byte(

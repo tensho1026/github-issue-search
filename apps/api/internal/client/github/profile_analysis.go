@@ -895,6 +895,8 @@ func (node graphQLProfileRepository) toObservation(
 			"language sample exceeds total bytes",
 		)
 	}
+	observation.LanguagesComplete =
+		observedBytes == int64(node.Languages.TotalSize)
 
 	warnings := make([]profile.Warning, 0)
 	for _, manifestPath := range profile.ManifestCandidates(

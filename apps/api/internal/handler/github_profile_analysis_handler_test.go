@@ -28,7 +28,8 @@ func TestGitHubProfileAnalysisHandlerGet(t *testing.T) {
 					{Name: "Go", Percentage: 60},
 					{Name: "TypeScript", Percentage: 40},
 				},
-				Frameworks: []string{"Gin", "React"},
+				LanguageStatus: profile.EvidenceSampled,
+				Frameworks:     []string{"Gin", "React"},
 				RecentTechnologies: []profile.RecentTechnology{{
 					Name:            "Go",
 					Kind:            profile.TechnologyLanguage,
@@ -153,6 +154,7 @@ func TestGitHubProfileAnalysisHandlerGet(t *testing.T) {
 	for _, value := range []string{
 		`"username":"octocat"`,
 		`"name":"Go","percentage":60`,
+		`"languageStatus":"sampled"`,
 		`"frameworks":["Gin","React"]`,
 		`"recentTechnologies":[{"name":"Go","kind":"language"`,
 		`"repositorySources":["contributed","owned"]`,

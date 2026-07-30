@@ -68,9 +68,10 @@ type CountMetric struct {
 }
 
 type RepositoryObservation struct {
-	Repository repository.Summary
-	Languages  map[string]int64
-	Manifests  []Manifest
+	Repository        repository.Summary
+	Languages         map[string]int64
+	LanguagesComplete bool
+	Manifests         []Manifest
 }
 
 type RepositoryCollection struct {
@@ -182,6 +183,7 @@ func AnalyzeSnapshot(snapshot ProfileSnapshot) Analysis {
 	return Analysis{
 		Username:           snapshot.Username,
 		Languages:          ownedLanguages,
+		LanguageStatus:     languageEvidenceStatus(snapshot.Owned),
 		Frameworks:         frameworks,
 		RecentTechnologies: recent,
 		Contributions:      contributions,
