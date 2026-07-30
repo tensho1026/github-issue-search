@@ -59,11 +59,10 @@ describe("issue detail presentation", () => {
       ),
     ).toEqual({
       description:
-        "GitHub could not find this public issue. It may have been removed, transferred, or made private.",
+        "GitHub could not find this public issue. It may have moved or become private.",
       requestId: "req_detail",
       retryable: false,
       title: "Issue not found",
-      tone: "warning",
     });
     expect(detailErrorPresentation(new Error("network"))).toMatchObject({
       retryable: true,

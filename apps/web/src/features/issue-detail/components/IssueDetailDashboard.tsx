@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowUpRight } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 import { Link } from "react-router";
 
@@ -296,11 +296,7 @@ export function IssueDetailDashboard({ envelope, returnTo }: Props) {
                 target="_blank"
               >
                 Open original GitHub issue
-                <Icon icon={ArrowUpRight} />
               </a>
-            </Button>
-            <Button asChild variant="outline">
-              <Link to={returnTo}>Return to ranked results</Link>
             </Button>
           </div>
         </CardHeader>
@@ -365,9 +361,7 @@ export function IssueDetailDashboard({ envelope, returnTo }: Props) {
               items={[
                 [
                   "Category",
-                  `${categoryLabel(data.analysis.category.primary)} · ${data.analysis.category.matches
-                    .map(categoryLabel)
-                    .join(", ")}`,
+                  data.analysis.category.matches.map(categoryLabel).join(", "),
                 ],
                 [
                   "Difficulty",

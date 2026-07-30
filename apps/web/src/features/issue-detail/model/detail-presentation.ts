@@ -16,15 +16,9 @@ export type DetailErrorPresentation = {
   requestId?: string;
   retryable: boolean;
   title: string;
-  tone: "danger" | "warning";
 };
 
-type DetailErrorDefinition = readonly [
-  title: string,
-  description: string,
-  retryable: boolean,
-  tone: DetailErrorPresentation["tone"],
-];
+type DetailErrorDefinition = readonly [title: string, retryable: boolean];
 
 const qualityLabels: Record<QualitySignal["key"], string> = {
   acceptance_criteria: "Acceptance criteria",
@@ -65,36 +59,11 @@ const scopeAreaLabels: Record<ChangeScope["areas"][number], string> = {
 };
 
 const detailErrors: Record<number, DetailErrorDefinition> = {
-  400: [
-    "Issue reference rejected",
-    "The API rejected this issue or skill context. Open a fresh search result.",
-    false,
-    "danger",
-  ],
-  404: [
-    "Issue not found",
-    "GitHub could not find this public issue. It may have been removed, transferred, or made private.",
-    false,
-    "warning",
-  ],
-  429: [
-    "GitHub needs a breather",
-    "The GitHub allowance is exhausted. Keep this URL and return later.",
-    false,
-    "warning",
-  ],
-  502: [
-    "GitHub detail is unavailable",
-    "GitHub returned an incomplete detail snapshot. The issue URL remains safe.",
-    true,
-    "warning",
-  ],
-  504: [
-    "Recommendation took too long",
-    "The upstream request timed out. Retry without changing this URL.",
-    true,
-    "warning",
-  ],
+  400: ["Issue reference rejected", false],
+  404: ["Issue not found", false],
+  429: ["GitHub needs a breather", false],
+  502: ["GitHub detail is unavailable", true],
+  504: ["Recommendation took too long", true],
 };
 
 export function categoryLabel(category: IssueCategory): string {
@@ -145,20 +114,25 @@ export function detailErrorPresentation(error: Error): DetailErrorPresentation {
   if (!(error instanceof ApiError)) {
     return {
       description:
-        "An unexpected client error interrupted this recommendation. You can retry the same validated issue.",
+        "An unexpected client error interrupted this recommendation. Retry the validated issue.",
       retryable: true,
       title: "Recommendation interrupted",
-      tone: "danger",
     };
   }
 
   const definition = detailErrors[error.status] ?? [
     "Recommendation unavailable",
-    "The API could not complete this recommendation. Your links remain available.",
     true,
-    "danger",
   ];
-  const [title, description, retryable, tone] = definition;
+  const [title, retryable] = definition;
+  const description =
+    error.status === 404
+      ? "GitHub could not find this public issue. It may have moved or become private."
+      : error.status === 429
+        ? "The GitHub allowance is exhausted. Keep this URL and return later."
+        : retryable
+          ? "GitHub could not complete this recommendation. Retry the same URL."
+          : "Return to search and open a fresh result.";
   const shared = error.requestId ? { requestId: error.requestId } : {};
-  return { ...shared, description, retryable, title, tone };
+  return { ...shared, description, retryable, title };
 }

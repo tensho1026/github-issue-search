@@ -133,7 +133,7 @@ describe("IssueDetailPage", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "This recommendation link needs attention.",
+        name: "Check this recommendation link.",
       }),
     ).toBeInTheDocument();
     expect(request).not.toHaveBeenCalled();
