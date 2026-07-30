@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -78,7 +79,9 @@ func TestDatabaseHealthRouteIsSeparateFromProcessHealth(t *testing.T) {
 }
 
 func TestAnonymousCoreRoutesNeverProbeDatabase(t *testing.T) {
-	health := &routerDatabaseHealthStub{}
+	health := &routerDatabaseHealthStub{
+		err: errors.New("simulated database outage"),
+	}
 	router := newTestRouterWithDatabase(t, health, true)
 	requests := []*http.Request{
 		httptest.NewRequest(http.MethodGet, "/api/health", nil),
@@ -303,11 +306,12 @@ func newTestRouterWithDatabase(
 
 type routerDatabaseHealthStub struct {
 	calls atomic.Int64
+	err   error
 }
 
 func (health *routerDatabaseHealthStub) Ping(context.Context) error {
 	health.calls.Add(1)
-	return nil
+	return health.err
 }
 
 type routerGetGitHubUserStub struct{}
