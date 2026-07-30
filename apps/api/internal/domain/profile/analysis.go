@@ -27,6 +27,12 @@ type Analysis struct {
 	Username             user.Username
 	Languages            []LanguageShare
 	Frameworks           []string
+	RecentTechnologies   []RecentTechnology
+	Contributions        ContributionAnalysis
+	OSSExperience        OSSExperience
+	RepositoryEvidence   RepositoryEvidence
+	Proficiency          []TechnologyProficiency
+	Window               AnalysisWindow
 	RepositoriesAnalyzed int
 	Warnings             []Warning
 }
