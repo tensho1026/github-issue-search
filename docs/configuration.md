@@ -36,7 +36,7 @@ only the variable name and validation reason.
 | -------------------------- | ----------------------- | -------------------------------------------------------- |
 | `VITE_API_BASE_URL`        | `http://127.0.0.1:8080` | Public browser-visible IssueScout API origin             |
 | `WEB_PORT`                 | `5173`                  | Native supervisor Vite port                              |
-| `STACK_STARTUP_TIMEOUT_MS` | `30000`                 | Positive readiness deadline for the two native processes |
+| `STACK_STARTUP_TIMEOUT_MS` | `60000`                 | Positive readiness deadline, including a cold Go compile |
 
 `apps/web/.env.example` contains only browser-public values. Never place
 `GITHUB_TOKEN`, a database URL, OAuth secret, or provider credential in a

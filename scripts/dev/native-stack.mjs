@@ -27,7 +27,7 @@ const apiOrigin = `http://127.0.0.1:${apiPort}`;
 const webOrigin = `http://127.0.0.1:${webPort}`;
 const startupTimeoutMs = parsePositiveInteger(
   "STACK_STARTUP_TIMEOUT_MS",
-  process.env.STACK_STARTUP_TIMEOUT_MS ?? "30000",
+  process.env.STACK_STARTUP_TIMEOUT_MS ?? "60000",
 );
 const group = new NativeProcessGroup();
 const abortController = new AbortController();

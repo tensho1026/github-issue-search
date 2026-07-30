@@ -85,7 +85,8 @@ for _ in {1..30}; do
   )"
   if [[ "${api_response}" == *'"status":"ok"'* ]] &&
     [[ "${api_response}" == *'"requestId":"artifact-smoke-readiness"'* ]] &&
-    grep -Eiq '^x-request-id: artifact-smoke-readiness\r?$' "${api_headers}" &&
+    tr -d '\r' <"${api_headers}" |
+      grep -Eiq '^x-request-id: artifact-smoke-readiness$' &&
     [[ "${web_response}" == *"<title>IssueScout</title>"* ]]; then
     kill "${api_pid}"
     set +e
