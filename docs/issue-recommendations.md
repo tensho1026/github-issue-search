@@ -90,6 +90,7 @@ The bounded detail query checks:
 - `.github/workflows`;
 - `tests`, `test`, and `spec`;
 - the bounded root `package.json` test scripts;
+- dependency identifiers from bounded root `package.json` and `go.mod` blobs;
 - `CODE_OF_CONDUCT.md` in the root, `.github`, and `docs`.
 
 Each result is independent. A package manifest is proof only when it defines a
@@ -97,6 +98,11 @@ non-empty `test` or `test:*` script. Because ecosystems such as Go colocate
 tests with source files, missing test directories and scripts remain `unknown`
 rather than becoming a false `absent`. For a partial GraphQL response, observed
 objects remain `present`, while omitted objects become `unknown`.
+
+Manifest dependency names are normalized, deduplicated, sorted, and capped at
+100 before rule evaluation. They provide high-confidence technology evidence;
+versions, scripts, arbitrary manifest content, and source code are never
+included in response evidence.
 
 ## Activity and maintainer samples
 

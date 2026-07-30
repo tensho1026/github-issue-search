@@ -148,6 +148,58 @@ func TestRecommendIssueFallbackPerformsNoIOAndMarksEvidenceUnknown(t *testing.T)
 	}
 }
 
+func TestRecommendIssueUsesManifestDependencyEvidence(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, time.July, 30, 0, 0, 0, 0, time.UTC)
+	detail := issueDetailUsecaseFixture(now)
+	detail.Dependencies = []string{"react"}
+	cache, err := memory.NewIssueDetail(1, time.Hour)
+	if err != nil {
+		t.Fatalf("NewIssueDetail() error = %v", err)
+	}
+	contract, err := NewRecommendIssue(
+		&issueDetailReaderStub{result: detail},
+		cache,
+	)
+	if err != nil {
+		t.Fatalf("NewRecommendIssue() error = %v", err)
+	}
+	implementation := contract.(*recommendIssue)
+	implementation.now = func() time.Time { return now }
+	reference, _ := issue.NewReference("acme", "rocket", 42)
+	output, err := contract.Execute(
+		context.Background(),
+		RecommendIssueInput{
+			Reference:     reference,
+			DesiredSkills: []string{"React"},
+		},
+	)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if len(output.Dependencies) != 1 || output.Dependencies[0] != "react" {
+		t.Fatalf("dependencies = %v", output.Dependencies)
+	}
+	for _, technology := range output.Item.Analysis.RequiredTechnologies {
+		if technology.Name != "React" {
+			continue
+		}
+		if technology.Confidence != issue.ConfidenceHigh {
+			t.Fatalf("React technology = %+v", technology)
+		}
+		for _, evidence := range technology.Evidence {
+			if evidence.Source == issue.EvidenceDependency {
+				return
+			}
+		}
+		t.Fatalf("React evidence = %+v", technology.Evidence)
+	}
+	t.Fatalf(
+		"required technologies = %+v",
+		output.Item.Analysis.RequiredTechnologies,
+	)
+}
+
 func TestRecommendIssueMapsErrors(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

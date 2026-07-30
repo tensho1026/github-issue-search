@@ -281,8 +281,9 @@ func TestSearchIssuesReusesRepositoryInspectionWithinWindow(t *testing.T) {
 		TotalCount: 3,
 	}}
 	recommender := &searchRecommenderStub{
-		now:    now,
-		scores: map[int]int{1: 80},
+		now:          now,
+		scores:       map[int]int{1: 80},
+		dependencies: []string{"react"},
 	}
 	cache, err := memory.NewIssueSearch(10, time.Hour)
 	if err != nil {
@@ -318,15 +319,26 @@ func TestSearchIssuesReusesRepositoryInspectionWithinWindow(t *testing.T) {
 		)
 	}
 	sharedWarnings := 0
+	manifestEvidence := 0
 	for _, item := range output.Items {
 		for _, warning := range item.Recommendation.Warnings {
 			if warning.Code == "claim_evidence_unavailable" {
 				sharedWarnings++
 			}
 		}
+		for _, technology := range item.Analysis.RequiredTechnologies {
+			if technology.Name == "React" &&
+				technology.Confidence == issue.ConfidenceHigh {
+				manifestEvidence++
+			}
+		}
 	}
-	if sharedWarnings != 2 {
-		t.Fatalf("shared claim warnings = %d, want 2", sharedWarnings)
+	if sharedWarnings != 2 || manifestEvidence != 2 {
+		t.Fatalf(
+			"shared claim warnings = %d, manifest evidence = %d",
+			sharedWarnings,
+			manifestEvidence,
+		)
 	}
 }
 
@@ -514,14 +526,15 @@ type issueSearcherStub struct {
 }
 
 type searchRecommenderStub struct {
-	mu         sync.Mutex
-	now        time.Time
-	scores     map[int]int
-	failNumber int
-	delay      time.Duration
-	calls      int
-	active     int
-	maxActive  int
+	mu           sync.Mutex
+	now          time.Time
+	scores       map[int]int
+	failNumber   int
+	dependencies []string
+	delay        time.Duration
+	calls        int
+	active       int
+	maxActive    int
 }
 
 func (stub *searchRecommenderStub) Execute(
@@ -580,6 +593,10 @@ func (stub *searchRecommenderStub) Execute(
 				},
 			},
 		},
+		Dependencies: append(
+			make([]string, 0, len(stub.dependencies)),
+			stub.dependencies...,
+		),
 		RateLimit: port.RateLimit{
 			Known:     true,
 			Remaining: 40 - input.Reference.Number(),

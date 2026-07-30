@@ -373,6 +373,7 @@ func (usecase *searchIssues) recommendCandidates(
 					ranked[index] = sharedRepositoryRecommendation(
 						candidate,
 						output.Item.Recommendation,
+						output.Dependencies,
 						desiredSkills,
 						usecase.now(),
 					)
@@ -398,11 +399,13 @@ func (usecase *searchIssues) recommendCandidates(
 func sharedRepositoryRecommendation(
 	candidate issue.Candidate,
 	repositoryRecommendation issue.Recommendation,
+	dependencies []string,
 	desiredSkills []string,
 	now time.Time,
 ) issue.RankedIssue {
 	ranked := evaluateIssueRecommendation(
 		candidate,
+		dependencies,
 		repositoryRecommendation.RepositorySignals,
 		repositoryRecommendation.Activity,
 		issue.DetectClaim(nil, true),
@@ -441,6 +444,7 @@ func fallbackRecommendation(
 	} else {
 		ranked = evaluateIssueRecommendation(
 			candidate,
+			nil,
 			nil,
 			issue.ActivityMetrics{
 				LastMeaningfulUpdate: candidate.Repository.UpdatedAt,

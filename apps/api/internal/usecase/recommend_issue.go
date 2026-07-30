@@ -24,10 +24,11 @@ type RecommendIssueInput struct {
 // RecommendIssueOutput contains the shared list/detail analysis plus
 // operational metadata that remains outside the domain model.
 type RecommendIssueOutput struct {
-	Item       issue.RankedIssue
-	RateLimit  port.RateLimit
-	Incomplete bool
-	CacheHit   bool
+	Item         issue.RankedIssue
+	Dependencies []string
+	RateLimit    port.RateLimit
+	Incomplete   bool
+	CacheHit     bool
 }
 
 // IssueRecommender provides cached detail reads and a no-I/O fallback for
@@ -141,6 +142,7 @@ func (usecase *recommendIssue) output(
 	return RecommendIssueOutput{
 		Item: evaluateIssueRecommendation(
 			detail.Candidate,
+			detail.Dependencies,
 			detail.RepositorySignals,
 			detail.Activity,
 			issue.DetectClaim(
@@ -149,6 +151,10 @@ func (usecase *recommendIssue) output(
 			),
 			desiredSkills,
 			usecase.now(),
+		),
+		Dependencies: append(
+			make([]string, 0, len(detail.Dependencies)),
+			detail.Dependencies...,
 		),
 		RateLimit:  detail.RateLimit,
 		Incomplete: detail.Incomplete,
@@ -167,6 +173,7 @@ func (usecase *recommendIssue) EvaluateCandidate(
 	return evaluateIssueRecommendation(
 		candidate,
 		nil,
+		nil,
 		issue.ActivityMetrics{
 			LastMeaningfulUpdate: lastMeaningfulUpdate,
 			CI:                   issue.CIStateUnknown,
@@ -179,6 +186,7 @@ func (usecase *recommendIssue) EvaluateCandidate(
 
 func evaluateIssueRecommendation(
 	candidate issue.Candidate,
+	dependencies []string,
 	repositorySignals []issue.RepositorySignal,
 	activity issue.ActivityMetrics,
 	claim issue.ClaimEvidence,
@@ -195,6 +203,7 @@ func evaluateIssueRecommendation(
 	}
 	analysis := issue.AnalyzeIssue(issue.AnalysisInput{
 		Candidate:             candidate,
+		Dependencies:          dependencies,
 		HasMaintainerGuidance: hasMaintainerGuidance,
 	})
 	recommendation := issue.Recommend(issue.RecommendationInput{
