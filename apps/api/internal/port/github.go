@@ -63,6 +63,11 @@ type GitHubRepositoryFileResult struct {
 	RateLimit RateLimit
 }
 
+type GitHubProfileAnalysisResult struct {
+	Snapshot  profile.ProfileSnapshot
+	RateLimit RateLimit
+}
+
 type GitHubIssueSearchResult struct {
 	Candidates        []issue.Candidate
 	TotalCount        int
@@ -103,18 +108,12 @@ type GitHubProfileReader interface {
 }
 
 type GitHubProfileAnalysisReader interface {
-	GitHubProfileReader
-	GetRepositoryLanguages(
+	GetProfileAnalysis(
 		ctx context.Context,
-		owner string,
-		name string,
-	) (GitHubLanguagesResult, error)
-	GetRepositoryFile(
-		ctx context.Context,
-		owner string,
-		name string,
-		filePath string,
-	) (GitHubRepositoryFileResult, error)
+		username user.Username,
+		repositoryLimit int,
+		manifestLimit int,
+	) (GitHubProfileAnalysisResult, error)
 }
 
 // GitHubIssueSearcher finds one bounded candidate window. Pagination of
@@ -143,6 +142,7 @@ type GitHubIssueDetailReader interface {
 // application. Production and deterministic test adapters implement the same
 // port so usecases never branch on runtime infrastructure.
 type GitHubReader interface {
+	GitHubProfileReader
 	GitHubProfileAnalysisReader
 	GitHubIssueSearcher
 	GitHubIssueDetailReader

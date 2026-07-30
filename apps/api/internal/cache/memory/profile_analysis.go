@@ -55,12 +55,85 @@ func cloneProfileAnalysisEntry(
 	entry port.ProfileAnalysisCacheEntry,
 ) port.ProfileAnalysisCacheEntry {
 	cloned := entry
-	cloned.Analysis = profile.Analysis{
-		Username:             entry.Analysis.Username,
-		Languages:            append([]profile.LanguageShare(nil), entry.Analysis.Languages...),
-		Frameworks:           append([]string(nil), entry.Analysis.Frameworks...),
-		RepositoriesAnalyzed: entry.Analysis.RepositoriesAnalyzed,
-		Warnings:             append([]profile.Warning(nil), entry.Analysis.Warnings...),
+	cloned.Analysis = entry.Analysis
+	cloned.Analysis.Languages = append(
+		[]profile.LanguageShare(nil),
+		entry.Analysis.Languages...,
+	)
+	cloned.Analysis.Frameworks = append(
+		[]string(nil),
+		entry.Analysis.Frameworks...,
+	)
+	cloned.Analysis.RecentTechnologies = cloneRecentTechnologies(
+		entry.Analysis.RecentTechnologies,
+	)
+	cloned.Analysis.OSSExperience.Evidence = append(
+		[]profile.TechnologyEvidence(nil),
+		entry.Analysis.OSSExperience.Evidence...,
+	)
+	cloned.Analysis.RepositoryEvidence = cloneRepositoryEvidence(
+		entry.Analysis.RepositoryEvidence,
+	)
+	cloned.Analysis.Proficiency = cloneTechnologyProficiency(
+		entry.Analysis.Proficiency,
+	)
+	cloned.Analysis.Warnings = append(
+		[]profile.Warning(nil),
+		entry.Analysis.Warnings...,
+	)
+	return cloned
+}
+
+func cloneRecentTechnologies(
+	source []profile.RecentTechnology,
+) []profile.RecentTechnology {
+	cloned := make([]profile.RecentTechnology, len(source))
+	for index, technology := range source {
+		cloned[index] = technology
+		cloned[index].RepositorySources = append(
+			[]profile.RepositorySource(nil),
+			technology.RepositorySources...,
+		)
+	}
+	return cloned
+}
+
+func cloneRepositoryEvidence(
+	source profile.RepositoryEvidence,
+) profile.RepositoryEvidence {
+	return profile.RepositoryEvidence{
+		Owned:       cloneRepositorySample(source.Owned),
+		Contributed: cloneRepositorySample(source.Contributed),
+		Starred:     cloneRepositorySample(source.Starred),
+		Forked:      cloneRepositorySample(source.Forked),
+	}
+}
+
+func cloneRepositorySample(
+	source profile.RepositorySample,
+) profile.RepositorySample {
+	cloned := source
+	if source.Total != nil {
+		total := *source.Total
+		cloned.Total = &total
+	}
+	cloned.PrimaryTechnologies = append(
+		[]profile.LanguageShare(nil),
+		source.PrimaryTechnologies...,
+	)
+	return cloned
+}
+
+func cloneTechnologyProficiency(
+	source []profile.TechnologyProficiency,
+) []profile.TechnologyProficiency {
+	cloned := make([]profile.TechnologyProficiency, len(source))
+	for index, technology := range source {
+		cloned[index] = technology
+		cloned[index].Evidence = append(
+			[]profile.TechnologyEvidence(nil),
+			technology.Evidence...,
+		)
 	}
 	return cloned
 }

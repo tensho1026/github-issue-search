@@ -9,159 +9,192 @@ import (
 	"time"
 
 	"github.com/tensho1026/github-issue-search/apps/api/internal/cache/memory"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/profile"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/repository"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/user"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/platform/apperror"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
 )
 
-func TestAnalyzeGitHubProfileAggregatesAndCachesData(t *testing.T) {
-	now := time.Date(2026, time.July, 30, 0, 0, 0, 0, time.UTC)
-	reader := &profileAnalysisReaderStub{
-		repositories: []repository.Summary{
-			{
-				Owner:        "octocat",
-				Name:         "api",
-				FullName:     "octocat/api",
-				MainLanguage: "Go",
-				UpdatedAt:    now.Add(2 * time.Hour),
+func TestAnalyzeGitHubProfileBuildsExtendedSnapshotAndCachesIt(
+	t *testing.T,
+) {
+	now := time.Date(2026, time.July, 30, 12, 0, 0, 0, time.UTC)
+	reader := &profileAnalysisSnapshotReaderStub{
+		result: port.GitHubProfileAnalysisResult{
+			Snapshot: profile.ProfileSnapshot{
+				Username:   "octocat",
+				WindowFrom: now.AddDate(0, 0, -profile.AnalysisWindowDays),
+				WindowTo:   now,
+				Owned: profile.RepositoryCollection{
+					Available:  true,
+					Total:      1,
+					TotalKnown: true,
+					Limit:      20,
+					Repositories: []profile.RepositoryObservation{{
+						Repository: repository.Summary{
+							Owner:        "octocat",
+							Name:         "api",
+							FullName:     "octocat/api",
+							MainLanguage: "Go",
+							UpdatedAt:    now.Add(-time.Hour),
+						},
+						Languages: map[string]int64{
+							"Go":         750,
+							"TypeScript": 250,
+						},
+						Manifests: []profile.Manifest{{
+							Path: "go.mod",
+							Content: []byte(
+								"require github.com/gin-gonic/gin v1.12.0",
+							),
+						}},
+					}},
+				},
+				Contributed: profile.RepositoryCollection{
+					Available:  true,
+					Total:      1,
+					TotalKnown: true,
+					Limit:      20,
+					Repositories: []profile.RepositoryObservation{{
+						Repository: repository.Summary{
+							FullName:     "community/project",
+							MainLanguage: "Go",
+							UpdatedAt:    now.Add(-2 * time.Hour),
+						},
+					}},
+				},
+				Starred: profile.RepositoryCollection{
+					Available: true,
+					Limit:     20,
+				},
+				Forked: profile.RepositoryCollection{
+					Available:  true,
+					TotalKnown: true,
+					Limit:      20,
+				},
+				Contributions: profile.ContributionSnapshot{
+					Available: true,
+					Commits: profile.CountEvidence{
+						Available: true,
+						Value:     12,
+					},
+					IssuesOpened: profile.CountEvidence{
+						Available: true,
+						Value:     2,
+						Complete:  true,
+					},
+					PullRequestsOpened: profile.CountEvidence{
+						Available: true,
+						Value:     5,
+						Complete:  true,
+					},
+					PullRequestReviews: profile.CountEvidence{
+						Available: true,
+						Value:     3,
+					},
+					RepositoriesTouched: profile.CountEvidence{
+						Available: true,
+						Value:     1,
+						Complete:  true,
+					},
+				},
 			},
-			{
-				Owner:        "octocat",
-				Name:         "web",
-				FullName:     "octocat/web",
-				MainLanguage: "TypeScript",
-				UpdatedAt:    now.Add(time.Hour),
-			},
-			{
-				Owner:        "octocat",
-				Name:         "archived",
-				FullName:     "octocat/archived",
-				MainLanguage: "Rust",
-				IsArchived:   true,
-				UpdatedAt:    now.Add(3 * time.Hour),
+			RateLimit: port.RateLimit{
+				Known:     true,
+				Limit:     5000,
+				Remaining: 4975,
+				Reset:     now.Add(time.Hour),
 			},
 		},
-		languages: map[string]map[string]int64{
-			"api": {"Go": 100},
-			"web": {"TypeScript": 100},
-		},
-		files: map[string][]byte{
-			"api:go.mod": []byte("require github.com/gin-gonic/gin v1.12.0"),
-			"web:package.json": []byte(
-				`{"dependencies":{"react":"latest"}}`,
-			),
-		},
-		languageDelay: 20 * time.Millisecond,
 	}
-	usecase := newProfileAnalysisUsecase(t, reader, 20, 3, 2)
+	analyze := newProfileAnalysisUsecase(t, reader, 20, 3)
 
-	output, err := usecase.Execute(context.Background(), "octocat")
+	output, err := analyze.Execute(context.Background(), "octocat")
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
 	if output.Analysis.Username != "octocat" ||
-		output.Analysis.RepositoriesAnalyzed != 2 ||
-		len(output.Analysis.Languages) != 2 ||
-		output.Analysis.Languages[0].Name != "Go" ||
-		output.Analysis.Languages[0].Percentage != 50 ||
-		output.Analysis.Languages[1].Name != "TypeScript" ||
-		output.Analysis.Languages[1].Percentage != 50 {
-		t.Fatalf("Execute() analysis = %+v", output.Analysis)
-	}
-	if len(output.Analysis.Frameworks) != 2 ||
+		output.Analysis.RepositoriesAnalyzed != 1 ||
+		output.Analysis.Languages[0] != (profile.LanguageShare{
+			Name: "Go", Percentage: 75,
+		}) ||
+		len(output.Analysis.Frameworks) != 1 ||
 		output.Analysis.Frameworks[0] != "Gin" ||
-		output.Analysis.Frameworks[1] != "React" {
-		t.Fatalf("frameworks = %v", output.Analysis.Frameworks)
+		output.Analysis.Contributions.PullRequestsOpened.Value != 5 ||
+		output.Analysis.OSSExperience.Level != "contributing" ||
+		len(output.Analysis.Proficiency) == 0 {
+		t.Fatalf("analysis = %+v", output.Analysis)
 	}
-	if output.RateLimit.Remaining != 70 {
+	if output.RateLimit.Remaining != 4975 {
 		t.Fatalf("rate limit = %+v", output.RateLimit)
 	}
-	if reader.maximumConcurrency() > 2 || reader.maximumConcurrency() < 2 {
-		t.Fatalf("maximum concurrency = %d, want 2", reader.maximumConcurrency())
-	}
 
-	if _, err := usecase.Execute(context.Background(), "OCTOCAT"); err != nil {
+	if _, err := analyze.Execute(context.Background(), "OCTOCAT"); err != nil {
 		t.Fatalf("cached Execute() error = %v", err)
 	}
-	if calls := reader.callCounts(); calls != (profileAnalysisCallCounts{
-		getUser:   1,
-		list:      1,
-		languages: 2,
-		files:     2,
-	}) {
-		t.Fatalf("calls after cache hit = %+v", calls)
+	calls, repositoryLimit, manifestLimit := reader.observations()
+	if calls != 1 || repositoryLimit != 20 || manifestLimit != 3 {
+		t.Fatalf(
+			"reader observations = calls:%d repositories:%d manifests:%d",
+			calls,
+			repositoryLimit,
+			manifestLimit,
+		)
 	}
 }
 
-func TestAnalyzeGitHubProfileReturnsDeterministicPartialWarnings(t *testing.T) {
-	now := time.Now()
-	reader := &profileAnalysisReaderStub{
-		repositories: []repository.Summary{
-			{
-				Owner:        "octocat",
-				Name:         "alpha",
-				FullName:     "octocat/alpha",
-				MainLanguage: "Go",
-				UpdatedAt:    now.Add(time.Hour),
+func TestAnalyzeGitHubProfilePreservesPartialWarnings(t *testing.T) {
+	now := time.Date(2026, time.July, 30, 12, 0, 0, 0, time.UTC)
+	reader := &profileAnalysisSnapshotReaderStub{
+		result: port.GitHubProfileAnalysisResult{
+			Snapshot: profile.ProfileSnapshot{
+				Username:   "octocat",
+				WindowFrom: now.AddDate(0, 0, -profile.AnalysisWindowDays),
+				WindowTo:   now,
+				Warnings: []profile.Warning{{
+					Code:    "contribution_activity_unavailable",
+					Message: "Public contribution evidence is unavailable",
+				}},
 			},
-			{
-				Owner:        "octocat",
-				Name:         "beta",
-				FullName:     "octocat/beta",
-				MainLanguage: "TypeScript",
-				UpdatedAt:    now,
-			},
-		},
-		languages: map[string]map[string]int64{
-			"beta": {"TypeScript": 10},
-		},
-		languageErrors: map[string]error{
-			"alpha": errors.New("language endpoint unavailable"),
-		},
-		fileErrors: map[string]error{
-			"beta:package.json": errors.New("contents endpoint unavailable"),
 		},
 	}
 
-	output, err := newProfileAnalysisUsecase(t, reader, 20, 3, 2).
+	output, err := newProfileAnalysisUsecase(t, reader, 20, 3).
 		Execute(context.Background(), "octocat")
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if output.Analysis.RepositoriesAnalyzed != 2 ||
-		len(output.Analysis.Languages) != 1 ||
-		output.Analysis.Languages[0].Name != "TypeScript" {
+	if len(output.Analysis.Warnings) != 1 ||
+		output.Analysis.Warnings[0].Code !=
+			"contribution_activity_unavailable" ||
+		output.Analysis.Contributions.Commits.Status !=
+			profile.EvidenceUnavailable ||
+		output.Analysis.OSSExperience.Level != "unavailable" {
 		t.Fatalf("analysis = %+v", output.Analysis)
-	}
-	if len(output.Analysis.Warnings) != 2 {
-		t.Fatalf("warnings = %+v", output.Analysis.Warnings)
-	}
-	if output.Analysis.Warnings[0].Code != warningLanguageUnavailable ||
-		output.Analysis.Warnings[0].Repository != "octocat/alpha" ||
-		output.Analysis.Warnings[1].Code != warningManifestUnavailable ||
-		output.Analysis.Warnings[1].Repository != "octocat/beta" {
-		t.Fatalf("warning order = %+v", output.Analysis.Warnings)
 	}
 }
 
 func TestAnalyzeGitHubProfileDeduplicatesConcurrentRequests(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})
-	reader := &profileAnalysisReaderStub{
+	reader := &profileAnalysisSnapshotReaderStub{
+		result: port.GitHubProfileAnalysisResult{
+			Snapshot: profile.ProfileSnapshot{Username: "octocat"},
+		},
 		started: started,
 		release: release,
 	}
-	usecase := newProfileAnalysisUsecase(t, reader, 20, 3, 5)
+	analyze := newProfileAnalysisUsecase(t, reader, 20, 3)
 
 	const requestCount = 12
 	var waitGroup sync.WaitGroup
 	errorsByRequest := make(chan error, requestCount)
-	for index := 0; index < requestCount; index++ {
+	for range requestCount {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			_, err := usecase.Execute(context.Background(), "octocat")
+			_, err := analyze.Execute(context.Background(), "octocat")
 			errorsByRequest <- err
 		}()
 	}
@@ -175,8 +208,9 @@ func TestAnalyzeGitHubProfileDeduplicatesConcurrentRequests(t *testing.T) {
 			t.Fatalf("Execute() error = %v", err)
 		}
 	}
-	if calls := reader.callCounts(); calls.getUser != 1 || calls.list != 1 {
-		t.Fatalf("single-flight calls = %+v", calls)
+	calls, _, _ := reader.observations()
+	if calls != 1 {
+		t.Fatalf("snapshot calls = %d, want 1", calls)
 	}
 }
 
@@ -209,8 +243,8 @@ func TestAnalyzeGitHubProfileMapsFatalGitHubErrors(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			reader := &profileAnalysisReaderStub{userError: test.readerErr}
-			_, err := newProfileAnalysisUsecase(t, reader, 20, 3, 5).
+			reader := &profileAnalysisSnapshotReaderStub{err: test.readerErr}
+			_, err := newProfileAnalysisUsecase(t, reader, 20, 3).
 				Execute(context.Background(), "octocat")
 
 			var applicationError *apperror.Error
@@ -228,25 +262,26 @@ func TestAnalyzeGitHubProfileMapsFatalGitHubErrors(t *testing.T) {
 	}
 }
 
-func TestAnalyzeGitHubProfilePropagatesCancellationDuringRepositoryWork(
-	t *testing.T,
-) {
-	reader := &profileAnalysisReaderStub{
-		repositories: []repository.Summary{{
-			Owner:        "octocat",
-			Name:         "api",
-			FullName:     "octocat/api",
-			MainLanguage: "Go",
-		}},
-		blockLanguages: true,
+func TestAnalyzeGitHubProfilePropagatesCancellation(t *testing.T) {
+	started := make(chan struct{})
+	reader := &profileAnalysisSnapshotReaderStub{
+		started:           started,
+		blockUntilContext: true,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() {
+		_, err := newProfileAnalysisUsecase(t, reader, 20, 3).Execute(
+			ctx,
+			"octocat",
+		)
+		result <- err
+	}()
+	<-started
 	cancel()
 
-	_, err := newProfileAnalysisUsecase(t, reader, 20, 3, 5).
-		Execute(ctx, "octocat")
 	var applicationError *apperror.Error
-	if !errors.As(err, &applicationError) ||
+	if err := <-result; !errors.As(err, &applicationError) ||
 		applicationError.Code != apperror.CodeRequestTimeout {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -257,7 +292,6 @@ func newProfileAnalysisUsecase(
 	reader port.GitHubProfileAnalysisReader,
 	repositoryLimit int,
 	manifestLimit int,
-	maxConcurrency int,
 ) AnalyzeGitHubProfile {
 	t.Helper()
 	cache, err := memory.NewProfileAnalysis(100, time.Hour)
@@ -269,168 +303,55 @@ func newProfileAnalysisUsecase(
 		cache,
 		repositoryLimit,
 		manifestLimit,
-		maxConcurrency,
 	)
 }
 
-type profileAnalysisReaderStub struct {
-	mu             sync.Mutex
-	repositories   []repository.Summary
-	languages      map[string]map[string]int64
-	files          map[string][]byte
-	languageErrors map[string]error
-	fileErrors     map[string]error
-	userError      error
-	languageDelay  time.Duration
-	blockLanguages bool
-	started        chan struct{}
-	startedOnce    sync.Once
-	release        chan struct{}
-	getUserCalls   int
-	listCalls      int
-	languageCalls  int
-	fileCalls      int
-	active         int
-	maxActive      int
+type profileAnalysisSnapshotReaderStub struct {
+	mu                sync.Mutex
+	result            port.GitHubProfileAnalysisResult
+	err               error
+	started           chan struct{}
+	startedOnce       sync.Once
+	release           chan struct{}
+	blockUntilContext bool
+	calls             int
+	repositoryLimit   int
+	manifestLimit     int
 }
 
-type profileAnalysisCallCounts struct {
-	getUser   int
-	list      int
-	languages int
-	files     int
-}
-
-func (stub *profileAnalysisReaderStub) GetUser(
+func (stub *profileAnalysisSnapshotReaderStub) GetProfileAnalysis(
 	ctx context.Context,
-	username user.Username,
-) (port.GitHubUserResult, error) {
+	_ user.Username,
+	repositoryLimit int,
+	manifestLimit int,
+) (port.GitHubProfileAnalysisResult, error) {
 	stub.mu.Lock()
-	stub.getUserCalls++
+	stub.calls++
+	stub.repositoryLimit = repositoryLimit
+	stub.manifestLimit = manifestLimit
 	stub.mu.Unlock()
-
 	if stub.started != nil {
 		stub.startedOnce.Do(func() { close(stub.started) })
+	}
+	if stub.blockUntilContext {
+		<-ctx.Done()
+		return port.GitHubProfileAnalysisResult{}, ctx.Err()
 	}
 	if stub.release != nil {
 		select {
 		case <-stub.release:
 		case <-ctx.Done():
-			return port.GitHubUserResult{}, ctx.Err()
+			return port.GitHubProfileAnalysisResult{}, ctx.Err()
 		}
 	}
-	if stub.userError != nil {
-		return port.GitHubUserResult{}, stub.userError
+	if stub.err != nil {
+		return port.GitHubProfileAnalysisResult{}, stub.err
 	}
-	return port.GitHubUserResult{
-		Profile: user.Profile{Login: username},
-		RateLimit: port.RateLimit{
-			Known:     true,
-			Remaining: 100,
-		},
-	}, nil
+	return stub.result, nil
 }
 
-func (stub *profileAnalysisReaderStub) ListRepositories(
-	context.Context,
-	user.Username,
-	int,
-) ([]repository.Summary, port.RateLimit, error) {
+func (stub *profileAnalysisSnapshotReaderStub) observations() (int, int, int) {
 	stub.mu.Lock()
 	defer stub.mu.Unlock()
-	stub.listCalls++
-	return append([]repository.Summary(nil), stub.repositories...),
-		port.RateLimit{Known: true, Remaining: 90},
-		nil
-}
-
-func (stub *profileAnalysisReaderStub) GetRepositoryLanguages(
-	ctx context.Context,
-	_ string,
-	name string,
-) (port.GitHubLanguagesResult, error) {
-	stub.mu.Lock()
-	stub.languageCalls++
-	stub.active++
-	if stub.active > stub.maxActive {
-		stub.maxActive = stub.active
-	}
-	stub.mu.Unlock()
-	defer func() {
-		stub.mu.Lock()
-		stub.active--
-		stub.mu.Unlock()
-	}()
-
-	if stub.blockLanguages {
-		<-ctx.Done()
-		return port.GitHubLanguagesResult{}, ctx.Err()
-	}
-	if stub.languageDelay > 0 {
-		select {
-		case <-time.After(stub.languageDelay):
-		case <-ctx.Done():
-			return port.GitHubLanguagesResult{}, ctx.Err()
-		}
-	}
-	if err := stub.languageErrors[name]; err != nil {
-		return port.GitHubLanguagesResult{}, err
-	}
-	return port.GitHubLanguagesResult{
-		Languages: cloneLanguageMap(stub.languages[name]),
-		RateLimit: port.RateLimit{
-			Known:     true,
-			Remaining: 80,
-		},
-	}, nil
-}
-
-func (stub *profileAnalysisReaderStub) GetRepositoryFile(
-	_ context.Context,
-	_ string,
-	name string,
-	filePath string,
-) (port.GitHubRepositoryFileResult, error) {
-	stub.mu.Lock()
-	stub.fileCalls++
-	stub.mu.Unlock()
-
-	key := name + ":" + filePath
-	if err := stub.fileErrors[key]; err != nil {
-		return port.GitHubRepositoryFileResult{}, err
-	}
-	content, exists := stub.files[key]
-	return port.GitHubRepositoryFileResult{
-		Content: append([]byte(nil), content...),
-		Exists:  exists,
-		RateLimit: port.RateLimit{
-			Known:     true,
-			Remaining: 70,
-		},
-	}, nil
-}
-
-func (stub *profileAnalysisReaderStub) maximumConcurrency() int {
-	stub.mu.Lock()
-	defer stub.mu.Unlock()
-	return stub.maxActive
-}
-
-func (stub *profileAnalysisReaderStub) callCounts() profileAnalysisCallCounts {
-	stub.mu.Lock()
-	defer stub.mu.Unlock()
-	return profileAnalysisCallCounts{
-		getUser:   stub.getUserCalls,
-		list:      stub.listCalls,
-		languages: stub.languageCalls,
-		files:     stub.fileCalls,
-	}
-}
-
-func cloneLanguageMap(source map[string]int64) map[string]int64 {
-	cloned := make(map[string]int64, len(source))
-	for language, count := range source {
-		cloned[language] = count
-	}
-	return cloned
+	return stub.calls, stub.repositoryLimit, stub.manifestLimit
 }

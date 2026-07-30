@@ -40,6 +40,23 @@ func TestClientSupportsCompleteSuccessJourney(t *testing.T) {
 		t.Fatalf("ListRepositories() = %+v", repositories)
 	}
 
+	analysis, err := client.GetProfileAnalysis(
+		context.Background(),
+		username,
+		20,
+		3,
+	)
+	if err != nil {
+		t.Fatalf("GetProfileAnalysis() error = %v", err)
+	}
+	if len(analysis.Snapshot.Owned.Repositories) != 1 ||
+		len(analysis.Snapshot.Contributed.Repositories) != 1 ||
+		len(analysis.Snapshot.Starred.Repositories) != 1 ||
+		len(analysis.Snapshot.Forked.Repositories) != 1 ||
+		analysis.Snapshot.Contributions.PullRequestsOpened.Value != 7 {
+		t.Fatalf("GetProfileAnalysis() = %+v", analysis)
+	}
+
 	languages, err := client.GetRepositoryLanguages(
 		context.Background(),
 		fixtureOwner,

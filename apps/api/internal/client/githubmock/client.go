@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/issue"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/profile"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/repository"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/user"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
@@ -142,6 +143,125 @@ func (client *Client) GetRepositoryFile(
 			`{"dependencies":{"react":"19.2.0","typescript":"6.0.0"}}`,
 		),
 		Exists:    true,
+		RateLimit: client.rateLimit(),
+	}, nil
+}
+
+// GetProfileAnalysis returns one fresh, public-only extended profile snapshot.
+func (client *Client) GetProfileAnalysis(
+	ctx context.Context,
+	username user.Username,
+	repositoryLimit int,
+	manifestLimit int,
+) (port.GitHubProfileAnalysisResult, error) {
+	if err := ctx.Err(); err != nil {
+		return port.GitHubProfileAnalysisResult{}, err
+	}
+	if err := scenarioError(username.String(), client.now()); err != nil {
+		return port.GitHubProfileAnalysisResult{}, err
+	}
+	if !isFixtureProfile(username.String()) {
+		return port.GitHubProfileAnalysisResult{}, notFound()
+	}
+	if repositoryLimit < 1 || repositoryLimit > 20 ||
+		manifestLimit < 1 || manifestLimit > 10 {
+		return port.GitHubProfileAnalysisResult{}, fmt.Errorf(
+			"mock profile analysis limits are invalid",
+		)
+	}
+
+	now := client.now().UTC()
+	emptyCollection := profile.RepositoryCollection{
+		Available:  true,
+		TotalKnown: true,
+		Limit:      repositoryLimit,
+	}
+	snapshot := profile.ProfileSnapshot{
+		Username:    username,
+		WindowFrom:  now.AddDate(0, 0, -profile.AnalysisWindowDays),
+		WindowTo:    now,
+		Owned:       emptyCollection,
+		Contributed: emptyCollection,
+		Forked:      emptyCollection,
+		Starred: profile.RepositoryCollection{
+			Available: true,
+			Limit:     repositoryLimit,
+		},
+		Contributions: profile.ContributionSnapshot{
+			Available: true,
+			Commits: profile.CountEvidence{
+				Available: true,
+			},
+			IssuesOpened: profile.CountEvidence{
+				Available: true,
+				Complete:  true,
+			},
+			PullRequestsOpened: profile.CountEvidence{
+				Available: true,
+				Complete:  true,
+			},
+			PullRequestReviews: profile.CountEvidence{
+				Available: true,
+			},
+			RepositoriesTouched: profile.CountEvidence{
+				Available: true,
+				Complete:  true,
+			},
+		},
+	}
+	if username.String() == successUsername {
+		snapshot.Owned.Repositories = []profile.RepositoryObservation{{
+			Repository: client.repository(successUsername),
+			Languages: map[string]int64{
+				"TypeScript": 650,
+				"Go":         350,
+			},
+			Manifests: []profile.Manifest{{
+				Path: "package.json",
+				Content: []byte(
+					`{"dependencies":{"react":"19.2.0","typescript":"6.0.0"}}`,
+				),
+			}},
+		}}
+		snapshot.Owned.Total = 1
+		snapshot.Contributed.Repositories = []profile.RepositoryObservation{{
+			Repository: client.profileRepository(
+				"community",
+				"accessible-tools",
+				"TypeScript",
+				false,
+				24*time.Hour,
+			),
+		}}
+		snapshot.Contributed.Total = 1
+		snapshot.Forked.Repositories = []profile.RepositoryObservation{{
+			Repository: client.profileRepository(
+				successUsername,
+				"go-tooling-fork",
+				"Go",
+				true,
+				48*time.Hour,
+			),
+		}}
+		snapshot.Forked.Total = 1
+		snapshot.Starred.Repositories = []profile.RepositoryObservation{{
+			Repository: client.profileRepository(
+				"community",
+				"rust-cli",
+				"Rust",
+				false,
+				72*time.Hour,
+			),
+		}}
+		snapshot.Contributions.Commits.Value = 18
+		snapshot.Contributions.IssuesOpened.Value = 3
+		snapshot.Contributions.PullRequestsOpened.Value = 7
+		snapshot.Contributions.PullRequestReviews.Value = 4
+		snapshot.Contributions.RepositoriesTouched.Value = 1
+	}
+
+	return port.GitHubProfileAnalysisResult{
+		Snapshot:  snapshot,
 		RateLimit: client.rateLimit(),
 	}, nil
 }
@@ -294,6 +414,31 @@ func (client *Client) repository(owner string) repository.Summary {
 		DefaultBranch: "main",
 		UpdatedAt:     now.Add(-12 * time.Hour),
 		PushedAt:      now.Add(-14 * time.Hour),
+	}
+}
+
+func (client *Client) profileRepository(
+	owner string,
+	name string,
+	language string,
+	isFork bool,
+	age time.Duration,
+) repository.Summary {
+	return repository.Summary{
+		ID:            10,
+		Owner:         owner,
+		Name:          name,
+		FullName:      owner + "/" + name,
+		Description:   "Deterministic public profile evidence.",
+		URL:           "https://github.com/" + owner + "/" + name,
+		MainLanguage:  language,
+		Stars:         100,
+		Forks:         10,
+		OpenIssues:    5,
+		IsFork:        isFork,
+		DefaultBranch: "main",
+		UpdatedAt:     client.now().UTC().Add(-age),
+		PushedAt:      client.now().UTC().Add(-age),
 	}
 }
 
