@@ -18,7 +18,7 @@ contain names and safe defaults, never credentials. Commit no `.env` file.
 | `PROFILE_ANALYSIS_CACHE_TTL`            | `30m`                    | Profile-analysis cache lifetime, positive and at most 24 hours        | No     |
 | `PROFILE_ANALYSIS_CACHE_CAPACITY`       | `500`                    | Profile-analysis LRU entries, 1–10,000                                | No     |
 | `REPOSITORY_DISCOVERY_RESULT_LIMIT`     | `50`                     | Upstream repository candidate window, 1–50                            | No     |
-| `REPOSITORY_DISCOVERY_ENRICHMENT_LIMIT` | `20`                     | Batched enrichments, 1–20 and no more than result limit               | No     |
+| `REPOSITORY_DISCOVERY_ENRICHMENT_LIMIT` | `10`                     | Batched enrichments, 1–20 and no more than result limit               | No     |
 | `REPOSITORY_DISCOVERY_CACHE_TTL`        | `5m`                     | Repository cache lifetime, positive and at most 24 hours              | No     |
 | `REPOSITORY_DISCOVERY_CACHE_CAPACITY`   | `1000`                   | Repository-discovery LRU entries, 1–10,000                            | No     |
 | `ISSUE_SEARCH_RESULT_LIMIT`             | `50`                     | Upstream candidate window, 1–50                                       | No     |
@@ -51,17 +51,17 @@ the native supervisor. Shell values take precedence over defaults.
 
 ## Fixed server deadlines
 
-| Deadline                      |           Value | Reason                                    |
-| ----------------------------- | --------------: | ----------------------------------------- |
-| Read header                   |       5 seconds | Limits slow header delivery               |
-| Request read/write            | 20 seconds each | Bounds client connections                 |
-| Idle connection               |      60 seconds | Reuses healthy keep-alive connections     |
-| Graceful shutdown             |      10 seconds | Allows in-flight requests to complete     |
-| Health/profile-normal request |       5 seconds | Fast boundary work                        |
-| Profile analysis              |      15 seconds | Bounded GitHub repository fan-out         |
-| Repository discovery          |      15 seconds | Two bounded GitHub GraphQL requests       |
-| Issue search                  |      15 seconds | Bounded discovery and enrichment          |
-| Issue detail                  |      15 seconds | One bounded GraphQL snapshot and analysis |
+| Deadline                      |           Value | Reason                                     |
+| ----------------------------- | --------------: | ------------------------------------------ |
+| Read header                   |       5 seconds | Limits slow header delivery                |
+| Request read/write            | 20 seconds each | Bounds client connections                  |
+| Idle connection               |      60 seconds | Reuses healthy keep-alive connections      |
+| Graceful shutdown             |      10 seconds | Allows in-flight requests to complete      |
+| Health/profile-normal request |       5 seconds | Fast boundary work                         |
+| Profile analysis              |      15 seconds | Bounded GitHub repository fan-out          |
+| Repository discovery          |      15 seconds | One REST search and one GraphQL enrichment |
+| Issue search                  |      15 seconds | Bounded discovery and enrichment           |
+| Issue detail                  |      15 seconds | One bounded GraphQL snapshot and analysis  |
 
 These are compiled process safety limits rather than deployment knobs. Change
 them with focused server tests instead of adding unvalidated environment

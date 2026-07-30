@@ -1,9 +1,9 @@
 # Repository discovery
 
 Repository discovery finds public open-source repositories without cloning or
-executing their code. It uses bounded GitHub GraphQL snapshots, explicit
-evidence states, deterministic rules, and an in-memory cache. The anonymous
-route never reads or writes a database.
+executing their code. It uses one bounded GitHub REST search, one bounded
+GraphQL enrichment, explicit evidence states, deterministic rules, and an
+in-memory cache. The anonymous route never reads or writes a database.
 
 ## Bounded request flow
 
@@ -20,10 +20,10 @@ sequenceDiagram
     alt cache hit
         Cache-->>API: Deep-copied analyzed window
     else cache miss
-        API->>GitHub: One search query (at most 50)
+        API->>GitHub: One REST search query (at most 50)
         GitHub-->>API: Normalized public candidates
         API->>API: Cheap filtering and stable shortlist
-        API->>GitHub: One batched enrichment query (at most 20)
+        API->>GitHub: One batched GraphQL enrichment (at most 20)
         GitHub-->>API: Bounded README and contribution files
         API->>API: Analyze, filter, rank
         API->>Cache: Store deep copy for five minutes
@@ -32,9 +32,10 @@ sequenceDiagram
 ```
 
 A cache miss makes at most two upstream requests. The first query obtains at
-most 50 candidates. The second query enriches at most 20 repositories in one
-batch; it is not a per-repository fan-out. Pagination is applied after
-analysis and is excluded from the canonical cache key.
+most 50 candidates. The second query enriches 10 repositories by default and
+at most 20 when explicitly configured, in one batch; it is not a
+per-repository fan-out. Pagination is applied after analysis and is excluded
+from the canonical cache key.
 
 ## Filters and defaults
 

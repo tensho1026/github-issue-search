@@ -128,12 +128,13 @@ individual-only activity is explicitly unavailable. The complete selection,
 status, proficiency, and OSS rules are documented in
 [Public profile and OSS analysis](profile-analysis.md).
 
-Repository discovery independently performs one search request for at most 50
-public candidates and one batched enrichment request for at most 20
-repositories. It never clones code or fans out one request per repository.
-README and contribution-file evidence is normalized before it reaches the
-usecase. See [Repository discovery](repository-discovery.md) for filter,
-classification, and confidence rules.
+Repository discovery independently performs one REST search request for at
+most 50 public candidates and one batched GraphQL enrichment request for at
+most 20 repositories. It never clones code or fans out one request per
+repository. README and contribution-file evidence is normalized before it
+reaches the usecase. See
+[Repository discovery](repository-discovery.md) for filter, classification,
+and confidence rules.
 
 External calls carry the inbound context and use a ten-second client timeout.
 Only transient network failures and HTTP 502/503/504 responses are retried, at
@@ -156,7 +157,7 @@ them. Initial TTLs are deliberately different by data volatility:
 | Issue details        |  5 minutes |
 
 Repository discovery uses `REPOSITORY_DISCOVERY_RESULT_LIMIT` (maximum 50),
-`REPOSITORY_DISCOVERY_ENRICHMENT_LIMIT` (maximum 20),
+`REPOSITORY_DISCOVERY_ENRICHMENT_LIMIT` (10 by default, maximum 20),
 `REPOSITORY_DISCOVERY_CACHE_TTL` (five minutes by default), and
 `REPOSITORY_DISCOVERY_CACHE_CAPACITY` (1000 entries by default).
 Issue search uses `ISSUE_SEARCH_RESULT_LIMIT` (maximum 50),

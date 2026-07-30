@@ -227,16 +227,17 @@ paths:
       operationId: searchGitHubRepositories
       summary: Find contribution-ready public OSS repositories
       description: |
-        Executes one bounded GitHub GraphQL repository search containing at
-        most 50 normalized public candidates. Cheap language, SPDX license,
+        Executes one bounded GitHub REST repository search containing at most
+        50 normalized public candidates. Cheap language, SPDX license,
         popularity, fork, issue-count, archive, and recency filters run before
         a shortlist of at most 20 repositories receives one batched GraphQL
-        documentation enrichment. README language and technology detection are
-        heuristics over at most 64 KiB of text and always expose evidence
-        status and confidence. The final order is deterministic: readiness,
-        stars, last push, then canonical full name. Equivalent validated
-        conditions share a five-minute bounded in-memory cache. Anonymous
-        requests never access a database or persist the query or results.
+        quality and documentation enrichment. README language and technology
+        detection are heuristics over at most 64 KiB of text and always expose
+        evidence status and confidence. The final order is deterministic:
+        readiness, stars, last push, then canonical full name. Equivalent
+        validated conditions share a five-minute bounded in-memory cache.
+        Anonymous requests never access a database or persist the query or
+        results.
       tags:
         - Repository discovery
       parameters:

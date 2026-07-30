@@ -15,35 +15,27 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/repository"
 )
 
-const validGraphQLRepositoryNode = `{
-	"__typename":"Repository",
-	"databaseId":123,
+const validRESTRepositoryItem = `{
+	"id":123,
 	"owner":{"login":"example"},
 	"name":"typed-service",
-	"nameWithOwner":"example/typed-service",
+	"full_name":"example/typed-service",
 	"description":"A typed React and Go developer tool",
-	"url":"https://github.com/example/typed-service",
-	"stargazerCount":420,
-	"forkCount":32,
-	"watchers":{"totalCount":18},
-	"issues":{"totalCount":14},
-	"goodFirstIssues":{"totalCount":4},
-	"helpWantedIssues":{"totalCount":6},
-	"isFork":false,
-	"isArchived":false,
-	"hasIssuesEnabled":true,
-	"hasDiscussionsEnabled":true,
-	"primaryLanguage":{"name":"TypeScript"},
-	"licenseInfo":{"name":"MIT License","spdxId":"MIT"},
-	"repositoryTopics":{"nodes":[
-		{"topic":{"name":"react"}},
-		{"topic":{"name":"developer-tools"}}
-	]},
-	"defaultBranchRef":{"name":"main"},
-	"updatedAt":"2026-07-30T09:00:00Z",
-	"pushedAt":"2026-07-30T08:00:00Z",
-	"codeOfConduct":{"key":"contributor_covenant"},
-	"securityPolicyUrl":"https://github.com/example/typed-service/security/policy"
+	"html_url":"https://github.com/example/typed-service",
+	"stargazers_count":420,
+	"forks_count":32,
+	"watchers_count":18,
+	"open_issues_count":14,
+	"fork":false,
+	"archived":false,
+	"has_issues":true,
+	"has_discussions":true,
+	"language":"TypeScript",
+	"license":{"name":"MIT License","spdx_id":"MIT"},
+	"topics":["react","developer-tools"],
+	"default_branch":"main",
+	"updated_at":"2026-07-30T09:00:00Z",
+	"pushed_at":"2026-07-30T08:00:00Z"
 }`
 
 func TestBuildRepositorySearchQueryUsesBoundedQualifiers(t *testing.T) {
@@ -72,7 +64,7 @@ func TestBuildRepositorySearchQueryUsesBoundedQualifiers(t *testing.T) {
 	want := `is:public archived:false fork:true stars:>=100 forks:>=2 ` +
 		`pushed:>=2026-06-30 ` +
 		`language:"Go" language:"TypeScript" ` +
-		`license:apache-2.0 license:mit sort:updated-desc`
+		`license:apache-2.0 license:mit`
 	if query != want {
 		t.Fatalf("query =\n%s\nwant\n%s", query, want)
 	}
@@ -81,7 +73,7 @@ func TestBuildRepositorySearchQueryUsesBoundedQualifiers(t *testing.T) {
 	}
 }
 
-func TestSearchRepositoriesPostsGraphQLAndNormalizesCandidate(t *testing.T) {
+func TestSearchRepositoriesGetsRESTWindowAndNormalizesCandidate(t *testing.T) {
 	t.Parallel()
 
 	var requests atomic.Int32
@@ -90,35 +82,26 @@ func TestSearchRepositoriesPostsGraphQLAndNormalizesCandidate(t *testing.T) {
 		request *http.Request,
 	) {
 		requests.Add(1)
-		if request.Method != http.MethodPost ||
-			request.URL.Path != "/graphql" {
+		if request.Method != http.MethodGet ||
+			request.URL.Path != "/search/repositories" {
 			t.Errorf("request = %s %s", request.Method, request.URL.String())
 		}
-		var payload graphQLRepositorySearchRequest
-		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
-			t.Errorf("decode request: %v", err)
-		}
-		if payload.Query != graphQLRepositorySearchDocument ||
-			payload.Variables.First != 50 {
-			t.Errorf("payload = %+v", payload)
-		}
-		if !strings.Contains(payload.Variables.SearchQuery, "stars:>=10") {
-			t.Errorf("search query = %q", payload.Variables.SearchQuery)
+		query := request.URL.Query()
+		if !strings.Contains(query.Get("q"), "stars:>=10") ||
+			query.Get("per_page") != "50" ||
+			query.Get("page") != "1" ||
+			query.Get("sort") != "updated" ||
+			query.Get("order") != "desc" {
+			t.Errorf("search query = %q", request.URL.RawQuery)
 		}
 		writer.Header().Set("Content-Type", "application/json")
+		writer.Header().Set("X-RateLimit-Limit", "30")
+		writer.Header().Set("X-RateLimit-Remaining", "29")
+		writer.Header().Set("X-RateLimit-Reset", "1785384000")
 		_, _ = io.WriteString(writer, `{
-			"data":{
-				"search":{
-					"repositoryCount":200,
-					"pageInfo":{"hasNextPage":true},
-					"nodes":[`+validGraphQLRepositoryNode+`]
-				},
-				"rateLimit":{
-					"limit":5000,
-					"remaining":70,
-					"resetAt":"2026-07-30T13:00:00Z"
-				}
-			}
+			"total_count":200,
+			"incomplete_results":false,
+			"items":[`+validRESTRepositoryItem+`]
 		}`)
 	}))
 	defer server.Close()
@@ -139,7 +122,7 @@ func TestSearchRepositoriesPostsGraphQLAndNormalizesCandidate(t *testing.T) {
 		len(result.Candidates) != 1 ||
 		result.TotalCount != 200 ||
 		!result.IncompleteResults ||
-		result.RateLimit.Remaining != 70 {
+		result.RateLimit.Remaining != 29 {
 		t.Fatalf("SearchRepositories() result = %+v", result)
 	}
 	candidate := result.Candidates[0]
@@ -149,33 +132,19 @@ func TestSearchRepositoriesPostsGraphQLAndNormalizesCandidate(t *testing.T) {
 		candidate.Repository.MainLanguage != "TypeScript" ||
 		candidate.License != "MIT" ||
 		!candidate.LicenseKnown ||
-		candidate.GoodFirstIssues != 4 ||
-		candidate.HelpWantedIssues != 6 ||
-		!candidate.HasCodeOfConduct ||
-		!candidate.HasSecurityPolicy ||
 		len(candidate.Topics) != 2 ||
 		candidate.Topics[0] != "developer-tools" {
 		t.Fatalf("candidate = %+v", candidate)
 	}
 }
 
-func TestSearchRepositoriesKeepsValidNodesOnPartialError(t *testing.T) {
+func TestSearchRepositoriesReportsRESTIncompleteResults(t *testing.T) {
 	t.Parallel()
 
 	server := jsonServer(`{
-		"data":{
-			"search":{
-				"repositoryCount":2,
-				"pageInfo":{"hasNextPage":false},
-				"nodes":[` + validGraphQLRepositoryNode + `,null]
-			},
-			"rateLimit":{
-				"limit":5000,
-				"remaining":60,
-				"resetAt":"2026-07-30T13:00:00Z"
-			}
-		},
-		"errors":[{"type":"INTERNAL","message":"one repository failed"}]
+		"total_count":2,
+		"incomplete_results":true,
+		"items":[` + validRESTRepositoryItem + `]
 	}`)
 	defer server.Close()
 
@@ -212,6 +181,10 @@ func TestEnrichRepositoriesUsesOneBoundedBatchAndReportsPartialData(
 		for _, required := range []string{
 			"repo0: repository",
 			"repo1: repository",
+			"goodFirstIssues: issues",
+			"helpWantedIssues: issues",
+			"codeOfConduct",
+			"securityPolicyUrl",
 			`"main:README.ja.md"`,
 			`"main:.github/CONTRIBUTING.md"`,
 			"rateLimit",
@@ -226,6 +199,17 @@ func TestEnrichRepositoriesUsesOneBoundedBatchAndReportsPartialData(
 			"data": map[string]any{
 				"repo0": map[string]any{
 					"nameWithOwner": "example/typed-service",
+					"goodFirstIssues": map[string]any{
+						"totalCount": 4,
+					},
+					"helpWantedIssues": map[string]any{
+						"totalCount": 6,
+					},
+					"codeOfConduct": map[string]any{
+						"key": "contributor_covenant",
+					},
+					"securityPolicyUrl": "https://github.com/example/" +
+						"typed-service/security/policy",
 					"readmeMarkdown": map[string]any{
 						"byteSize": 12,
 						"isBinary": false,
@@ -287,6 +271,10 @@ func TestEnrichRepositoriesUsesOneBoundedBatchAndReportsPartialData(
 		!enrichment.READMEAvailable ||
 		!enrichment.READMEContentAvailable ||
 		!enrichment.ContributingAvailable ||
+		enrichment.GoodFirstIssues != 4 ||
+		enrichment.HelpWantedIssues != 6 ||
+		!enrichment.HasCodeOfConduct ||
+		!enrichment.HasSecurityPolicy ||
 		!strings.Contains(enrichment.READMEText, "日本語") {
 		t.Fatalf("enrichment = %+v", enrichment)
 	}

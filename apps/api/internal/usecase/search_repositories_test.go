@@ -41,6 +41,9 @@ func TestSearchRepositoriesFiltersEnrichesSortsPaginatesAndCaches(
 					READMEContentAvailable: true,
 					READMEText:             "React " + strings.Repeat("日本語の説明", 30),
 					ContributingAvailable:  true,
+					GoodFirstIssues:        4,
+					HelpWantedIssues:       2,
+					HasCodeOfConduct:       true,
 				},
 				"beta/english": {
 					Available:              true,
@@ -514,10 +517,7 @@ func repositoryDiscoveryCandidate(
 		Topics:           []string{"react", "developer-tools"},
 		License:          "MIT",
 		LicenseKnown:     true,
-		GoodFirstIssues:  4,
-		HelpWantedIssues: 2,
 		HasIssuesEnabled: true,
 		HasDiscussions:   true,
-		HasCodeOfConduct: true,
 	}
 }

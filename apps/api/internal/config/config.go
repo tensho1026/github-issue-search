@@ -31,7 +31,7 @@ const (
 	defaultIssueDetailCacheTTL                = 5 * time.Minute
 	defaultIssueDetailCacheCapacity           = 500
 	defaultRepositoryDiscoveryResultLimit     = repository.MaximumDiscoveryCandidateResults
-	defaultRepositoryDiscoveryEnrichmentLimit = repository.MaximumDiscoveryEnrichmentResults
+	defaultRepositoryDiscoveryEnrichmentLimit = 10
 	defaultRepositoryDiscoveryCacheTTL        = 5 * time.Minute
 	defaultRepositoryDiscoveryCacheCapacity   = 1000
 	defaultManifestFileLimit                  = 3

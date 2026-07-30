@@ -221,6 +221,12 @@ func (usecase *searchRepositories) loadRepositoryDiscovery(
 				enrichmentFailed++
 			}
 		}
+		if evidence.Available {
+			candidate.GoodFirstIssues = evidence.GoodFirstIssues
+			candidate.HelpWantedIssues = evidence.HelpWantedIssues
+			candidate.HasCodeOfConduct = evidence.HasCodeOfConduct
+			candidate.HasSecurityPolicy = evidence.HasSecurityPolicy
+		}
 		result := repository.AnalyzeDiscovery(
 			candidate,
 			evidence,

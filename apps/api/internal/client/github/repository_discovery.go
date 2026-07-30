@@ -23,78 +23,12 @@ const (
 	maxRepositorySearchResponseBytes     = 8 << 20
 	maxRepositoryEnrichmentQueryBytes    = 64 << 10
 	maxRepositoryEnrichmentResponseBytes = 8 << 20
-
-	graphQLRepositorySearchDocument = `query IssueScoutRepositoryDiscovery($searchQuery: String!, $first: Int!) {
-  search(query: $searchQuery, type: REPOSITORY, first: $first) {
-    repositoryCount
-    pageInfo {
-      hasNextPage
-    }
-    nodes {
-      __typename
-      ... on Repository {
-        databaseId
-        owner {
-          login
-        }
-        name
-        nameWithOwner
-        description
-        url
-        stargazerCount
-        forkCount
-        watchers {
-          totalCount
-        }
-        issues(states: OPEN) {
-          totalCount
-        }
-        goodFirstIssues: issues(states: OPEN, labels: ["good first issue"]) {
-          totalCount
-        }
-        helpWantedIssues: issues(states: OPEN, labels: ["help wanted"]) {
-          totalCount
-        }
-        isFork
-        isArchived
-        hasIssuesEnabled
-        hasDiscussionsEnabled
-        primaryLanguage {
-          name
-        }
-        licenseInfo {
-          name
-          spdxId
-        }
-        repositoryTopics(first: 20) {
-          nodes {
-            topic {
-              name
-            }
-          }
-        }
-        defaultBranchRef {
-          name
-        }
-        updatedAt
-        pushedAt
-        codeOfConduct {
-          key
-        }
-        securityPolicyUrl
-      }
-    }
-  }
-  rateLimit {
-    limit
-    remaining
-    resetAt
-  }
-}`
+	maxRepositoryTopics                  = 20
 )
 
-// SearchRepositories retrieves exactly one bounded GraphQL repository window.
-// README content is intentionally absent and is loaded only for the shortlist.
+// SearchRepositories retrieves exactly one bounded REST search window.
+// Expensive issue-label and documentation evidence is intentionally absent and
+// loaded in one GraphQL request only for the shortlist.
 func (c *Client) SearchRepositories(
 	ctx context.Context,
 	criteria repository.DiscoveryCriteria,
@@ -110,21 +44,17 @@ func (c *Client) SearchRepositories(
 	if err != nil {
 		return port.GitHubRepositoryDiscoveryResult{}, err
 	}
-	requestPayload, err := json.Marshal(graphQLRepositorySearchRequest{
-		Query: graphQLRepositorySearchDocument,
-		Variables: graphQLRepositorySearchVariables{
-			SearchQuery: searchQuery,
-			First:       limit,
-		},
-	})
-	if err != nil {
-		return port.GitHubRepositoryDiscoveryResult{}, upstreamDecodeError(
-			"GitHub GraphQL repository search request",
-			err,
-		)
-	}
+	endpoint := *c.baseURL
+	endpoint.Path = path.Join(endpoint.Path, "search", "repositories")
+	query := endpoint.Query()
+	query.Set("q", searchQuery)
+	query.Set("per_page", strconv.Itoa(limit))
+	query.Set("page", "1")
+	query.Set("sort", "updated")
+	query.Set("order", "desc")
+	endpoint.RawQuery = query.Encode()
 
-	response, err := c.graphQLRequest(ctx, requestPayload)
+	response, err := c.do(ctx, endpoint.String())
 	if err != nil {
 		return port.GitHubRepositoryDiscoveryResult{}, err
 	}
@@ -134,28 +64,25 @@ func (c *Client) SearchRepositories(
 		return port.GitHubRepositoryDiscoveryResult{}, statusErr
 	}
 
-	var payload graphQLRepositorySearchEnvelope
+	var payload restRepositoryDiscoveryEnvelope
 	if decodeErr := decodeBoundedJSON(
 		response.Body,
 		maxRepositorySearchResponseBytes,
-		"GitHub GraphQL repository search response",
+		"GitHub REST repository search response",
 		&payload,
 	); decodeErr != nil {
 		return port.GitHubRepositoryDiscoveryResult{}, decodeErr
 	}
-	rateLimit, err := normalizeGraphQLRateLimit(
-		payload.Data.RateLimit,
+	result, err := normalizeRESTRepositorySearch(
+		payload,
+		limit,
 		headerRateLimit,
 	)
 	if err != nil {
 		return port.GitHubRepositoryDiscoveryResult{}, err
 	}
-	result, err := normalizeGraphQLRepositorySearch(payload, limit, rateLimit)
-	if err != nil {
-		return port.GitHubRepositoryDiscoveryResult{}, err
-	}
 	c.logger.Debug(
-		"GitHub GraphQL repository search response received",
+		"GitHub REST repository search response received",
 		"status", response.StatusCode,
 		"candidateCount", len(result.Candidates),
 		"upstreamTotal", result.TotalCount,
@@ -333,8 +260,6 @@ func buildRepositorySearchQuery(
 			)
 		}
 	}
-	parts = append(parts, "sort:updated-desc")
-
 	query := strings.Join(parts, " ")
 	if len(query) > maxRepositorySearchQueryBytes {
 		return "", fmt.Errorf(
@@ -346,69 +271,40 @@ func buildRepositorySearchQuery(
 	return query, nil
 }
 
-func normalizeGraphQLRepositorySearch(
-	payload graphQLRepositorySearchEnvelope,
+func normalizeRESTRepositorySearch(
+	payload restRepositoryDiscoveryEnvelope,
 	limit int,
 	rateLimit port.RateLimit,
 ) (port.GitHubRepositoryDiscoveryResult, error) {
-	if payload.Data.Search == nil {
-		if len(payload.Errors) > 0 {
-			return port.GitHubRepositoryDiscoveryResult{},
-				graphQLRequestError(
-					"GitHub GraphQL repository search",
-					payload.Errors,
-					rateLimit,
-				)
-		}
+	if payload.TotalCount < 0 ||
+		payload.TotalCount < len(payload.Items) ||
+		len(payload.Items) > limit {
 		return port.GitHubRepositoryDiscoveryResult{}, upstreamDecodeError(
-			"GitHub GraphQL repository search response",
-			errors.New("does not contain search data"),
-		)
-	}
-	search := payload.Data.Search
-	if search.RepositoryCount < 0 ||
-		search.RepositoryCount < len(search.Nodes) ||
-		len(search.Nodes) > limit {
-		return port.GitHubRepositoryDiscoveryResult{}, upstreamDecodeError(
-			"GitHub GraphQL repository search response",
+			"GitHub REST repository search response",
 			errors.New("contains invalid result counts"),
 		)
 	}
 
-	candidates := make([]repository.DiscoveryCandidate, 0, len(search.Nodes))
-	for index, node := range search.Nodes {
-		var candidate repository.DiscoveryCandidate
-		var mappingErr error
-		if node == nil {
-			mappingErr = errors.New("contains a null repository node")
-		} else {
-			candidate, mappingErr = node.toDomain()
-		}
+	candidates := make(
+		[]repository.DiscoveryCandidate,
+		0,
+		len(payload.Items),
+	)
+	for index, item := range payload.Items {
+		candidate, mappingErr := item.toDomain()
 		if mappingErr != nil {
-			if len(payload.Errors) > 0 {
-				continue
-			}
 			return port.GitHubRepositoryDiscoveryResult{}, upstreamDecodeError(
-				"GitHub GraphQL repository search response",
-				fmt.Errorf("node %d: %w", index, mappingErr),
+				"GitHub REST repository search response",
+				fmt.Errorf("item %d: %w", index, mappingErr),
 			)
 		}
 		candidates = append(candidates, candidate)
 	}
-	if len(payload.Errors) > 0 && len(candidates) == 0 {
-		return port.GitHubRepositoryDiscoveryResult{},
-			graphQLRequestError(
-				"GitHub GraphQL repository search",
-				payload.Errors,
-				rateLimit,
-			)
-	}
 	return port.GitHubRepositoryDiscoveryResult{
 		Candidates: candidates,
-		TotalCount: search.RepositoryCount,
-		IncompleteResults: len(payload.Errors) > 0 ||
-			search.PageInfo.HasNextPage ||
-			search.RepositoryCount > len(search.Nodes),
+		TotalCount: payload.TotalCount,
+		IncompleteResults: payload.IncompleteResults ||
+			payload.TotalCount > len(payload.Items),
 		RateLimit: rateLimit,
 	}, nil
 }
@@ -491,7 +387,19 @@ func writeRepositoryEnrichmentSelection(
 	query.WriteString(owner)
 	query.WriteString(", name: ")
 	query.WriteString(name)
-	query.WriteString(") {\n    nameWithOwner\n")
+	query.WriteString(`) {
+    nameWithOwner
+    goodFirstIssues: issues(states: OPEN, labels: ["good first issue"]) {
+      totalCount
+    }
+    helpWantedIssues: issues(states: OPEN, labels: ["help wanted"]) {
+      totalCount
+    }
+    codeOfConduct {
+      key
+    }
+    securityPolicyUrl
+`)
 	for _, field := range []string{
 		"readmeMarkdown",
 		"readmePlain",
@@ -578,111 +486,70 @@ func decodeBoundedJSON(
 	return nil
 }
 
-type graphQLRepositorySearchRequest struct {
-	Query     string                           `json:"query"`
-	Variables graphQLRepositorySearchVariables `json:"variables"`
+type restRepositoryDiscoveryEnvelope struct {
+	TotalCount        int                           `json:"total_count"`
+	IncompleteResults bool                          `json:"incomplete_results"`
+	Items             []restRepositoryDiscoveryItem `json:"items"`
 }
 
-type graphQLRepositorySearchVariables struct {
-	SearchQuery string `json:"searchQuery"`
-	First       int    `json:"first"`
+type restRepositoryDiscoveryItem struct {
+	ID             int64                           `json:"id"`
+	Owner          owner                           `json:"owner"`
+	Name           string                          `json:"name"`
+	FullName       string                          `json:"full_name"`
+	Description    *string                         `json:"description"`
+	HTMLURL        string                          `json:"html_url"`
+	Stars          int                             `json:"stargazers_count"`
+	Forks          int                             `json:"forks_count"`
+	Watchers       int                             `json:"watchers_count"`
+	OpenIssues     int                             `json:"open_issues_count"`
+	IsFork         bool                            `json:"fork"`
+	IsArchived     bool                            `json:"archived"`
+	HasIssues      bool                            `json:"has_issues"`
+	HasDiscussions bool                            `json:"has_discussions"`
+	Language       *string                         `json:"language"`
+	License        *restRepositoryDiscoveryLicense `json:"license"`
+	Topics         []string                        `json:"topics"`
+	DefaultBranch  string                          `json:"default_branch"`
+	UpdatedAt      time.Time                       `json:"updated_at"`
+	PushedAt       *time.Time                      `json:"pushed_at"`
 }
 
-type graphQLRepositorySearchEnvelope struct {
-	Data struct {
-		Search    *graphQLRepositorySearchConnection `json:"search"`
-		RateLimit *graphQLRateLimit                  `json:"rateLimit"`
-	} `json:"data"`
-	Errors []graphQLError `json:"errors"`
-}
-
-type graphQLRepositorySearchConnection struct {
-	RepositoryCount int                      `json:"repositoryCount"`
-	PageInfo        graphQLPageInfo          `json:"pageInfo"`
-	Nodes           []*graphQLRepositoryNode `json:"nodes"`
-}
-
-type graphQLRepositoryNode struct {
-	TypeName              string                    `json:"__typename"`
-	DatabaseID            *int64                    `json:"databaseId"`
-	Owner                 graphQLActor              `json:"owner"`
-	Name                  string                    `json:"name"`
-	NameWithOwner         string                    `json:"nameWithOwner"`
-	Description           *string                   `json:"description"`
-	URL                   string                    `json:"url"`
-	StargazerCount        int                       `json:"stargazerCount"`
-	ForkCount             int                       `json:"forkCount"`
-	Watchers              graphQLTotalCount         `json:"watchers"`
-	OpenIssues            graphQLTotalCount         `json:"issues"`
-	GoodFirstIssues       graphQLTotalCount         `json:"goodFirstIssues"`
-	HelpWantedIssues      graphQLTotalCount         `json:"helpWantedIssues"`
-	IsFork                bool                      `json:"isFork"`
-	IsArchived            bool                      `json:"isArchived"`
-	HasIssuesEnabled      bool                      `json:"hasIssuesEnabled"`
-	HasDiscussionsEnabled bool                      `json:"hasDiscussionsEnabled"`
-	PrimaryLanguage       *graphQLRepositoryName    `json:"primaryLanguage"`
-	LicenseInfo           *graphQLRepositoryLicense `json:"licenseInfo"`
-	RepositoryTopics      graphQLRepositoryTopics   `json:"repositoryTopics"`
-	DefaultBranch         *graphQLRepositoryName    `json:"defaultBranchRef"`
-	UpdatedAt             time.Time                 `json:"updatedAt"`
-	PushedAt              *time.Time                `json:"pushedAt"`
-	CodeOfConduct         *graphQLCodeOfConduct     `json:"codeOfConduct"`
-	SecurityPolicyURL     *string                   `json:"securityPolicyUrl"`
-}
-
-type graphQLRepositoryLicense struct {
+type restRepositoryDiscoveryLicense struct {
 	Name   string `json:"name"`
-	SPDXID string `json:"spdxId"`
+	SPDXID string `json:"spdx_id"`
 }
 
-type graphQLRepositoryTopics struct {
-	Nodes []struct {
-		Topic struct {
-			Name string `json:"name"`
-		} `json:"topic"`
-	} `json:"nodes"`
-}
-
-type graphQLCodeOfConduct struct {
-	Key string `json:"key"`
-}
-
-func (node graphQLRepositoryNode) toDomain() (
+func (item restRepositoryDiscoveryItem) toDomain() (
 	repository.DiscoveryCandidate,
 	error,
 ) {
-	if node.TypeName != "Repository" {
-		return repository.DiscoveryCandidate{}, fmt.Errorf(
-			"contains unexpected node type %q",
-			node.TypeName,
-		)
-	}
-	if strings.TrimSpace(node.Owner.Login) == "" ||
-		strings.TrimSpace(node.Name) == "" ||
-		strings.TrimSpace(node.NameWithOwner) == "" ||
-		strings.TrimSpace(node.URL) == "" ||
-		node.StargazerCount < 0 ||
-		node.ForkCount < 0 ||
-		node.Watchers.TotalCount < 0 ||
-		node.OpenIssues.TotalCount < 0 ||
-		node.GoodFirstIssues.TotalCount < 0 ||
-		node.HelpWantedIssues.TotalCount < 0 ||
-		node.UpdatedAt.IsZero() {
+	if item.ID < 0 ||
+		strings.TrimSpace(item.Owner.Login) == "" ||
+		strings.TrimSpace(item.Name) == "" ||
+		strings.TrimSpace(item.FullName) == "" ||
+		strings.TrimSpace(item.HTMLURL) == "" ||
+		item.Stars < 0 ||
+		item.Forks < 0 ||
+		item.Watchers < 0 ||
+		item.OpenIssues < 0 ||
+		item.UpdatedAt.IsZero() ||
+		len(item.Topics) > maxRepositoryTopics {
 		return repository.DiscoveryCandidate{}, errors.New(
 			"contains invalid repository fields",
 		)
 	}
-	if err := validateAbsoluteHTTPURL(node.URL); err != nil {
+	if err := validateAbsoluteHTTPURL(item.HTMLURL); err != nil {
 		return repository.DiscoveryCandidate{}, fmt.Errorf(
 			"invalid repository URL: %w",
 			err,
 		)
 	}
 
-	topics := make([]string, 0, len(node.RepositoryTopics.Nodes))
-	seenTopics := make(map[string]struct{}, len(node.RepositoryTopics.Nodes))
-	for _, topicNode := range node.RepositoryTopics.Nodes {
-		topic := strings.TrimSpace(topicNode.Topic.Name)
+	topics := make([]string, 0, len(item.Topics))
+	seenTopics := make(map[string]struct{}, len(item.Topics))
+	for _, rawTopic := range item.Topics {
+		topic := strings.TrimSpace(rawTopic)
 		if topic == "" {
 			return repository.DiscoveryCandidate{}, errors.New(
 				"contains a blank repository topic",
@@ -699,28 +566,16 @@ func (node graphQLRepositoryNode) toDomain() (
 		return strings.Compare(strings.ToLower(left), strings.ToLower(right))
 	})
 
-	var id int64
-	if node.DatabaseID != nil {
-		id = *node.DatabaseID
-	}
-	var mainLanguage string
-	if node.PrimaryLanguage != nil {
-		mainLanguage = strings.TrimSpace(node.PrimaryLanguage.Name)
-	}
-	var defaultBranch string
-	if node.DefaultBranch != nil {
-		defaultBranch = strings.TrimSpace(node.DefaultBranch.Name)
-	}
 	var pushedAt time.Time
-	if node.PushedAt != nil {
-		pushedAt = node.PushedAt.UTC()
+	if item.PushedAt != nil {
+		pushedAt = item.PushedAt.UTC()
 	}
 	var license repository.SPDXLicense
 	var licenseName string
 	licenseKnown := false
-	if node.LicenseInfo != nil {
-		licenseName = strings.TrimSpace(node.LicenseInfo.Name)
-		parsed, err := repository.ParseSPDXLicense(node.LicenseInfo.SPDXID)
+	if item.License != nil {
+		licenseName = strings.TrimSpace(item.License.Name)
+		parsed, err := repository.ParseSPDXLicense(item.License.SPDXID)
 		if err == nil {
 			license = parsed
 			licenseKnown = true
@@ -728,34 +583,29 @@ func (node graphQLRepositoryNode) toDomain() (
 	}
 	return repository.DiscoveryCandidate{
 		Repository: repository.Summary{
-			ID:            id,
-			Owner:         strings.TrimSpace(node.Owner.Login),
-			Name:          strings.TrimSpace(node.Name),
-			FullName:      strings.TrimSpace(node.NameWithOwner),
-			Description:   stringValue(node.Description),
-			URL:           node.URL,
-			MainLanguage:  mainLanguage,
-			Stars:         node.StargazerCount,
-			Forks:         node.ForkCount,
-			OpenIssues:    node.OpenIssues.TotalCount,
-			IsFork:        node.IsFork,
-			IsArchived:    node.IsArchived,
-			DefaultBranch: defaultBranch,
-			UpdatedAt:     node.UpdatedAt.UTC(),
+			ID:            item.ID,
+			Owner:         strings.TrimSpace(item.Owner.Login),
+			Name:          strings.TrimSpace(item.Name),
+			FullName:      strings.TrimSpace(item.FullName),
+			Description:   stringValue(item.Description),
+			URL:           item.HTMLURL,
+			MainLanguage:  stringValue(item.Language),
+			Stars:         item.Stars,
+			Forks:         item.Forks,
+			OpenIssues:    item.OpenIssues,
+			IsFork:        item.IsFork,
+			IsArchived:    item.IsArchived,
+			DefaultBranch: strings.TrimSpace(item.DefaultBranch),
+			UpdatedAt:     item.UpdatedAt.UTC(),
 			PushedAt:      pushedAt,
 		},
 		Topics:           topics,
 		License:          license,
 		LicenseName:      licenseName,
 		LicenseKnown:     licenseKnown,
-		Watchers:         node.Watchers.TotalCount,
-		GoodFirstIssues:  node.GoodFirstIssues.TotalCount,
-		HelpWantedIssues: node.HelpWantedIssues.TotalCount,
-		HasIssuesEnabled: node.HasIssuesEnabled,
-		HasDiscussions:   node.HasDiscussionsEnabled,
-		HasCodeOfConduct: node.CodeOfConduct != nil,
-		HasSecurityPolicy: node.SecurityPolicyURL != nil &&
-			strings.TrimSpace(*node.SecurityPolicyURL) != "",
+		Watchers:         item.Watchers,
+		HasIssuesEnabled: item.HasIssues,
+		HasDiscussions:   item.HasDiscussions,
 	}, nil
 }
 
@@ -764,8 +614,16 @@ type graphQLRepositoryEnrichmentEnvelope struct {
 	Errors []graphQLError             `json:"errors"`
 }
 
+type graphQLCodeOfConduct struct {
+	Key string `json:"key"`
+}
+
 type graphQLRepositoryEnrichmentNode struct {
 	NameWithOwner        string                          `json:"nameWithOwner"`
+	GoodFirstIssues      graphQLTotalCount               `json:"goodFirstIssues"`
+	HelpWantedIssues     graphQLTotalCount               `json:"helpWantedIssues"`
+	CodeOfConduct        *graphQLCodeOfConduct           `json:"codeOfConduct"`
+	SecurityPolicyURL    *string                         `json:"securityPolicyUrl"`
 	ReadmeMarkdown       *graphQLRepositoryDiscoveryBlob `json:"readmeMarkdown"`
 	ReadmePlain          *graphQLRepositoryDiscoveryBlob `json:"readmePlain"`
 	ReadmeRST            *graphQLRepositoryDiscoveryBlob `json:"readmeRST"`
@@ -791,6 +649,12 @@ func (node graphQLRepositoryEnrichmentNode) toDomain(
 	) {
 		return repository.DiscoveryEnrichment{}, errors.New(
 			"repository enrichment identity does not match",
+		)
+	}
+	if node.GoodFirstIssues.TotalCount < 0 ||
+		node.HelpWantedIssues.TotalCount < 0 {
+		return repository.DiscoveryEnrichment{}, errors.New(
+			"repository enrichment contains invalid issue counts",
 		)
 	}
 	readmes := []*graphQLRepositoryDiscoveryBlob{
@@ -835,5 +699,10 @@ func (node graphQLRepositoryEnrichmentNode) toDomain(
 		READMEContentSampled:   sampled,
 		ContributingAvailable: node.ContributingRoot != nil ||
 			node.ContributingGitHub != nil,
+		GoodFirstIssues:  node.GoodFirstIssues.TotalCount,
+		HelpWantedIssues: node.HelpWantedIssues.TotalCount,
+		HasCodeOfConduct: node.CodeOfConduct != nil,
+		HasSecurityPolicy: node.SecurityPolicyURL != nil &&
+			strings.TrimSpace(*node.SecurityPolicyURL) != "",
 	}, nil
 }

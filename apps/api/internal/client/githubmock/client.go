@@ -268,18 +268,14 @@ func (client *Client) SearchRepositories(
 	summary := client.repository(successUsername)
 	return port.GitHubRepositoryDiscoveryResult{
 		Candidates: []repository.DiscoveryCandidate{{
-			Repository:        summary,
-			Topics:            []string{"accessibility", "developer-tools", "react"},
-			License:           "MIT",
-			LicenseName:       "MIT License",
-			LicenseKnown:      true,
-			Watchers:          48,
-			GoodFirstIssues:   4,
-			HelpWantedIssues:  6,
-			HasIssuesEnabled:  true,
-			HasDiscussions:    true,
-			HasCodeOfConduct:  true,
-			HasSecurityPolicy: true,
+			Repository:       summary,
+			Topics:           []string{"accessibility", "developer-tools", "react"},
+			License:          "MIT",
+			LicenseName:      "MIT License",
+			LicenseKnown:     true,
+			Watchers:         48,
+			HasIssuesEnabled: true,
+			HasDiscussions:   true,
 		}},
 		TotalCount: 1,
 		RateLimit:  client.rateLimit(),
@@ -317,6 +313,10 @@ func (client *Client) EnrichRepositories(
 			READMEText: "React TypeScript accessibility tooling. " +
 				strings.Repeat("日本語のコントリビューション案内。", 12),
 			ContributingAvailable: true,
+			GoodFirstIssues:       4,
+			HelpWantedIssues:      6,
+			HasCodeOfConduct:      true,
+			HasSecurityPolicy:     true,
 		}
 	}
 	return port.GitHubRepositoryEnrichmentResult{

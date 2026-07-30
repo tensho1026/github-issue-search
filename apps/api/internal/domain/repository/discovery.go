@@ -72,6 +72,10 @@ type DiscoveryEnrichment struct {
 	READMEText             string
 	READMEContentSampled   bool
 	ContributingAvailable  bool
+	GoodFirstIssues        int
+	HelpWantedIssues       int
+	HasCodeOfConduct       bool
+	HasSecurityPolicy      bool
 }
 
 type JapaneseREADMEEvidence struct {
