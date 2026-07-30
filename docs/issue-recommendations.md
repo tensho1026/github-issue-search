@@ -157,6 +157,19 @@ Tie-breakers are score, skill percentage, stars, issue update time, repository
 full name, and issue number. The first four are descending; names and numbers
 are ascending. Sorting uses a copy and does not mutate domain or cache input.
 
+## Available-time filtering
+
+Search accepts an optional `maximumEffort` value from the same ordered bands
+returned by analysis: `thirty_minutes`, `two_hours`, `half_day`, `one_day`,
+and `three_days`. The filter is inclusive and runs after every candidate has a
+deterministic analysis, but before totals and pagination are calculated.
+Server ranking among the remaining items is unchanged.
+
+Effort-only changes reuse the canonical GitHub candidate cache because effort
+does not alter discovery qualifiers. Every search item includes compact
+difficulty and effort summaries (label, confidence, and level or band) derived
+from the same `RankedIssue.Analysis` used by the detail endpoint.
+
 ## Cache and failure behavior
 
 `ISSUE_DETAIL_CACHE_CAPACITY` and `ISSUE_DETAIL_CACHE_TTL` configure a
@@ -177,6 +190,8 @@ GitHub's search API reporting a partial result window.
 
 - The GitHub token stays server-side; this anonymous flow never accesses the
   database.
+- `maximumEffort` is a closed enum and is never interpolated into GitHub search
+  syntax.
 - Queries and samples are bounded, response bodies have an eight-MiB limit,
   and upstream counts are validated before normalization.
 - Owner, repository, issue number, and skill values are validated before I/O.

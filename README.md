@@ -74,7 +74,7 @@ The API can search a bounded GitHub issue candidate window after startup:
 curl --fail-with-body \
   --request POST \
   --header 'Content-Type: application/json' \
-  --data '{"username":"octocat","languages":["Go"]}' \
+  --data '{"username":"octocat","languages":["Go"],"maximumEffort":"half_day"}' \
   'http://127.0.0.1:8080/api/issues/search?page=1&perPage=20'
 ```
 
@@ -85,7 +85,8 @@ allowed, and the `good first issue` or `help wanted` labels. See the
 response, pagination, exclusion, cache-header, and error details. Issue search
 uses GitHub's authenticated GraphQL API, so the API process requires a
 server-only `GITHUB_TOKEN` for this route. Browser callers remain anonymous and
-the token is never returned to them.
+the token is never returned to them. The optional `maximumEffort` filter is
+applied to the ranked analysis before server pagination.
 
 Inspect the same recommendation with complete evidence and bounded activity
 samples:
