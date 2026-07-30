@@ -1,12 +1,10 @@
 import { appRoutes } from "../../../shared/config/app-config";
 import { validateGitHubUsername } from "../../../shared/lib/github-username";
-import {
-  decodeSearchParams,
-  encodeSearchParams,
-} from "../../issue-search/model/search-filters";
+import { maximumReturnLocationLength } from "../../../shared/lib/issue-detail-location";
 
 const repositoryPattern = /^(?!\.{1,2}$)[A-Za-z0-9._-]{1,100}$/;
-const maximumReturnLocationLength = 4096;
+const maximumSkillsPerGroup = 10;
+const maximumSkillCharacters = 64;
 
 export type IssueReference =
   | {
@@ -74,19 +72,6 @@ export function validateIssueReference(
   };
 }
 
-export function issueDetailSearchParameters(
-  currentLocation: string,
-): URLSearchParams {
-  const parameters = new URLSearchParams();
-  if (
-    currentLocation.length <= maximumReturnLocationLength &&
-    currentLocation.startsWith(`${appRoutes.search}?`)
-  ) {
-    parameters.set("from", currentLocation);
-  }
-  return parameters;
-}
-
 export function decodeIssueDetailContext(
   parameters: URLSearchParams,
 ): IssueDetailContext {
@@ -115,19 +100,22 @@ export function decodeIssueDetailContext(
     return invalidContext();
   }
 
-  const search = decodeSearchParams(parsed.searchParams);
-  if (!search.valid || !search.shouldSearch) {
+  const searchValues = parsed.searchParams.getAll("search");
+  const usernameValues = parsed.searchParams.getAll("username");
+  const username = validateGitHubUsername(usernameValues[0] ?? "");
+  const skills = readSkills(parsed.searchParams);
+  if (
+    searchValues.length !== 1 ||
+    searchValues[0] !== "1" ||
+    usernameValues.length !== 1 ||
+    !username.valid ||
+    skills === undefined
+  ) {
     return invalidContext();
   }
 
-  const skills = normalizeSkills([
-    ...search.filters.languages,
-    ...search.filters.frameworks,
-  ]);
   return {
-    returnTo: `${appRoutes.search}?${encodeSearchParams(
-      search.filters,
-    ).toString()}`,
+    returnTo: from,
     skills,
     valid: true,
   };
@@ -141,15 +129,40 @@ function invalidContext(): IssueDetailContext {
   };
 }
 
-function normalizeSkills(values: readonly string[]): string[] {
+function readSkills(parameters: URLSearchParams): string[] | undefined {
+  const languages = parameters.getAll("language");
+  const frameworks = parameters.getAll("framework");
+  if (
+    languages.length > maximumSkillsPerGroup ||
+    frameworks.length > maximumSkillsPerGroup
+  ) {
+    return undefined;
+  }
+
   const result: string[] = [];
   const seen = new Set<string>();
-  for (const value of values) {
+  for (const value of [...languages, ...frameworks]) {
+    if (
+      value.length < 1 ||
+      [...value].length > maximumSkillCharacters ||
+      value.trim() !== value ||
+      [...value].some((character) => {
+        const codePoint = character.codePointAt(0) ?? 0;
+        return (
+          character === '"' ||
+          character === "\\" ||
+          codePoint <= 31 ||
+          codePoint === 127
+        );
+      })
+    ) {
+      return undefined;
+    }
     const key = value.toLocaleLowerCase("en");
     if (!seen.has(key)) {
       seen.add(key);
       result.push(value);
     }
   }
-  return result.slice(0, 20);
+  return result;
 }

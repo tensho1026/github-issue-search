@@ -1,5 +1,5 @@
 import { ArrowUpRight, Clock3, Code2, MessageCircle, Star } from "lucide-react";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 
 import { Alert, AlertDescription } from "../../../components/ui/alert";
 import { Badge } from "../../../components/ui/badge";
@@ -19,6 +19,7 @@ import {
   formatPercentage,
 } from "../../../shared/lib/format";
 import { cn } from "../../../shared/lib/cn";
+import { issueDetailSearchParameters } from "../../../shared/lib/issue-detail-location";
 import {
   scorePresentation,
   skillPresentation,
@@ -31,12 +32,20 @@ type RecommendationCardProps = {
 };
 
 export function RecommendationCard({ item, rank }: RecommendationCardProps) {
+  const location = useLocation();
   const score = scorePresentation(item.recommendation.score);
-  const detailPath = appRoutes.issue(
+  const detailRoute = appRoutes.issue(
     item.repository.owner,
     item.repository.name,
     item.issue.number,
   );
+  const detailParameters = issueDetailSearchParameters(
+    `${location.pathname}${location.search}`,
+  );
+  const detailPath =
+    detailParameters.size > 0
+      ? `${detailRoute}?${detailParameters.toString()}`
+      : detailRoute;
   return (
     <Card aria-labelledby={`issue-result-${rank}`} className="overflow-hidden">
       <CardHeader className="border-b border-border bg-muted/35">

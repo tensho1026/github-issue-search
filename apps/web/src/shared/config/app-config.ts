@@ -55,6 +55,11 @@ export const externalLinks = Object.freeze({
       owner,
     )}/${encodeURIComponent(repository)}/issues/${issueNumber}`;
   },
+  gitHubRepository(owner: string, repository: string): string {
+    return `https://github.com/${encodeURIComponent(
+      owner,
+    )}/${encodeURIComponent(repository)}`;
+  },
   gitHubProfile(username: string): string {
     return `https://github.com/${encodeURIComponent(username)}`;
   },

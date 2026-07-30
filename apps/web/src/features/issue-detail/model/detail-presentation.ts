@@ -1,13 +1,30 @@
 import type {
   AggregateStatus,
+  ChangeScope,
   IssueCategory,
   QualitySignal,
   RepositorySignal,
   ScoreComponent,
   SignalState,
 } from "../../../shared/api/generated";
+import { ApiError } from "../../../shared/api/client";
 
 type BadgeTone = "danger" | "info" | "neutral" | "success" | "warning";
+
+export type DetailErrorPresentation = {
+  description: string;
+  requestId?: string;
+  retryable: boolean;
+  title: string;
+  tone: "danger" | "warning";
+};
+
+type DetailErrorDefinition = readonly [
+  title: string,
+  description: string,
+  retryable: boolean,
+  tone: DetailErrorPresentation["tone"],
+];
 
 const qualityLabels: Record<QualitySignal["key"], string> = {
   acceptance_criteria: "Acceptance criteria",
@@ -38,6 +55,48 @@ const scoreLabels: Record<ScoreComponent["name"], string> = {
   skill_match: "Skill match",
 };
 
+const scopeAreaLabels: Record<ChangeScope["areas"][number], string> = {
+  backend: "Backend",
+  documentation: "Documentation",
+  frontend: "Frontend",
+  infrastructure: "Infrastructure",
+  migration: "Migration",
+  tests: "Tests",
+};
+
+const detailErrors: Record<number, DetailErrorDefinition> = {
+  400: [
+    "Issue reference rejected",
+    "The API rejected this issue or skill context. Open a fresh search result.",
+    false,
+    "danger",
+  ],
+  404: [
+    "Issue not found",
+    "GitHub could not find this public issue. It may have been removed, transferred, or made private.",
+    false,
+    "warning",
+  ],
+  429: [
+    "GitHub needs a breather",
+    "The GitHub allowance is exhausted. Keep this URL and return later.",
+    false,
+    "warning",
+  ],
+  502: [
+    "GitHub detail is unavailable",
+    "GitHub returned an incomplete detail snapshot. The issue URL remains safe.",
+    true,
+    "warning",
+  ],
+  504: [
+    "Recommendation took too long",
+    "The upstream request timed out. Retry without changing this URL.",
+    true,
+    "warning",
+  ],
+};
+
 export function categoryLabel(category: IssueCategory): string {
   return category === "ui"
     ? "UI"
@@ -58,6 +117,10 @@ export function scoreComponentLabel(name: ScoreComponent["name"]): string {
   return scoreLabels[name];
 }
 
+export function scopeAreaLabel(area: ChangeScope["areas"][number]): string {
+  return scopeAreaLabels[area];
+}
+
 export function signalPresentation(state: SignalState): {
   label: string;
   tone: BadgeTone;
@@ -76,4 +139,26 @@ export function signalPresentation(state: SignalState): {
 
 export function aggregateStatusLabel(status: AggregateStatus): string {
   return status === "available" ? "Available" : "Unavailable";
+}
+
+export function detailErrorPresentation(error: Error): DetailErrorPresentation {
+  if (!(error instanceof ApiError)) {
+    return {
+      description:
+        "An unexpected client error interrupted this recommendation. You can retry the same validated issue.",
+      retryable: true,
+      title: "Recommendation interrupted",
+      tone: "danger",
+    };
+  }
+
+  const definition = detailErrors[error.status] ?? [
+    "Recommendation unavailable",
+    "The API could not complete this recommendation. Your links remain available.",
+    true,
+    "danger",
+  ];
+  const [title, description, retryable, tone] = definition;
+  const shared = error.requestId ? { requestId: error.requestId } : {};
+  return { ...shared, description, retryable, title, tone };
 }

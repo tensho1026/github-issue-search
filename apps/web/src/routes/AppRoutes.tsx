@@ -20,6 +20,11 @@ const IssueSearchPage = lazy(async () => {
   return { default: module.IssueSearchPage };
 });
 
+const IssueDetailPage = lazy(async () => {
+  const module = await import("../pages/IssueDetailPage");
+  return { default: module.IssueDetailPage };
+});
+
 const NotFoundPage = lazy(async () => {
   const module = await import("../pages/NotFoundPage");
   return { default: module.NotFoundPage };
@@ -71,6 +76,14 @@ export function AppRoutes() {
               </LazyPage>
             }
             path={appRoutes.search}
+          />
+          <Route
+            element={
+              <LazyPage>
+                <IssueDetailPage />
+              </LazyPage>
+            }
+            path={appRoutes.issuePattern}
           />
           <Route
             element={

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { issueDetailSearchParameters } from "../../../shared/lib/issue-detail-location";
 import {
   decodeIssueDetailContext,
-  issueDetailSearchParameters,
   validateIssueReference,
 } from "./issue-reference";
 
