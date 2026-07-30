@@ -116,10 +116,12 @@ sleep-based synchronization.
 
 ## Fuzz and performance gates
 
-CI executes one-second bounded fuzz sessions for GitHub usernames, search
-filter values, and issue references. A discovered corpus file is a regression
-asset: inspect it, retain it under the owning package when useful, and add a
-named unit test when the behavior deserves explanation.
+CI executes exactly 50,000 fuzz cases per target for GitHub usernames, search
+filter values, and issue references. The fixed execution budget avoids
+runner-speed-dependent timeouts while preserving a reproducible minimum test
+depth. A discovered corpus file is a regression asset: inspect it, retain it
+under the owning package when useful, and add a named unit test when the
+behavior deserves explanation.
 
 The two bounded domain benchmarks run three fixed 100-operation samples.
 `config/quality-budgets.json` sets fail-closed time, byte, and allocation
