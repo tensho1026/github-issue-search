@@ -155,6 +155,37 @@ func TestIssueDetailRouteUsesStandardEnvelope(t *testing.T) {
 	}
 }
 
+func TestRepositoryDiscoveryRouteUsesStandardEnvelope(t *testing.T) {
+	router := newTestRouter(t)
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/repositories/search?page=1&perPage=20",
+		strings.NewReader(`{}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Request-ID", "req_repositories")
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	for _, fragment := range []string{
+		`"items":[]`,
+		`"page":1`,
+		`"perPage":20`,
+		`"candidatesChecked":0`,
+		`"warnings":[]`,
+		`"rateLimitRemaining":38`,
+		`"requestId":"req_repositories"`,
+	} {
+		if !strings.Contains(recorder.Body.String(), fragment) {
+			t.Errorf("body missing %s: %s", fragment, recorder.Body.String())
+		}
+	}
+}
+
 func TestNewRequiresLogger(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfg := testConfig(t)
@@ -180,6 +211,7 @@ func newTestRouter(t *testing.T) http.Handler {
 		GetGitHubUser:        routerGetGitHubUserStub{},
 		AnalyzeGitHubProfile: routerAnalyzeGitHubProfileStub{},
 		SearchIssues:         routerSearchIssuesStub{},
+		SearchRepositories:   routerSearchRepositoriesStub{},
 		RecommendIssue:       routerRecommendIssueStub{},
 	})
 	if err != nil {
@@ -235,6 +267,24 @@ func (routerSearchIssuesStub) Execute(
 }
 
 type routerRecommendIssueStub struct{}
+
+type routerSearchRepositoriesStub struct{}
+
+func (routerSearchRepositoriesStub) Execute(
+	context.Context,
+	usecase.SearchRepositoriesInput,
+) (usecase.SearchRepositoriesOutput, error) {
+	return usecase.SearchRepositoriesOutput{
+		Pagination: usecase.SearchRepositoriesPagination{
+			Page:    1,
+			PerPage: 20,
+		},
+		RateLimit: port.RateLimit{
+			Known:     true,
+			Remaining: 38,
+		},
+	}, nil
+}
 
 func (routerRecommendIssueStub) Execute(
 	_ context.Context,

@@ -109,6 +109,7 @@ Coverage includes:
 - exactly one attempt for non-retryable responses;
 - at most three attempts for 502, 503, 504, and transport failures;
 - response-body closure, bounded pagination, and bounded GraphQL windows.
+- one repository search plus at most one batched repository enrichment request.
 
 Run these tests with the race detector through `pnpm run coverage:api`.
 Cancellation tests must finish from context signals rather than arbitrary
@@ -116,32 +117,35 @@ sleep-based synchronization.
 
 ## Fuzz and performance gates
 
-CI executes exactly 50,000 fuzz cases per target for GitHub usernames, search
-filter values, and issue references. The fixed execution budget avoids
-runner-speed-dependent timeouts while preserving a reproducible minimum test
-depth. A discovered corpus file is a regression asset: inspect it, retain it
-under the owning package when useful, and add a named unit test when the
-behavior deserves explanation.
+CI executes exactly 50,000 fuzz cases per target for GitHub usernames, issue
+search values, repository-discovery values, and issue references. The fixed
+execution budget avoids runner-speed-dependent timeouts while preserving a
+reproducible minimum test depth. A discovered corpus file is a regression
+asset: inspect it, retain it under the owning package when useful, and add a
+named unit test when the behavior deserves explanation.
 
-The two bounded domain benchmarks run three fixed 100-operation samples.
+The four bounded domain benchmarks run three fixed 100-operation samples.
 `config/quality-budgets.json` sets fail-closed time, byte, and allocation
 ceilings. Budgets include broad runner headroom; a budget increase requires a
 measured explanation in the pull request. Web gzip limits are enforced from
 the same file.
 
-| Budget                                           |      Maximum |
-| ------------------------------------------------ | -----------: |
-| `BenchmarkAnalyzeIssueBoundedRichInput` latency  |      5 ms/op |
-| Analysis bytes                                   |   256 KiB/op |
-| Analysis allocations                             |       200/op |
-| `BenchmarkAnalyzeProfileSnapshotBounded` latency |      2 ms/op |
-| Profile analysis bytes                           |   512 KiB/op |
-| Profile analysis allocations                     |     5,000/op |
-| `BenchmarkRecommendBounded` latency              |      1 ms/op |
-| Recommendation bytes                             |   128 KiB/op |
-| Recommendation allocations                       |     1,000/op |
-| Largest JavaScript asset                         | 140 KiB gzip |
-| All JavaScript and CSS                           | 180 KiB gzip |
+| Budget                                               |      Maximum |
+| ---------------------------------------------------- | -----------: |
+| `BenchmarkAnalyzeIssueBoundedRichInput` latency      |      5 ms/op |
+| Analysis bytes                                       |   256 KiB/op |
+| Analysis allocations                                 |       200/op |
+| `BenchmarkAnalyzeProfileSnapshotBounded` latency     |      2 ms/op |
+| Profile analysis bytes                               |   512 KiB/op |
+| Profile analysis allocations                         |     5,000/op |
+| `BenchmarkAnalyzeRepositoryDiscoveryBounded` latency |     50 ms/op |
+| Repository discovery bytes                           |   128 KiB/op |
+| Repository discovery allocations                     |     1,000/op |
+| `BenchmarkRecommendBounded` latency                  |      1 ms/op |
+| Recommendation bytes                                 |   128 KiB/op |
+| Recommendation allocations                           |     1,000/op |
+| Largest JavaScript asset                             | 140 KiB gzip |
+| All JavaScript and CSS                               | 180 KiB gzip |
 
 ## Contract fixtures
 

@@ -17,19 +17,20 @@ then follow the topic guide that matches your change.
 
 ## Knowledge map
 
-| Concern                                  | Primary guide                           | Supporting material                           |
-| ---------------------------------------- | --------------------------------------- | --------------------------------------------- |
-| Product intent, vocabulary, journeys     | [Product](product.md)                   | [Frontend](frontend.md)                       |
-| Local setup and native process lifecycle | [Getting started](getting-started.md)   | [Configuration](configuration.md)             |
-| Monorepo and dependency boundaries       | [Architecture](architecture.md)         | [ADRs](adr/README.md)                         |
-| HTTP endpoints and errors                | [API](api.md)                           | [OpenAPI](../packages/contracts/openapi.yaml) |
-| Profile and OSS evidence                 | [Profile analysis](profile-analysis.md) | [API](api.md)                                 |
-| Issue analysis and ranking               | [Rule analysis](issue-analysis.md)      | [Recommendations](issue-recommendations.md)   |
-| Security and anonymous-data rules        | [Security](security.md)                 | [Configuration](configuration.md)             |
-| Automated verification                   | [Testing](testing.md)                   | [CI](ci.md)                                   |
-| Release and promotion                    | [Delivery](delivery.md)                 | [ADR 0005](adr/0005-docker-free-delivery.md)  |
-| Logs and request correlation             | [Observability](observability.md)       | [Troubleshooting](troubleshooting.md)         |
-| Safe product evolution                   | [Extension playbooks](extending.md)     | [Contributing](../CONTRIBUTING.md)            |
+| Concern                                  | Primary guide                                   | Supporting material                           |
+| ---------------------------------------- | ----------------------------------------------- | --------------------------------------------- |
+| Product intent, vocabulary, journeys     | [Product](product.md)                           | [Frontend](frontend.md)                       |
+| Local setup and native process lifecycle | [Getting started](getting-started.md)           | [Configuration](configuration.md)             |
+| Monorepo and dependency boundaries       | [Architecture](architecture.md)                 | [ADRs](adr/README.md)                         |
+| HTTP endpoints and errors                | [API](api.md)                                   | [OpenAPI](../packages/contracts/openapi.yaml) |
+| Profile and OSS evidence                 | [Profile analysis](profile-analysis.md)         | [API](api.md)                                 |
+| Repository discovery and readiness       | [Repository discovery](repository-discovery.md) | [API](api.md)                                 |
+| Issue analysis and ranking               | [Rule analysis](issue-analysis.md)              | [Recommendations](issue-recommendations.md)   |
+| Security and anonymous-data rules        | [Security](security.md)                         | [Configuration](configuration.md)             |
+| Automated verification                   | [Testing](testing.md)                           | [CI](ci.md)                                   |
+| Release and promotion                    | [Delivery](delivery.md)                         | [ADR 0005](adr/0005-docker-free-delivery.md)  |
+| Logs and request correlation             | [Observability](observability.md)               | [Troubleshooting](troubleshooting.md)         |
+| Safe product evolution                   | [Extension playbooks](extending.md)             | [Contributing](../CONTRIBUTING.md)            |
 
 ## Documentation contract
 

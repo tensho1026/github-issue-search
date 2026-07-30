@@ -298,6 +298,18 @@ func graphQLIssueSearchError(
 	graphQLErrors []graphQLError,
 	rateLimit port.RateLimit,
 ) error {
+	return graphQLRequestError(
+		"GitHub GraphQL issue search",
+		graphQLErrors,
+		rateLimit,
+	)
+}
+
+func graphQLRequestError(
+	operation string,
+	graphQLErrors []graphQLError,
+	rateLimit port.RateLimit,
+) error {
 	kind := port.GitHubErrorUpstream
 	for _, graphQLError := range graphQLErrors {
 		classification := strings.ToUpper(strings.Join([]string{
@@ -325,7 +337,8 @@ func graphQLIssueSearchError(
 		Kind:  kind,
 		Reset: reset,
 		Cause: fmt.Errorf(
-			"GitHub GraphQL issue search returned %d error(s)",
+			"%s returned %d error(s)",
+			operation,
 			len(graphQLErrors),
 		),
 	}

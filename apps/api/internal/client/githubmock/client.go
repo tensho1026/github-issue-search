@@ -250,6 +250,81 @@ func (client *Client) SearchIssues(
 	}, nil
 }
 
+// SearchRepositories returns one bounded public repository candidate. The
+// application usecase applies the same deterministic filters as production.
+func (client *Client) SearchRepositories(
+	ctx context.Context,
+	_ repository.DiscoveryCriteria,
+	limit int,
+) (port.GitHubRepositoryDiscoveryResult, error) {
+	if err := ctx.Err(); err != nil {
+		return port.GitHubRepositoryDiscoveryResult{}, err
+	}
+	if limit < 1 || limit > repository.MaximumDiscoveryCandidateResults {
+		return port.GitHubRepositoryDiscoveryResult{}, fmt.Errorf(
+			"mock repository discovery limit is invalid",
+		)
+	}
+	summary := client.repository(successUsername)
+	return port.GitHubRepositoryDiscoveryResult{
+		Candidates: []repository.DiscoveryCandidate{{
+			Repository:       summary,
+			Topics:           []string{"accessibility", "developer-tools", "react"},
+			License:          "MIT",
+			LicenseName:      "MIT License",
+			LicenseKnown:     true,
+			Watchers:         48,
+			HasIssuesEnabled: true,
+			HasDiscussions:   true,
+		}},
+		TotalCount: 1,
+		RateLimit:  client.rateLimit(),
+	}, nil
+}
+
+// EnrichRepositories returns fresh deterministic documentation evidence for
+// only the supplied shortlist.
+func (client *Client) EnrichRepositories(
+	ctx context.Context,
+	repositories []repository.Summary,
+) (port.GitHubRepositoryEnrichmentResult, error) {
+	if err := ctx.Err(); err != nil {
+		return port.GitHubRepositoryEnrichmentResult{}, err
+	}
+	if len(repositories) > repository.MaximumDiscoveryEnrichmentResults {
+		return port.GitHubRepositoryEnrichmentResult{}, fmt.Errorf(
+			"mock repository enrichment limit is invalid",
+		)
+	}
+	items := make(
+		map[string]repository.DiscoveryEnrichment,
+		len(repositories),
+	)
+	for _, summary := range repositories {
+		key := strings.ToLower(summary.FullName)
+		if !isFixtureRepository(summary.Owner, summary.Name) {
+			items[key] = repository.DiscoveryEnrichment{}
+			continue
+		}
+		items[key] = repository.DiscoveryEnrichment{
+			Available:              true,
+			READMEAvailable:        true,
+			READMEContentAvailable: true,
+			READMEText: "React TypeScript accessibility tooling. " +
+				strings.Repeat("日本語のコントリビューション案内。", 12),
+			ContributingAvailable: true,
+			GoodFirstIssues:       4,
+			HelpWantedIssues:      6,
+			HasCodeOfConduct:      true,
+			HasSecurityPolicy:     true,
+		}
+	}
+	return port.GitHubRepositoryEnrichmentResult{
+		Items:     items,
+		RateLimit: client.rateLimit(),
+	}, nil
+}
+
 // GetIssueDetail returns the complete bounded fixture used by the real detail
 // handler, analyzer, recommendation usecase, and response mapper.
 func (client *Client) GetIssueDetail(

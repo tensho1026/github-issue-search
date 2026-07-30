@@ -81,23 +81,25 @@ not silently converted to zero.
 
 ## Domain glossary
 
-| Term                    | Meaning                                                                                    |
-| ----------------------- | ------------------------------------------------------------------------------------------ |
-| Candidate               | A normalized open GitHub issue returned by bounded discovery before full scoring           |
-| Eligibility             | Cheap rules that decide whether a candidate can enter the analysis window                  |
-| Enrichment              | Bounded repository, issue, activity, and maintainer evidence added to a candidate          |
-| Ranked issue            | A candidate plus analysis, score components, and stable tie-break fields                   |
-| Evidence                | Typed, bounded facts supporting an analysis result; never arbitrary secret-bearing text    |
-| Confidence              | `high`, `medium`, or `low` strength assigned to an inference or sample                     |
-| Unknown                 | Evidence was not available or sufficient; it is not equivalent to `absent`                 |
-| Warning                 | A stable conservative risk code with fixed safe text                                       |
-| Snapshot                | Normalized public upstream data stored only in a bounded in-memory cache                   |
-| Evidence status         | `exact`, `sampled`, or `unavailable`; unavailable never means measured zero                |
-| Proficiency diagnostic  | Five-level rule output backed by public repository evidence, not a certification           |
-| Candidate cache         | Five-minute canonical search window cache, independent of pagination and effort            |
-| Detail cache            | Five-minute canonical issue/repository snapshot cache                                      |
-| Anonymous core          | Public profile, search, and recommendation behavior that never requires OAuth or DB access |
-| Authenticated workspace | Future opt-in account behavior for saved data, isolated from the anonymous core            |
+| Term                       | Meaning                                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------------------ |
+| Candidate                  | A normalized open GitHub issue returned by bounded discovery before full scoring           |
+| Eligibility                | Cheap rules that decide whether a candidate can enter the analysis window                  |
+| Enrichment                 | Bounded repository, issue, activity, and maintainer evidence added to a candidate          |
+| Ranked issue               | A candidate plus analysis, score components, and stable tie-break fields                   |
+| Evidence                   | Typed, bounded facts supporting an analysis result; never arbitrary secret-bearing text    |
+| Confidence                 | `high`, `medium`, or `low` strength assigned to an inference or sample                     |
+| Unknown                    | Evidence was not available or sufficient; it is not equivalent to `absent`                 |
+| Warning                    | A stable conservative risk code with fixed safe text                                       |
+| Snapshot                   | Normalized public upstream data stored only in a bounded in-memory cache                   |
+| Evidence status            | `exact`, `sampled`, or `unavailable`; unavailable never means measured zero                |
+| Proficiency diagnostic     | Five-level rule output backed by public repository evidence, not a certification           |
+| Repository readiness       | Explainable contribution-support band derived from bounded public evidence                 |
+| Repository discovery cache | Five-minute canonical repository window, independent of pagination                         |
+| Candidate cache            | Five-minute canonical search window cache, independent of pagination and effort            |
+| Detail cache               | Five-minute canonical issue/repository snapshot cache                                      |
+| Anonymous core             | Public profile, search, and recommendation behavior that never requires OAuth or DB access |
+| Authenticated workspace    | Future opt-in account behavior for saved data, isolated from the anonymous core            |
 
 ## Success and safety measures
 

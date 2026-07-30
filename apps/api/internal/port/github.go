@@ -64,6 +64,24 @@ type GitHubIssueSearchResult struct {
 	RateLimit         RateLimit
 }
 
+// GitHubRepositoryDiscoveryResult is one bounded public repository candidate
+// window. IncompleteResults indicates either upstream partial GraphQL data or
+// a larger upstream result beyond the configured window.
+type GitHubRepositoryDiscoveryResult struct {
+	Candidates        []repository.DiscoveryCandidate
+	TotalCount        int
+	IncompleteResults bool
+	RateLimit         RateLimit
+}
+
+// GitHubRepositoryEnrichmentResult contains documentation evidence for a
+// bounded shortlist keyed by canonical lower-case owner/name.
+type GitHubRepositoryEnrichmentResult struct {
+	Items             map[string]repository.DiscoveryEnrichment
+	IncompleteResults bool
+	RateLimit         RateLimit
+}
+
 // GitHubIssueDetailResult is one bounded, normalized repository and issue
 // inspection. Incomplete indicates that optional GraphQL fields were omitted
 // by GitHub and are represented as unknown rather than absent.
@@ -116,6 +134,25 @@ type GitHubIssueSearcher interface {
 	) (GitHubIssueSearchResult, error)
 }
 
+// GitHubRepositoryDiscoverySearcher performs the cheap bounded candidate
+// search without README content fan-out.
+type GitHubRepositoryDiscoverySearcher interface {
+	SearchRepositories(
+		ctx context.Context,
+		criteria repository.DiscoveryCriteria,
+		limit int,
+	) (GitHubRepositoryDiscoveryResult, error)
+}
+
+// GitHubRepositoryDiscoveryEnricher inspects public documentation for only the
+// preselected shortlist.
+type GitHubRepositoryDiscoveryEnricher interface {
+	EnrichRepositories(
+		ctx context.Context,
+		repositories []repository.Summary,
+	) (GitHubRepositoryEnrichmentResult, error)
+}
+
 // GitHubIssueDetailReader retrieves one bounded public inspection without
 // exposing GitHub response objects to the application layer.
 type GitHubIssueDetailReader interface {
@@ -135,6 +172,8 @@ type GitHubReader interface {
 	GitHubProfileAnalysisReader
 	GitHubIssueSearcher
 	GitHubIssueDetailReader
+	GitHubRepositoryDiscoverySearcher
+	GitHubRepositoryDiscoveryEnricher
 }
 
 type ProfileAnalysisCacheEntry struct {
@@ -172,6 +211,29 @@ type IssueSearchCache interface {
 		ctx context.Context,
 		key string,
 		entry IssueSearchCacheEntry,
+	) error
+}
+
+type RepositoryDiscoveryCacheEntry struct {
+	Items                []repository.DiscoveryResult
+	CandidatesChecked    int
+	UpstreamTotal        int
+	SearchIncomplete     bool
+	EnrichmentAttempted  int
+	EnrichmentFailed     int
+	EnrichmentIncomplete bool
+	RateLimit            RateLimit
+}
+
+type RepositoryDiscoveryCache interface {
+	Get(
+		ctx context.Context,
+		key string,
+	) (RepositoryDiscoveryCacheEntry, bool, error)
+	Set(
+		ctx context.Context,
+		key string,
+		entry RepositoryDiscoveryCacheEntry,
 	) error
 }
 
