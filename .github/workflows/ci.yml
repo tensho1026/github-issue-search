@@ -205,6 +205,12 @@ jobs:
       - name: Run race tests and enforce coverage
         run: bash scripts/ci/check-go-coverage.sh
 
+      - name: Fuzz public parsers and references
+        run: bash scripts/ci/check-go-fuzz.sh
+
+      - name: Enforce bounded performance budgets
+        run: node scripts/ci/check-go-performance.mjs
+
       - name: Build production API
         run: |
           mkdir -p artifacts/go

@@ -8,6 +8,18 @@
       "statements": 70
     }
   },
+  "goBenchmarks": {
+    "BenchmarkAnalyzeIssueBoundedRichInput": {
+      "maximumAllocationsPerOperation": 200,
+      "maximumBytesPerOperation": 262144,
+      "maximumNanosecondsPerOperation": 5000000
+    },
+    "BenchmarkRecommendBounded": {
+      "maximumAllocationsPerOperation": 1000,
+      "maximumBytesPerOperation": 131072,
+      "maximumNanosecondsPerOperation": 1000000
+    }
+  },
   "webBundle": {
     "maximumSingleJavaScriptGzipKiB": 140,
     "maximumTotalGzipKiB": 180
