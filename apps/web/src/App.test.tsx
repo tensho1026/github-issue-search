@@ -13,6 +13,8 @@ describe("App", () => {
         name: /find the issue you can finish/i,
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText("IssueScout")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "IssueScout home" }),
+    ).toBeInTheDocument();
   });
 });

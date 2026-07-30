@@ -3,6 +3,7 @@ import { useState, type PropsWithChildren } from "react";
 
 import { appConfig } from "../shared/config/app-config";
 import { shouldRetryQuery } from "../shared/query/retry-policy";
+import { TooltipProvider } from "../components/ui/tooltip";
 
 const createQueryClient = () =>
   new QueryClient({
@@ -20,6 +21,8 @@ export function AppProviders({ children }: PropsWithChildren) {
   const [queryClient] = useState(createQueryClient);
 
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider delayDuration={300}>{children}</TooltipProvider>
+    </QueryClientProvider>
   );
 }
