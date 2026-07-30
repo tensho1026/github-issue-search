@@ -28,6 +28,14 @@ contain names and safe defaults, never credentials. Commit no `.env` file.
 | `ISSUE_DETAIL_CACHE_TTL`                | `5m`                     | Detail snapshot cache lifetime, positive and at most 24 hours         | No     |
 | `ISSUE_DETAIL_CACHE_CAPACITY`           | `500`                    | Detail LRU entries, 1–10,000                                          | No     |
 | `MANIFEST_FILE_LIMIT`                   | `3`                      | Supported manifests read per repository, 1–10                         | No     |
+| `DATABASE_URL`                          | empty                    | Optional TLS-only PostgreSQL URL for authenticated account data       | Yes    |
+| `DATABASE_MAX_CONNECTIONS`              | `10`                     | Hard pool ceiling, 1–100                                              | No     |
+| `DATABASE_MIN_CONNECTIONS`              | `0`                      | Warm pool floor, 0–maximum                                            | No     |
+| `DATABASE_CONNECT_TIMEOUT`              | `5s`                     | Positive duration, at most one minute                                 | No     |
+| `DATABASE_QUERY_TIMEOUT`                | `5s`                     | Query/statement/idle-transaction deadline, at most one minute         | No     |
+| `DATABASE_MAX_CONNECTION_LIFETIME`      | `30m`                    | Positive duration, at most 24 hours                                   | No     |
+| `DATABASE_MAX_CONNECTION_IDLE_TIME`     | `5m`                     | Positive duration, at most 24 hours                                   | No     |
+| `DATABASE_HEALTH_CHECK_PERIOD`          | `30s`                    | Pool health cycle, positive and at most one hour                      | No     |
 | `USE_GITHUB_API_MOCK`                   | `false`                  | Deterministic adapter; `true` is legal only with `APP_ENV=test`       | No     |
 
 `apps/api/.env.example` is the copyable API reference. The process validates
@@ -89,6 +97,9 @@ Restarting the API clears all anonymous data. See
 - Test may opt into the deterministic adapter.
 - Staging and production must reject the deterministic adapter.
 - Anonymous routes never require or access database configuration.
-- Future database and OAuth secrets belong only to the API process and
+- Database and future OAuth secrets belong only to the API process and
   protected delivery environment, not examples, logs, frontend assets, or
   release manifests.
+
+See [Authenticated PostgreSQL persistence](database.md) for TLS validation,
+pool bounds, credential rotation, migrations, and least-privilege roles.

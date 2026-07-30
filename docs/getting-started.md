@@ -49,6 +49,11 @@ read public repository metadata is sufficient. Issue search uses GitHub
 GraphQL, so it requires a token; public REST profile behavior can still start
 without one.
 
+Leave `DATABASE_URL` empty for the complete anonymous product. Optional account
+work requires a rotated TLS PostgreSQL credential and the native migration
+workflow in [Authenticated PostgreSQL persistence](database.md). Never reuse a
+connection string that appeared in chat or another non-secret channel.
+
 Start the complete stack with one command:
 
 ```sh

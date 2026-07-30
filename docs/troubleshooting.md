@@ -36,6 +36,23 @@ Add the exact browser scheme, host, and port to `ALLOWED_ORIGINS`. Wildcards
 and path components are intentionally invalid. Restart the API after changing
 configuration.
 
+### Authenticated storage is unavailable
+
+Confirm the process still returns `200` from `/api/health`, then inspect
+`/api/health/database`. `DATABASE_UNAVAILABLE` means the optional account
+boundary is not configured or its bounded ping failed; anonymous features
+remain healthy. Check only that `DATABASE_URL` contains a rotated TLS
+credential, then run `pnpm run database:status`. Never print the value or paste
+driver output containing connection parameters.
+
+### Migration verification reports drift
+
+Stop deployment. Do not edit the migration table or rewrite an existing SQL
+file. Compare the reported version with the reviewed catalog, restore the
+original file if it changed, and create a new forward migration for the desired
+schema change. Run `pnpm run migrations:check` and
+`pnpm run database:verify` before retrying.
+
 ## Contract and generated code
 
 ### Generated frontend types differ

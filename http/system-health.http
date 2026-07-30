@@ -1,0 +1,12 @@
+@apiBaseUrl = http://127.0.0.1:8080
+
+### Check process health without GitHub or database I/O
+# @name getProcessHealth
+GET {{apiBaseUrl}}/api/health
+X-Request-ID: httpyac-process-health
+
+### Check the separate authenticated-storage readiness signal
+# @name getDatabaseHealth
+GET {{apiBaseUrl}}/api/health/database
+X-Request-ID: httpyac-database-health
+

@@ -38,6 +38,9 @@ surface; pnpm scripts expose every CI building block.
 | `pnpm run contracts:policy`                          | Enforce statuses, envelopes, and request IDs         |
 | `pnpm run coverage:api`                              | Run Go race tests and coverage threshold             |
 | `pnpm run coverage:web`                              | Run Vitest coverage and thresholds                   |
+| `pnpm run database:migrate`                          | Apply pending forward PostgreSQL migrations          |
+| `pnpm run database:status`                           | Show safe migration status and checksums             |
+| `pnpm run database:verify`                           | Require an up-to-date checksummed schema             |
 | `pnpm run dev`                                       | Supervise native API and web development servers     |
 | `pnpm run dev:api`                                   | Run only the API                                     |
 | `pnpm run dev:smoke`                                 | Start, verify, and stop the deterministic stack      |
@@ -54,6 +57,7 @@ surface; pnpm scripts expose every CI building block.
 | `pnpm run lint:web`                                  | Run ESLint with zero warnings                        |
 | `pnpm run lint:workflow-policy`                      | Enforce GitHub Actions safety policy                 |
 | `pnpm run lint:workflows`                            | Run actionlint and workflow policy                   |
+| `pnpm run migrations:check`                          | Enforce SQL and append-only migration policy         |
 | `pnpm run performance:api`                           | Enforce Go latency/allocation budgets                |
 | `pnpm run quality:strict`                            | Run the complete pre-PR local gate                   |
 | `pnpm run release:build -- v0.1.0 artifacts/release` | Build, verify, and scan one archive set              |

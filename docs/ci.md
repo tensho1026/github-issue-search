@@ -28,15 +28,15 @@ Change detection avoids unrelated expensive work, but `CI required` always runs.
 
 ## Enforced gates
 
-| Job                | Enforcement                                                                                                  |
-| ------------------ | ------------------------------------------------------------------------------------------------------------ |
-| Repository quality | Formatting, architecture, Docker-free policy, Actions/Shell/Markdown lint, commit and PR metadata            |
-| Frontend           | Type-aware ESLint, strict TypeScript, Vitest coverage, production build, gzip bundle budget                  |
-| Backend            | golangci-lint, race detector, atomic coverage, bounded fuzzing, performance budgets, production build        |
-| API contracts      | Redocly, strict status/envelope/header policy, negative fixtures, generated types, bidirectional route drift |
-| Release artifacts  | Two independent builds, byte comparison, secret-surface scan, checksums, manifests, native lifecycle smoke   |
-| Documentation      | markdownlint plus links and complete command/configuration/API coverage                                      |
-| End-to-end         | Native process lifecycle/smoke plus production Vite and compiled Go API in Chromium                          |
+| Job                | Enforcement                                                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- |
+| Repository quality | Formatting, architecture, migration and Docker-free policies, Actions/Shell/Markdown lint, commit/PR metadata |
+| Frontend           | Type-aware ESLint, strict TypeScript, Vitest coverage, production build, gzip bundle budget                   |
+| Backend            | golangci-lint, race detector, atomic coverage, bounded fuzzing, performance budgets, production build         |
+| API contracts      | Redocly, strict status/envelope/header policy, negative fixtures, generated types, bidirectional route drift  |
+| Release artifacts  | Two independent builds, byte comparison, secret-surface scan, checksums, manifests, native lifecycle smoke    |
+| Documentation      | markdownlint plus links and complete command/configuration/API coverage                                       |
+| End-to-end         | Native process lifecycle/smoke plus production Vite and compiled Go API in Chromium                           |
 
 The workflow does not use pull request secrets. Failure evidence is retained for seven days; the validated OpenAPI contract is retained for 14 days. E2E evidence includes the HTML report, trace, screenshot, and video when Playwright produces them.
 
@@ -63,6 +63,7 @@ pnpm run performance:api
 pnpm run coverage:web
 pnpm run bundle:check
 pnpm run contracts:check
+pnpm run migrations:check
 pnpm run lint:docs
 pnpm run lint:workflows
 pnpm run e2e

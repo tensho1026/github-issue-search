@@ -59,6 +59,10 @@ protected environments are never entered from pull request events.
   database-free and stores only a bounded in-memory cache entry.
 - Logs use request IDs and bounded metadata; authorization headers and upstream
   response bodies are not logged.
+- PostgreSQL is optional, TLS-only, pool-bounded, and reserved for authenticated
+  account data. Anonymous handlers have no database repository dependency.
+- Database URLs use redacting configuration values and never enter errors,
+  fixtures, frontend assets, migration output, or release artifacts.
 - Release archives reject `.env`, source-map, and private-key files plus
   credential-shaped GitHub, PostgreSQL/Neon, and AWS content.
 
