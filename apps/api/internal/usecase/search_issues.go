@@ -244,6 +244,7 @@ func (usecase *searchIssues) issueSearchOutput(
 	if err != nil {
 		return SearchIssuesOutput{}, mapIssueSearchError(err)
 	}
+	ranked = filterRankedIssuesByEffort(ranked, input.Criteria)
 	total := len(ranked)
 	totalPages := 0
 	if total > 0 {
@@ -281,6 +282,24 @@ func (usecase *searchIssues) issueSearchOutput(
 		RateLimit:            rateLimit,
 		CacheHit:             cacheHit,
 	}, nil
+}
+
+func filterRankedIssuesByEffort(
+	ranked []issue.RankedIssue,
+	criteria issue.SearchCriteria,
+) []issue.RankedIssue {
+	maximum, configured := criteria.MaximumEffort()
+	if !configured {
+		return ranked
+	}
+
+	filtered := make([]issue.RankedIssue, 0, len(ranked))
+	for _, candidate := range ranked {
+		if candidate.Analysis.Effort.Band.IsAtMost(maximum) {
+			filtered = append(filtered, candidate)
+		}
+	}
+	return filtered
 }
 
 type issueRecommendationMeta struct {

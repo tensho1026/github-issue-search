@@ -129,6 +129,87 @@ func TestSearchIssuesCanonicalCriteriaShareCache(t *testing.T) {
 	}
 }
 
+func TestSearchIssuesFiltersByEffortBeforePaginationAndReusesDiscoveryCache(
+	t *testing.T,
+) {
+	now := time.Date(2026, time.July, 30, 12, 0, 0, 0, time.UTC)
+	searcher := &issueSearcherStub{result: port.GitHubIssueSearchResult{
+		Candidates: []issue.Candidate{
+			searchCandidate(now, 1, 30),
+			searchCandidate(now, 2, 20),
+			searchCandidate(now, 3, 10),
+		},
+		TotalCount: 3,
+	}}
+	for index := range searcher.result.Candidates {
+		name := "repo-" + strconv.Itoa(index+1)
+		searcher.result.Candidates[index].Repository.Name = name
+		searcher.result.Candidates[index].Repository.FullName = "example/" + name
+	}
+	recommender := &searchRecommenderStub{
+		now:    now,
+		scores: map[int]int{1: 90, 2: 80, 3: 70},
+		efforts: map[int]issue.EffortBand{
+			1: issue.EffortThirtyMinutes,
+			2: issue.EffortHalfDay,
+			3: issue.EffortThreeDays,
+		},
+	}
+	cache, err := memory.NewIssueSearch(10, time.Hour)
+	if err != nil {
+		t.Fatalf("NewIssueSearch() error = %v", err)
+	}
+	contract, err := NewSearchIssues(
+		searcher,
+		cache,
+		50,
+		WithIssueRecommendationEnrichment(recommender, 3, 1),
+	)
+	if err != nil {
+		t.Fatalf("NewSearchIssues() error = %v", err)
+	}
+	maximumEffort := string(issue.EffortHalfDay)
+	limitedCriteria := searchCriteria(t, issue.SearchCriteriaOptions{
+		Username:      "octocat",
+		MaximumEffort: &maximumEffort,
+	})
+
+	limited, err := contract.Execute(context.Background(), SearchIssuesInput{
+		Criteria:   limitedCriteria,
+		Pagination: searchPagination(t, 2, 1),
+	})
+	if err != nil {
+		t.Fatalf("Execute(limited) error = %v", err)
+	}
+	if len(limited.Items) != 1 ||
+		limited.Items[0].Candidate.Issue.Number != 2 ||
+		limited.Pagination.Total != 2 ||
+		limited.Pagination.TotalPages != 2 ||
+		limited.Pagination.HasNext {
+		t.Fatalf("limited output = %+v", limited)
+	}
+
+	unlimited, err := contract.Execute(context.Background(), SearchIssuesInput{
+		Criteria: searchCriteria(
+			t,
+			issue.SearchCriteriaOptions{Username: "octocat"},
+		),
+		Pagination: searchPagination(t, 1, 20),
+	})
+	if err != nil {
+		t.Fatalf("Execute(unlimited) error = %v", err)
+	}
+	if unlimited.Pagination.Total != 3 ||
+		!unlimited.CacheHit ||
+		searcher.callCount() != 1 {
+		t.Fatalf(
+			"unlimited output = %+v, search calls = %d",
+			unlimited,
+			searcher.callCount(),
+		)
+	}
+}
+
 func TestSearchIssuesDeduplicatesConcurrentMisses(t *testing.T) {
 	now := time.Now().UTC()
 	started := make(chan struct{})
@@ -531,6 +612,7 @@ type searchRecommenderStub struct {
 	mu           sync.Mutex
 	now          time.Time
 	scores       map[int]int
+	efforts      map[int]issue.EffortBand
 	failNumber   int
 	dependencies []string
 	delay        time.Duration
@@ -571,6 +653,7 @@ func (stub *searchRecommenderStub) Execute(
 		}
 	}
 	score := stub.scores[input.Reference.Number()]
+	effort := stub.efforts[input.Reference.Number()]
 	candidate := searchCandidate(
 		stub.now,
 		input.Reference.Number(),
@@ -583,6 +666,9 @@ func (stub *searchRecommenderStub) Execute(
 	return RecommendIssueOutput{
 		Item: issue.RankedIssue{
 			Candidate: candidate,
+			Analysis: issue.Analysis{
+				Effort: issue.EffortEstimate{Band: effort},
+			},
 			Recommendation: issue.Recommendation{
 				Score: score,
 				RepositorySignals: []issue.RepositorySignal{{

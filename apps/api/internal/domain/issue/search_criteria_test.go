@@ -13,12 +13,14 @@ func TestNewSearchCriteriaAppliesMVPDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSearchCriteria() error = %v", err)
 	}
+	_, maximumEffortConfigured := criteria.MaximumEffort()
 
 	if criteria.Username() != "octocat" ||
 		criteria.MinimumStars() != DefaultMinimumStars ||
 		criteria.MaximumDifficulty().Int() != DefaultMaximumDifficulty ||
 		criteria.UpdatedWithinDays() != DefaultUpdatedWithinDays ||
 		criteria.IncludesDocumentation() ||
+		maximumEffortConfigured ||
 		!criteria.IncludesEnglish() ||
 		!criteria.ExcludesArchived() {
 		t.Fatalf("criteria defaults = %+v", criteria)
@@ -38,6 +40,7 @@ func TestNewSearchCriteriaNormalizesCollectionsAndCanonicalKey(t *testing.T) {
 	includeDocumentation := true
 	includeEnglish := false
 	excludeArchived := false
+	maximumEffort := string(EffortHalfDay)
 
 	first, err := NewSearchCriteria(SearchCriteriaOptions{
 		Username:             "OctoCat",
@@ -46,6 +49,7 @@ func TestNewSearchCriteriaNormalizesCollectionsAndCanonicalKey(t *testing.T) {
 		Labels:               []string{"help wanted", "Good First Issue"},
 		MinimumStars:         &minimumStars,
 		MaximumDifficulty:    &maximumDifficulty,
+		MaximumEffort:        &maximumEffort,
 		UpdatedWithinDays:    &updatedWithinDays,
 		IncludeDocumentation: &includeDocumentation,
 		IncludeEnglish:       &includeEnglish,
@@ -61,6 +65,7 @@ func TestNewSearchCriteriaNormalizesCollectionsAndCanonicalKey(t *testing.T) {
 		Labels:               []string{"documentation", "good first issue", "HELP WANTED"},
 		MinimumStars:         &minimumStars,
 		MaximumDifficulty:    &maximumDifficulty,
+		MaximumEffort:        nil,
 		UpdatedWithinDays:    &updatedWithinDays,
 		IncludeDocumentation: &includeDocumentation,
 		IncludeEnglish:       &includeEnglish,
@@ -81,6 +86,10 @@ func TestNewSearchCriteriaNormalizesCollectionsAndCanonicalKey(t *testing.T) {
 	if first.CacheKey() != second.CacheKey() {
 		t.Fatalf("cache keys differ:\n%s\n%s", first.CacheKey(), second.CacheKey())
 	}
+	if effort, configured := first.MaximumEffort(); !configured ||
+		effort != EffortHalfDay {
+		t.Fatalf("maximum effort = %q, %t", effort, configured)
+	}
 	if !strings.HasPrefix(first.CacheKey(), "github:issue-search:") ||
 		len(strings.TrimPrefix(first.CacheKey(), "github:issue-search:")) != 64 {
 		t.Fatalf("cache key = %q", first.CacheKey())
@@ -98,11 +107,19 @@ func TestNewSearchCriteriaRejectsInvalidInputs(t *testing.T) {
 	zeroDifficulty := 0
 	tooManyDays := MaximumUpdatedWithinDays + 1
 	includeDocumentation := true
+	invalidEffort := "weekend"
 
 	tests := []struct {
 		name    string
 		options SearchCriteriaOptions
 	}{
+		{
+			name: "unsupported maximum effort",
+			options: SearchCriteriaOptions{
+				Username:      "octocat",
+				MaximumEffort: &invalidEffort,
+			},
+		},
 		{
 			name:    "invalid username",
 			options: SearchCriteriaOptions{Username: "invalid--user"},
