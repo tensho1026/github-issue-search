@@ -11,8 +11,9 @@ by backend response decoding and frontend browser-boundary tests.
 `fixtures/manifest.json` maps every document to its OpenAPI component schema.
 Fixture JSON must contain no credentials or user-specific production data.
 
-Run semantic validation, JSON Schema fixture validation, generated frontend
-type drift, and Gin route drift from the repository root:
+Run semantic validation, explicit status/envelope/request-ID policy, positive
+and negative JSON Schema fixture validation, generated frontend type drift,
+and Gin route drift from the repository root:
 
 ```sh
 pnpm run contracts:check
@@ -20,5 +21,6 @@ pnpm run contracts:check
 
 The drift check compares every Gin route registered under `/api` with every
 OpenAPI path. A difference fails closed in CI. `ajv` validates each fixture
-against the referenced OpenAPI 3.1 schema. Frontend types are generated from
-the same contract and must never be edited manually.
+against the referenced OpenAPI 3.1 schema and proves undocumented fields or
+missing envelope metadata are rejected. Frontend types are generated from the
+same contract and must never be edited manually.

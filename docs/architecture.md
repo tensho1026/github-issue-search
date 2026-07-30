@@ -6,16 +6,13 @@ IssueScout is a stateless recommendation application. The browser talks only
 to the IssueScout API; the API owns GitHub credentials, upstream rate-limit
 handling, analysis, and response normalization.
 
-```text
-React web application
-        |
-        | HTTP / JSON
-        v
-Go API (Gin)
-        |
-        | REST / GraphQL
-        v
-GitHub APIs
+```mermaid
+flowchart LR
+    User["Anonymous contributor"] --> Web["React web application"]
+    Web -->|"IssueScout HTTP / JSON"| API["Go API (Gin)"]
+    API -->|"Bounded REST / GraphQL"| GitHub["GitHub public APIs"]
+    Account["Future authenticated workspace"] -.-> API
+    API -.->|"Authenticated data only"| Neon["Future Neon PostgreSQL"]
 ```
 
 The anonymous core does not persist user or issue data. Storage-facing ports
@@ -31,14 +28,14 @@ validation. It must not reproduce recommendation rules that belong to the API.
 `apps/api` is an independently buildable Go module. Its packages follow this
 dependency direction:
 
-```text
-transport/handler -> application/usecase -> domain
-                              |             |
-                              v             v
-                       ports/interfaces <- policies
-                              ^
-                              |
-             adapters (GitHub, cache, future D1)
+```mermaid
+flowchart LR
+    Transport["router / middleware / handler"] --> Usecase["application usecases"]
+    Usecase --> Domain["domain policies and values"]
+    Usecase --> Ports["application ports"]
+    Adapters["GitHub / cache / future Neon adapters"] --> Ports
+    Composition["cmd/api composition root"] --> Transport
+    Composition --> Adapters
 ```
 
 Composition happens in `cmd/api` and `internal/router`. Transport packages may
@@ -135,12 +132,11 @@ must be configured for issue discovery even though the IssueScout HTTP route
 itself remains anonymous. The token stays inside the API process and is never
 part of cache keys, application responses, logs, or browser configuration.
 
-The bounded in-memory cache implements a port so a future adapter can replace
-it. Initial TTLs are deliberately different by data volatility:
+The bounded in-memory caches implement ports so future adapters can replace
+them. Initial TTLs are deliberately different by data volatility:
 
 | Data             |        TTL |
 | ---------------- | ---------: |
-| GitHub user      | 10 minutes |
 | Profile analysis | 30 minutes |
 | Issue search     |  5 minutes |
 | Issue details    |  5 minutes |

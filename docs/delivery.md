@@ -26,6 +26,18 @@ Build timestamps come from the Git commit, tar members are sorted, ownership and
 modes are normalized, and gzip timestamps are disabled. Rerunning a release for
 the same source produces the same archives.
 
+Reproduce the complete build, byte comparison, extracted-content scan, and
+native smoke test locally:
+
+```sh
+pnpm run release:reproducibility -- v0.1.0
+```
+
+The archive scan rejects `.env` files, source maps, private-key formats,
+server-only configuration in web assets, and GitHub, Neon/PostgreSQL, or AWS
+credential-shaped content. The packaged API health check proves
+`X-Request-ID` correlation and graceful SIGTERM shutdown.
+
 ## Release flow
 
 ```mermaid
@@ -36,7 +48,9 @@ flowchart TD
     API --> Package["Normalize deterministic archives"]
     Web --> Package
     Package --> Hash["Generate and independently verify SHA256SUMS"]
-    Hash --> Smoke["Run packaged native API and web smoke tests"]
+    Hash --> Repeat["Build independently and compare every byte"]
+    Repeat --> Secret["Expand and scan secret surface"]
+    Secret --> Smoke["Run packaged native API and web smoke tests"]
     Smoke --> Scan["Trivy HIGH/CRITICAL and secret scan"]
     Scan --> SBOM["Generate SPDX SBOM"]
     SBOM --> Evidence["Upload immutable workflow artifact"]

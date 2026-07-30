@@ -96,13 +96,16 @@ jobs:
       - name: Check architecture boundaries
         run: pnpm run architecture:check
 
+      - name: Enforce Docker-free repository policy
+        run: pnpm run lint:docker-free
+
       - name: Lint workflows and workflow policy
         run: pnpm run lint:workflows
 
       - name: Lint shell scripts
         run: find scripts -type f -name '*.sh' -print0 | xargs -0 shellcheck
 
-      - name: Lint Markdown
+      - name: Lint and contract-check documentation
         run: pnpm run lint:docs
 
       - name: Validate commit subjects
@@ -301,14 +304,24 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build, verify, and smoke-test release archives
+      - name: Build and verify release archives
         env:
           VERSION: v0.0.0-ci.${{ github.run_id }}
         run: |
-          bash scripts/release/build-api-artifacts.sh "${VERSION}" artifacts/release
-          bash scripts/release/build-web-artifact.sh "${VERSION}" artifacts/release
-          bash scripts/release/write-checksums.sh artifacts/release
-          node scripts/release/verify-artifacts.mjs artifacts/release "${VERSION}"
+          bash scripts/release/build-release.sh "${VERSION}" artifacts/release
+
+      - name: Prove independent build reproducibility
+        env:
+          VERSION: v0.0.0-ci.${{ github.run_id }}
+        run: |
+          node scripts/release/check-reproducibility.mjs \
+            "${VERSION}" \
+            artifacts/release
+
+      - name: Smoke-test native release processes
+        env:
+          VERSION: v0.0.0-ci.${{ github.run_id }}
+        run: |
           bash scripts/release/smoke-artifacts.sh artifacts/release "${VERSION}"
 
       - name: Upload release-build evidence
@@ -389,6 +402,11 @@ jobs:
 
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
+
+      - name: Verify native process lifecycle
+        run: |
+          pnpm run test:dev
+          pnpm run dev:smoke
 
       - name: Run built-stack smoke tests
         run: pnpm run e2e

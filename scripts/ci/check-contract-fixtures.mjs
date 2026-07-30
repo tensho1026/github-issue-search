@@ -29,15 +29,45 @@ for (const entry of manifest.fixtures) {
     $ref: `#/components/schemas/${entry.schema}`,
     components: specification.components,
   });
-  if (validate(fixture)) {
-    console.log(`${entry.file}: ${entry.schema} valid`);
+  if (!validate(fixture)) {
+    failures.push(
+      `${entry.file}: ${ajv.errorsText(validate.errors, {
+        dataVar: entry.file,
+        separator: "\n  ",
+      })}`,
+    );
     continue;
   }
-  failures.push(
-    `${entry.file}: ${ajv.errorsText(validate.errors, {
-      dataVar: entry.file,
-      separator: "\n  ",
-    })}`,
+
+  const unknownEnvelope = structuredClone(fixture);
+  unknownEnvelope.undocumentedContractField = true;
+  if (validate(unknownEnvelope)) {
+    failures.push(`${entry.file}: accepts an undocumented envelope field`);
+  }
+
+  const payloadKey = Object.hasOwn(fixture, "data") ? "data" : "error";
+  if (
+    fixture[payloadKey] !== null &&
+    typeof fixture[payloadKey] === "object" &&
+    !Array.isArray(fixture[payloadKey])
+  ) {
+    const unknownPayload = structuredClone(fixture);
+    unknownPayload[payloadKey].undocumentedContractField = true;
+    if (validate(unknownPayload)) {
+      failures.push(
+        `${entry.file}: accepts an undocumented ${payloadKey} field`,
+      );
+    }
+  }
+
+  const missingMetadata = structuredClone(fixture);
+  delete missingMetadata.meta;
+  if (validate(missingMetadata)) {
+    failures.push(`${entry.file}: accepts an envelope without metadata`);
+  }
+
+  console.log(
+    `${entry.file}: ${entry.schema} valid and strict-envelope mutations rejected`,
   );
 }
 

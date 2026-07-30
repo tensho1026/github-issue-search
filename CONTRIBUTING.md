@@ -48,6 +48,12 @@ The normal local gate is:
 pnpm run check
 ```
 
+For a clean deterministic full-stack startup and shutdown check:
+
+```sh
+make dev-smoke
+```
+
 Before opening a ready pull request, run the stricter checks relevant to the change:
 
 ```sh
@@ -59,6 +65,9 @@ pnpm run lint:docs
 pnpm run lint:workflows
 pnpm run e2e
 ```
+
+The complete [command reference](docs/commands.md) maps every root script and
+Make target to its purpose.
 
 The quality budgets live in `config/quality-budgets.json`. Lowering a threshold requires explicit rationale and must not be used to hide a regression.
 

@@ -28,15 +28,15 @@ Change detection avoids unrelated expensive work, but `CI required` always runs.
 
 ## Enforced gates
 
-| Job                | Enforcement                                                                                                                      |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| Repository quality | Prettier, gofmt, architecture dependencies, actionlint, workflow policy, ShellCheck, Markdown, Conventional Commits, PR template |
-| Frontend           | Type-aware ESLint, strict TypeScript, Vitest coverage, production build, gzip bundle budget                                      |
-| Backend            | golangci-lint, race detector, atomic coverage, bounded fuzzing, performance budgets, production build                            |
-| API contracts      | Redocly OpenAPI lint, JSON Schema fixtures, generated type drift, and bidirectional Gin route drift                              |
-| Release artifacts  | Cross-compiled API and static web archives, checksums, manifests, packaged smoke test                                            |
-| Documentation      | markdownlint across repository-owned Markdown                                                                                    |
-| End-to-end         | Production Vite preview and compiled Go API in Chromium                                                                          |
+| Job                | Enforcement                                                                                                  |
+| ------------------ | ------------------------------------------------------------------------------------------------------------ |
+| Repository quality | Formatting, architecture, Docker-free policy, Actions/Shell/Markdown lint, commit and PR metadata            |
+| Frontend           | Type-aware ESLint, strict TypeScript, Vitest coverage, production build, gzip bundle budget                  |
+| Backend            | golangci-lint, race detector, atomic coverage, bounded fuzzing, performance budgets, production build        |
+| API contracts      | Redocly, strict status/envelope/header policy, negative fixtures, generated types, bidirectional route drift |
+| Release artifacts  | Two independent builds, byte comparison, secret-surface scan, checksums, manifests, native lifecycle smoke   |
+| Documentation      | markdownlint plus links and complete command/configuration/API coverage                                      |
+| End-to-end         | Native process lifecycle/smoke plus production Vite and compiled Go API in Chromium                          |
 
 The workflow does not use pull request secrets. Failure evidence is retained for seven days; the validated OpenAPI contract is retained for 14 days. E2E evidence includes the HTML report, trace, screenshot, and video when Playwright produces them.
 
@@ -66,9 +66,16 @@ pnpm run contracts:check
 pnpm run lint:docs
 pnpm run lint:workflows
 pnpm run e2e
+pnpm run release:reproducibility -- v0.0.0-local
 ```
 
 `golangci-lint`, `actionlint`, and `shellcheck` are expected developer tools. CI installs or provisions fixed versions. The actionlint release archive is checked against its pinned upstream SHA-256 before installation. The workflow pins third-party actions by commit SHA; Dependabot proposes controlled SHA updates.
+
+The release job builds the same revision twice in independent temporary
+directories and compares all six archives plus `SHA256SUMS`. It expands every
+archive to reject environment files, source maps, key material, and
+credential-shaped content before running the packaged API/web readiness,
+request ID, and graceful shutdown smoke test.
 
 ## Budgets
 

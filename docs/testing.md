@@ -27,6 +27,8 @@ flowchart LR
 | Contract       | Redocly, Ajv, generated types            | OpenAPI semantics, fixture shape, route and type drift |
 | React          | Vitest and Testing Library               | forms, hooks, routing, a11y states, safe presentation  |
 | Built stack    | Playwright and deterministic API adapter | profile → search → detail and resilient errors         |
+| Native process | Node test runner and real child groups   | startup interruption, readiness, signal cleanup        |
+| Release        | independent builds and packaged smoke    | byte identity, secret surface, request ID, shutdown    |
 
 Tests assert observable behavior. Internal helper calls are asserted only when
 the call count is itself a bounded-resource or retry invariant.
@@ -44,6 +46,7 @@ Run the normal suites:
 ```sh
 pnpm run test:api
 pnpm run test:web
+pnpm run test:dev
 pnpm run e2e
 ```
 
@@ -113,10 +116,12 @@ sleep-based synchronization.
 
 ## Fuzz and performance gates
 
-CI executes one-second bounded fuzz sessions for GitHub usernames, search
-filter values, and issue references. A discovered corpus file is a regression
-asset: inspect it, retain it under the owning package when useful, and add a
-named unit test when the behavior deserves explanation.
+CI executes exactly 50,000 fuzz cases per target for GitHub usernames, search
+filter values, and issue references. The fixed execution budget avoids
+runner-speed-dependent timeouts while preserving a reproducible minimum test
+depth. A discovered corpus file is a regression asset: inspect it, retain it
+under the owning package when useful, and add a named unit test when the
+behavior deserves explanation.
 
 The two bounded domain benchmarks run three fixed 100-operation samples.
 `config/quality-budgets.json` sets fail-closed time, byte, and allocation
@@ -124,13 +129,25 @@ ceilings. Budgets include broad runner headroom; a budget increase requires a
 measured explanation in the pull request. Web gzip limits are enforced from
 the same file.
 
+| Budget                                          |      Maximum |
+| ----------------------------------------------- | -----------: |
+| `BenchmarkAnalyzeIssueBoundedRichInput` latency |      5 ms/op |
+| Analysis bytes                                  |   256 KiB/op |
+| Analysis allocations                            |       200/op |
+| `BenchmarkRecommendBounded` latency             |      1 ms/op |
+| Recommendation bytes                            |   128 KiB/op |
+| Recommendation allocations                      |     1,000/op |
+| Largest JavaScript asset                        | 140 KiB gzip |
+| All JavaScript and CSS                          | 180 KiB gzip |
+
 ## Contract fixtures
 
 `packages/contracts/fixtures/manifest.json` maps each JSON document to one
 OpenAPI component schema. `pnpm run contracts:fixtures` validates types,
-required fields, formats, enums, bounds, and unexpected properties. Backend
-tests decode those documents through concrete response types. Playwright uses
-the profile fixtures for its focused network-boundary test.
+required fields, formats, enums, and bounds. It also mutates every valid
+fixture to prove unknown envelope/payload fields and missing metadata fail.
+Backend tests decode those documents through concrete response types.
+Playwright uses the profile fixtures for its focused network-boundary test.
 
 When an HTTP response changes:
 
@@ -159,3 +176,16 @@ pnpm exec playwright show-trace test-results/<test>/trace.zip
 Do not point the E2E build at a developer API or enable `reuseExistingServer`
 while diagnosing CI-only behavior. Stop those processes first so Playwright
 owns both ports.
+
+## Native lifecycle and release tests
+
+`pnpm run test:dev` starts real native child process groups and verifies
+cleanup when startup is interrupted and after readiness. Its integration case
+sends SIGTERM to the actual supervisor, then proves both API and web ports are
+closed.
+
+`pnpm run dev:smoke` proves the local Go/Vite stack without a token.
+`pnpm run release:reproducibility -- v0.0.0-test` performs two independent
+builds, contract and checksum verification, extracted-content secret scanning,
+byte comparison, packaged readiness, request-correlation, and graceful
+shutdown checks.

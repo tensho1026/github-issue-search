@@ -609,6 +609,10 @@ export type GetHealthErrors = {
    */
   403: ErrorEnvelope;
   /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
+  /**
    * The bounded request deadline elapsed or the client cancelled.
    */
   504: ErrorEnvelope;
@@ -643,6 +647,10 @@ export type GetGitHubUserErrors = {
    */
   400: ErrorEnvelope;
   /**
+   * The browser Origin is not in the configured allowlist.
+   */
+  403: ErrorEnvelope;
+  /**
    * The requested GitHub user does not exist.
    */
   404: ErrorEnvelope;
@@ -650,6 +658,10 @@ export type GetGitHubUserErrors = {
    * GitHub refused the request because its rate limit was exhausted.
    */
   429: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
   /**
    * Required public data could not be retrieved from GitHub.
    */
@@ -690,6 +702,10 @@ export type AnalyzeGitHubProfileErrors = {
    */
   400: ErrorEnvelope;
   /**
+   * The browser Origin is not in the configured allowlist.
+   */
+  403: ErrorEnvelope;
+  /**
    * The requested GitHub user does not exist.
    */
   404: ErrorEnvelope;
@@ -697,6 +713,10 @@ export type AnalyzeGitHubProfileErrors = {
    * GitHub refused the request because its rate limit was exhausted.
    */
   429: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
   /**
    * Required public data could not be retrieved from GitHub.
    */
@@ -754,6 +774,10 @@ export type SearchGitHubIssuesErrors = {
    * GitHub refused the request because its rate limit was exhausted.
    */
   429: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
   /**
    * Required public data could not be retrieved from GitHub.
    */
@@ -824,6 +848,10 @@ export type GetIssueRecommendationErrors = {
    * GitHub refused the request because its rate limit was exhausted.
    */
   429: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
   /**
    * Required public data could not be retrieved from GitHub.
    */

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+fuzz_executions="50000x"
 
 run_fuzz_target() {
   local package_path="$1"
@@ -9,7 +10,7 @@ run_fuzz_target() {
   go -C "${repository_root}/apps/api" test \
     -run '^$' \
     -fuzz "^${target}$" \
-    -fuzztime=1s \
+    -fuzztime="${fuzz_executions}" \
     "${package_path}"
 }
 

@@ -1,0 +1,71 @@
+# Observability and request tracing
+
+IssueScout uses structured process logs and HTTP request correlation. It does
+not collect anonymous product analytics or persist request history.
+
+## Structured logs
+
+The API writes one JSON object per line to standard output. Platform log
+collection may ingest that stream without an application-specific agent.
+
+Request completion records include:
+
+- timestamp and level;
+- normalized route path, never a raw query string;
+- method and HTTP status;
+- latency in milliseconds;
+- request ID;
+- safe user-agent and client address metadata;
+- stable application error code when present.
+
+Startup records include listener address and build version/commit. Shutdown
+records indicate graceful termination. Upstream retry logs describe attempt and
+status without response bodies or credentials.
+
+## Trace a request
+
+Send a caller-owned safe identifier:
+
+```sh
+curl --fail-with-body \
+  --header 'X-Request-ID: local-diagnosis-001' \
+  http://127.0.0.1:8080/api/health
+```
+
+Confirm the same value in:
+
+1. the `X-Request-ID` response header;
+2. `meta.requestId` in JSON;
+3. the API request-completion log.
+
+Use that identifier when reporting an error. Do not paste a token, database
+URL, OAuth code, or raw private payload into a request ID.
+
+## Health and readiness
+
+`GET /api/health` proves that configuration was valid, the listener is serving,
+middleware is active, and response correlation works. It performs no GitHub or
+database operation, so an upstream incident does not incorrectly mark the
+process dead.
+
+The native supervisor and packaged-artifact smoke test validate health plus the
+web root. Promotion health checks use a public HTTPS endpoint supplied by the
+deployment environment.
+
+## Metrics semantics
+
+Repository and maintainer values in recommendation responses are product
+evidence, not service telemetry. Each bounded metric includes sample size,
+window, truncation, availability, and confidence. Never aggregate it into
+hidden user tracking.
+
+Future service metrics should use low-cardinality route names and status/error
+codes. Usernames, repositories, issue numbers, request IDs, tokens, and raw
+query values must not become metric labels.
+
+## Incident evidence
+
+Preserve the failed workflow URL, request ID, release checksum, environment,
+safe error code, and relevant timestamps. Redact secrets before attaching
+logs. Release and promotion artifacts retain immutable manifests so an
+operator can distinguish source, build, and deployed version.
