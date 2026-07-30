@@ -313,11 +313,7 @@ export function decodeRepositorySearchParams(
       parameterNames.languages,
       defaults.languages,
     ),
-    licenses: readList(
-      parameters,
-      parameterNames.licenses,
-      defaults.licenses,
-    ),
+    licenses: readList(parameters, parameterNames.licenses, defaults.licenses),
     maximumDifficulty: readInteger(
       parameters,
       parameterNames.maximumDifficulty,

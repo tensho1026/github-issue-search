@@ -4,6 +4,7 @@ import { Button } from "./button";
 import { Icon } from "./icon";
 
 type PaginationProps = {
+  ariaLabel?: string;
   disabled?: boolean;
   hasNext: boolean;
   onPageChange: (page: number) => void;
@@ -12,6 +13,7 @@ type PaginationProps = {
 };
 
 export function Pagination({
+  ariaLabel = "Issue search pagination",
   disabled,
   hasNext,
   onPageChange,
@@ -23,7 +25,7 @@ export function Pagination({
   }
   return (
     <nav
-      aria-label="Issue search pagination"
+      aria-label={ariaLabel}
       className="flex flex-wrap items-center justify-between gap-3"
     >
       <Button
