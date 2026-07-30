@@ -37,24 +37,62 @@ at most 20 when explicitly configured, in one batch; it is not a
 per-repository fan-out. Pagination is applied after analysis and is excluded
 from the canonical cache key.
 
+## Frontend journey
+
+The lazy-loaded `/repositories` route is available from the primary navigation
+without signing in. A visitor can also begin on `/profiles/:username`: the
+profile dashboard creates a repository-discovery link from the analyzed
+language and technology evidence, but leaves the form unsubmitted so the
+visitor can review every condition first.
+
+One typed filter module owns form defaults, validation, request mapping, and
+the URL codec. A URL contains only canonical filter values plus `search=1`
+after submission; it never contains a result payload, upstream response, or
+profile data. Back, forward, refresh, copied links, and pagination therefore
+restore the exact validated conditions while the server remains the authority
+for scoring and ordering.
+
+Repository cards distinguish facts from estimates. They show activity,
+popularity, license, topics, technologies, contribution documents, starter
+issues, readiness reasons, preliminary difficulty reasons, and Japanese README
+evidence. Confidence, sampled content, and unavailable evidence are labeled
+explicitly. The interface does not turn unavailable values into zero or
+recompute any server decision.
+
+Recoverable states are separate:
+
+- a first load uses a skeleton and keeps the form operable;
+- a later page request keeps the previous result while the replacement loads;
+- empty and out-of-range pages preserve the submitted filters;
+- partial enrichment keeps usable repositories and explains its warnings;
+- invalid shared links reset to safe defaults without calling the API;
+- rate limits and upstream failures provide a retry path.
+
+Obsolete requests are cancelled through the query client. Keyboard, mobile
+navigation, tooltip focus, reduced motion, and 320 CSS pixel reflow (equivalent
+to a 640-pixel viewport at 200% browser zoom) are covered by automated tests.
+
 ## Filters and defaults
 
-| Input              | Default     | Bound or accepted values            |
-| ------------------ | ----------- | ----------------------------------- |
-| Languages          | empty       | Up to 10 safe values                |
-| Technologies       | empty       | Up to 10 safe values                |
-| SPDX licenses      | empty       | Supported SPDX allowlist            |
-| OSS categories     | empty       | Nine documented categories          |
-| Minimum stars      | 10          | 0–10,000,000                        |
-| Minimum forks      | 0           | 0–10,000,000                        |
-| Open issues        | 0–unbounded | Each explicit bound is 0–10,000,000 |
-| Updated within     | 365 days    | 1–3,650 days                        |
-| Maximum difficulty | unset       | 1–5                                 |
-| Minimum readiness  | 0           | Inclusive score from 0–100          |
-| Japanese README    | unset       | `true` or `false`                   |
-| Fork policy        | `exclude`   | `exclude`, `include`, `only`        |
-| Exclude archived   | `true`      | `true` or `false`                   |
-| Page / page size   | 1 / 20      | Page 1–50; page size 1–50           |
+The endpoint stays broadly reusable, while the browser starts with a
+conservative contribution-oriented shortlist:
+
+| Input              | API default | Browser initial value | Bound or accepted values            |
+| ------------------ | ----------- | --------------------- | ----------------------------------- |
+| Languages          | empty       | empty                 | Up to 10 safe values                |
+| Technologies       | empty       | empty                 | Up to 10 safe values                |
+| SPDX licenses      | empty       | empty                 | Supported SPDX allowlist            |
+| OSS categories     | empty       | empty                 | Nine documented categories          |
+| Minimum stars      | 10          | 10                    | 0–10,000,000                        |
+| Minimum forks      | 0           | 0                     | 0–10,000,000                        |
+| Open issues        | 0–unbounded | 1–500                 | Each explicit bound is 0–10,000,000 |
+| Updated within     | 365 days    | 365 days              | 1–3,650 days                        |
+| Maximum difficulty | unset       | 3                     | 1–5                                 |
+| Minimum readiness  | 0           | 40                    | Inclusive score from 0–100          |
+| Japanese README    | unset       | any evidence state    | `true` or `false`                   |
+| Fork policy        | `exclude`   | `exclude`             | `exclude`, `include`, `only`        |
+| Exclude archived   | `true`      | `true`                | `true` or `false`                   |
+| Page / page size   | 1 / 20      | 1 / 20                | Page 1–50; page size 1–50           |
 
 The supported OSS categories are `application`, `data`, `documentation`,
 `education`, `framework`, `infrastructure`, `library`, `security`, and
