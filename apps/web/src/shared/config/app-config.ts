@@ -46,6 +46,7 @@ export const appRoutes = Object.freeze({
   profile(username: string): string {
     return `/profiles/${encodeURIComponent(username)}`;
   },
+  repositories: "/repositories",
   search: "/search",
 });
 
@@ -96,5 +97,15 @@ export const issueEndpoints = Object.freeze({
       perPage: perPage.toString(),
     });
     return `/api/issues/search?${query.toString()}`;
+  },
+});
+
+export const repositoryEndpoints = Object.freeze({
+  search(page: number, perPage: number): `/${string}` {
+    const query = new URLSearchParams({
+      page: page.toString(),
+      perPage: perPage.toString(),
+    });
+    return `/api/repositories/search?${query.toString()}`;
   },
 });
