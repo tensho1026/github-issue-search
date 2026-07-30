@@ -5,6 +5,10 @@
       "schema": "HealthEnvelope"
     },
     {
+      "file": "database-health.success.json",
+      "schema": "DatabaseHealthEnvelope"
+    },
+    {
       "file": "github-user.success.json",
       "schema": "GitHubUserEnvelope"
     },

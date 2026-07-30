@@ -34,6 +34,10 @@ func TestContractFixturesDecodeIntoBackendResponseTypes(t *testing.T) {
 			target: &fixtureSuccessEnvelope[map[string]string]{},
 		},
 		{
+			file:   "database-health.success.json",
+			target: &fixtureSuccessEnvelope[databaseHealthResponse]{},
+		},
+		{
 			file:   "github-user.success.json",
 			target: &fixtureSuccessEnvelope[githubUserResponse]{},
 		},

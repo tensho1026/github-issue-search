@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: IssueScout API
-  version: 0.5.0
+  version: 0.6.0
   description: |
     Stateless API for analyzing a public GitHub profile and finding suitable
     open-source repositories and issues. GitHub credentials remain server-side.
@@ -42,6 +42,35 @@ paths:
                 $ref: "#/components/schemas/HealthEnvelope"
         "403":
           $ref: "#/components/responses/ForbiddenOrigin"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/health/database:
+    get:
+      operationId: getDatabaseHealth
+      summary: Check authenticated account storage readiness
+      description: |
+        Probes the optional PostgreSQL boundary used only by authenticated
+        account capabilities. A failure does not change `/api/health` and does
+        not prevent anonymous profile, repository, or issue journeys.
+        Connection parameters and driver errors are never returned.
+      tags:
+        - System
+      responses:
+        "200":
+          description: The configured database accepted a bounded readiness probe.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatabaseHealthEnvelope"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "503":
+          $ref: "#/components/responses/DatabaseUnavailable"
         "500":
           $ref: "#/components/responses/InternalServerError"
         "504":
@@ -507,6 +536,17 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
+    DatabaseUnavailable:
+      description: |
+        Authenticated account storage is not configured or did not accept the
+        bounded readiness probe. Anonymous capabilities remain available.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
     RequestTimeout:
       description: The bounded request deadline elapsed or the client cancelled.
       headers:
@@ -560,6 +600,28 @@ components:
             status:
               type: string
               const: ok
+        meta:
+          $ref: "#/components/schemas/Meta"
+    DatabaseHealthEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - configured
+            - status
+          properties:
+            configured:
+              type: boolean
+              const: true
+            status:
+              type: string
+              const: ready
         meta:
           $ref: "#/components/schemas/Meta"
     GitHubUserEnvelope:
@@ -2756,6 +2818,8 @@ components:
             code:
               type: string
               enum:
+                - DATABASE_UNAVAILABLE
+                - FORBIDDEN_ORIGIN
                 - GITHUB_API_ERROR
                 - GITHUB_RATE_LIMIT_EXCEEDED
                 - GITHUB_USER_NOT_FOUND

@@ -17,6 +17,14 @@ export type HealthEnvelope = {
   meta: Meta;
 };
 
+export type DatabaseHealthEnvelope = {
+  data: {
+    configured: true;
+    status: "ready";
+  };
+  meta: Meta;
+};
+
 export type GitHubUserEnvelope = {
   data: GitHubUser;
   meta: Meta;
@@ -954,6 +962,8 @@ export type AnalysisWarning = {
 export type ErrorEnvelope = {
   error: {
     code:
+      | "DATABASE_UNAVAILABLE"
+      | "FORBIDDEN_ORIGIN"
       | "GITHUB_API_ERROR"
       | "GITHUB_RATE_LIMIT_EXCEEDED"
       | "GITHUB_USER_NOT_FOUND"
@@ -1018,6 +1028,47 @@ export type GetHealthResponses = {
 };
 
 export type GetHealthResponse = GetHealthResponses[keyof GetHealthResponses];
+
+export type GetDatabaseHealthData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/api/health/database";
+};
+
+export type GetDatabaseHealthErrors = {
+  /**
+   * The browser Origin is not in the configured allowlist.
+   */
+  403: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
+  /**
+   * Authenticated account storage is not configured or did not accept the
+   * bounded readiness probe. Anonymous capabilities remain available.
+   *
+   */
+  503: ErrorEnvelope;
+  /**
+   * The bounded request deadline elapsed or the client cancelled.
+   */
+  504: ErrorEnvelope;
+};
+
+export type GetDatabaseHealthError =
+  GetDatabaseHealthErrors[keyof GetDatabaseHealthErrors];
+
+export type GetDatabaseHealthResponses = {
+  /**
+   * The configured database accepted a bounded readiness probe.
+   */
+  200: DatabaseHealthEnvelope;
+};
+
+export type GetDatabaseHealthResponse =
+  GetDatabaseHealthResponses[keyof GetDatabaseHealthResponses];
 
 export type GetGitHubUserData = {
   body?: never;

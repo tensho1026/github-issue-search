@@ -33,6 +33,17 @@ func main() {
 	}
 
 	gin.SetMode(gin.ReleaseMode)
+	databasePool, databaseConfigured, err := bootstrap.NewDatabasePool(
+		context.Background(),
+		cfg,
+	)
+	if err != nil {
+		logger.Error("compose authenticated database pool")
+		os.Exit(1)
+	}
+	if databasePool != nil {
+		defer databasePool.Close()
+	}
 	gitHubClient := bootstrap.NewGitHubReader(cfg, logger)
 	getGitHubUser := usecase.NewGetGitHubUser(
 		gitHubClient,
@@ -121,6 +132,8 @@ func main() {
 		SearchIssues:         searchIssues,
 		SearchRepositories:   searchRepositories,
 		RecommendIssue:       recommendIssue,
+		DatabaseHealth:       databasePool,
+		DatabaseConfigured:   databaseConfigured,
 	})
 	if err != nil {
 		logger.Error("compose API router", "error", err)
