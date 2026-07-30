@@ -35,9 +35,47 @@ const (
 	defaultRepositoryDiscoveryCacheTTL        = 5 * time.Minute
 	defaultRepositoryDiscoveryCacheCapacity   = 1000
 	defaultManifestFileLimit                  = 3
+	defaultDatabaseMaxConnections             = 10
+	defaultDatabaseMinConnections             = 0
+	defaultDatabaseConnectTimeout             = 5 * time.Second
+	defaultDatabaseQueryTimeout               = 5 * time.Second
+	defaultDatabaseMaxConnectionLifetime      = 30 * time.Minute
+	defaultDatabaseMaxConnectionIdleTime      = 5 * time.Minute
+	defaultDatabaseHealthCheckPeriod          = 30 * time.Second
 )
 
 var errInvalidConfig = errors.New("invalid configuration")
+
+// Secret contains a server-only configuration value without exposing it
+// through formatting or JSON serialization.
+type Secret struct {
+	value string
+}
+
+// Value returns the secret for the narrow adapter boundary that consumes it.
+// Callers must never log, serialize, or include the result in an error.
+func (secret Secret) Value() string {
+	return secret.value
+}
+
+// IsSet reports whether the environment supplied a non-empty value.
+func (secret Secret) IsSet() bool {
+	return secret.value != ""
+}
+
+// String implements fmt.Stringer with a deliberately non-sensitive value.
+func (secret Secret) String() string {
+	if !secret.IsSet() {
+		return "<unset>"
+	}
+
+	return "<redacted>"
+}
+
+// GoString prevents %#v formatting from revealing the underlying value.
+func (secret Secret) GoString() string {
+	return secret.String()
+}
 
 // Config is the immutable process-level configuration assembled at startup.
 // Secrets remain server-side and callers must never serialize this type.
@@ -45,7 +83,7 @@ type Config struct {
 	AppEnvironment                     string
 	Port                               string
 	AllowedOrigins                     []string
-	GitHubToken                        string
+	GitHubToken                        Secret
 	GitHubAPIBaseURL                   *url.URL
 	GitHubRequestTimeout               time.Duration
 	GitHubMaxConcurrency               int
@@ -63,6 +101,14 @@ type Config struct {
 	RepositoryDiscoveryCacheTTL        time.Duration
 	RepositoryDiscoveryCacheCapacity   int
 	ManifestFileLimit                  int
+	DatabaseURL                        Secret
+	DatabaseMaxConnections             int
+	DatabaseMinConnections             int
+	DatabaseConnectTimeout             time.Duration
+	DatabaseQueryTimeout               time.Duration
+	DatabaseMaxConnectionLifetime      time.Duration
+	DatabaseMaxConnectionIdleTime      time.Duration
+	DatabaseHealthCheckPeriod          time.Duration
 	UseGitHubAPIMock                   bool
 	ReadHeaderTimeout                  time.Duration
 	ReadTimeout                        time.Duration
@@ -260,6 +306,69 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	databaseURL, err := parseDatabaseURL(os.Getenv("DATABASE_URL"))
+	if err != nil {
+		return Config{}, err
+	}
+	databaseMaxConnections, err := parseInt(
+		"DATABASE_MAX_CONNECTIONS",
+		defaultDatabaseMaxConnections,
+		1,
+		100,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	databaseMinConnections, err := parseInt(
+		"DATABASE_MIN_CONNECTIONS",
+		defaultDatabaseMinConnections,
+		0,
+		databaseMaxConnections,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	databaseConnectTimeout, err := parseDuration(
+		"DATABASE_CONNECT_TIMEOUT",
+		defaultDatabaseConnectTimeout,
+		time.Minute,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	databaseQueryTimeout, err := parseDuration(
+		"DATABASE_QUERY_TIMEOUT",
+		defaultDatabaseQueryTimeout,
+		time.Minute,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	databaseMaxConnectionLifetime, err := parseDuration(
+		"DATABASE_MAX_CONNECTION_LIFETIME",
+		defaultDatabaseMaxConnectionLifetime,
+		24*time.Hour,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	databaseMaxConnectionIdleTime, err := parseDuration(
+		"DATABASE_MAX_CONNECTION_IDLE_TIME",
+		defaultDatabaseMaxConnectionIdleTime,
+		24*time.Hour,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	databaseHealthCheckPeriod, err := parseDuration(
+		"DATABASE_HEALTH_CHECK_PERIOD",
+		defaultDatabaseHealthCheckPeriod,
+		time.Hour,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+
 	useGitHubAPIMock, err := parseBool("USE_GITHUB_API_MOCK", false)
 	if err != nil {
 		return Config{}, err
@@ -275,7 +384,7 @@ func Load() (Config, error) {
 		AppEnvironment:                     appEnvironment,
 		Port:                               port,
 		AllowedOrigins:                     allowedOrigins,
-		GitHubToken:                        os.Getenv("GITHUB_TOKEN"),
+		GitHubToken:                        Secret{value: os.Getenv("GITHUB_TOKEN")},
 		GitHubAPIBaseURL:                   gitHubAPIBaseURL,
 		GitHubRequestTimeout:               gitHubRequestTimeout,
 		GitHubMaxConcurrency:               gitHubMaxConcurrency,
@@ -293,6 +402,14 @@ func Load() (Config, error) {
 		RepositoryDiscoveryCacheTTL:        repositoryDiscoveryCacheTTL,
 		RepositoryDiscoveryCacheCapacity:   repositoryDiscoveryCacheCapacity,
 		ManifestFileLimit:                  manifestFileLimit,
+		DatabaseURL:                        Secret{value: databaseURL},
+		DatabaseMaxConnections:             databaseMaxConnections,
+		DatabaseMinConnections:             databaseMinConnections,
+		DatabaseConnectTimeout:             databaseConnectTimeout,
+		DatabaseQueryTimeout:               databaseQueryTimeout,
+		DatabaseMaxConnectionLifetime:      databaseMaxConnectionLifetime,
+		DatabaseMaxConnectionIdleTime:      databaseMaxConnectionIdleTime,
+		DatabaseHealthCheckPeriod:          databaseHealthCheckPeriod,
 		UseGitHubAPIMock:                   useGitHubAPIMock,
 		ReadHeaderTimeout:                  5 * time.Second,
 		ReadTimeout:                        20 * time.Second,
@@ -379,6 +496,42 @@ func parseBaseURL(raw string) (*url.URL, error) {
 	}
 
 	return parsed, nil
+}
+
+func parseDatabaseURL(raw string) (string, error) {
+	if raw == "" {
+		return "", nil
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil ||
+		(parsed.Scheme != "postgres" && parsed.Scheme != "postgresql") ||
+		parsed.Hostname() == "" ||
+		parsed.User == nil ||
+		parsed.User.Username() == "" ||
+		parsed.Path == "" ||
+		parsed.Path == "/" ||
+		parsed.Fragment != "" {
+		return "", configError(
+			"DATABASE_URL",
+			"must be a PostgreSQL URL with credentials, host, and database name",
+		)
+	}
+	if _, hasPassword := parsed.User.Password(); !hasPassword {
+		return "", configError(
+			"DATABASE_URL",
+			"must include a password supplied through the environment",
+		)
+	}
+	sslModes := parsed.Query()["sslmode"]
+	if len(sslModes) != 1 ||
+		(sslModes[0] != "require" && sslModes[0] != "verify-full") {
+		return "", configError(
+			"DATABASE_URL",
+			"must set sslmode=require or sslmode=verify-full",
+		)
+	}
+
+	return raw, nil
 }
 
 func isLoopbackHTTP(parsed *url.URL) bool {
