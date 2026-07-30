@@ -75,6 +75,7 @@ type GitHubIssueSearchResult struct {
 // by GitHub and are represented as unknown rather than absent.
 type GitHubIssueDetailResult struct {
 	Candidate         issue.Candidate
+	Dependencies      []string
 	RepositorySignals []issue.RepositorySignal
 	Activity          issue.ActivityMetrics
 	Comments          []issue.CommentObservation

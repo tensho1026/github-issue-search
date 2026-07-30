@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -66,6 +68,10 @@ func TestGetIssueDetailPostsBoundedGraphQLAndNormalizesResult(t *testing.T) {
 		result.Candidate.Repository.MainLanguage != "Go" ||
 		result.Candidate.Issue.Number != 42 ||
 		result.Candidate.Issue.Comments != 2 ||
+		!slices.Equal(result.Dependencies, []string{
+			"github.com/gin-gonic/gin",
+			"react",
+		}) ||
 		result.RateLimit.Remaining != 4980 ||
 		result.Incomplete {
 		t.Fatalf("GetIssueDetail() result = %+v, requests = %d", result, requests.Load())
@@ -162,6 +168,79 @@ func TestPackageManifestTestSignalIsConservative(t *testing.T) {
 	if state := (graphQLIssueDetailRepository{}).
 		testSignalState(); state != issue.SignalUnknown {
 		t.Fatalf("test signal without manifest = %q", state)
+	}
+}
+
+func TestManifestDependenciesAreNormalizedDeduplicatedAndBounded(
+	t *testing.T,
+) {
+	t.Parallel()
+	packageText := `{
+		"dependencies":{"React":"latest","@scope/pkg":"1.0.0"},
+		"devDependencies":{"react":"latest","vitest":"latest"}
+	}`
+	goText := `module example.com/rocket
+
+require github.com/gin-gonic/gin v1.10.0
+
+require (
+	github.com/redis/go-redis/v9 v9.0.0
+	// github.com/ignored/comment v1.0.0
+)
+`
+	dependencies := (graphQLIssueDetailRepository{
+		PackageManifest: manifestBlob(packageText),
+		GoManifest:      manifestBlob(goText),
+	}).manifestDependencies()
+	want := []string{
+		"@scope/pkg",
+		"github.com/gin-gonic/gin",
+		"github.com/redis/go-redis/v9",
+		"react",
+		"vitest",
+	}
+	if !slices.Equal(dependencies, want) {
+		t.Fatalf("manifest dependencies = %v, want %v", dependencies, want)
+	}
+
+	many := make(map[string]string, issue.MaximumAnalysisDependencies+20)
+	for index := range issue.MaximumAnalysisDependencies + 20 {
+		many[fmt.Sprintf("dependency-%03d", index)] = "latest"
+	}
+	payload, err := json.Marshal(packageManifestPayload{Dependencies: many})
+	if err != nil {
+		t.Fatalf("marshal manifest: %v", err)
+	}
+	bounded := (graphQLIssueDetailRepository{
+		PackageManifest: manifestBlob(string(payload)),
+	}).manifestDependencies()
+	if len(bounded) != issue.MaximumAnalysisDependencies ||
+		bounded[0] != "dependency-000" ||
+		bounded[len(bounded)-1] != "dependency-099" {
+		t.Fatalf("bounded dependencies = %v", bounded)
+	}
+}
+
+func TestManifestDependenciesRejectInvalidBlobs(t *testing.T) {
+	t.Parallel()
+	text := `{"dependencies":{"react":"latest"}}`
+	oversized := &graphQLBlob{
+		TypeName: "Blob",
+		ByteSize: maxManifestBytes + 1,
+		Text:     &text,
+	}
+	if dependencies := (graphQLIssueDetailRepository{
+		PackageManifest: oversized,
+	}).manifestDependencies(); len(dependencies) != 0 {
+		t.Fatalf("dependencies = %v, want empty", dependencies)
+	}
+}
+
+func manifestBlob(text string) *graphQLBlob {
+	return &graphQLBlob{
+		TypeName: "Blob",
+		ByteSize: len(text),
+		Text:     &text,
 	}
 }
 
@@ -425,7 +504,19 @@ func issueDetailFixture(suffix string) string {
       "workflows": {"__typename": "Tree"},
       "testsRoot": {"__typename": "Tree"},
       "testRoot": null,
-      "specsRoot": null
+      "specsRoot": null,
+      "packageManifest": {
+        "__typename": "Blob",
+        "byteSize": 51,
+        "isBinary": false,
+        "text": "{\"dependencies\":{\"react\":\"latest\"}}"
+      },
+      "goManifest": {
+        "__typename": "Blob",
+        "byteSize": 57,
+        "isBinary": false,
+        "text": "module example.com/rocket\n\nrequire github.com/gin-gonic/gin v1.10.0\n"
+      }
     },
     "rateLimit": {
       "limit": 5000,

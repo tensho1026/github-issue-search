@@ -142,6 +142,10 @@ const (
       __typename
       ... on Blob { byteSize isBinary text }
     }
+    goManifest: object(expression: "HEAD:go.mod") {
+      __typename
+      ... on Blob { byteSize isBinary text }
+    }
   }
   rateLimit { limit remaining resetAt }
 }`
@@ -322,6 +326,7 @@ func normalizeGraphQLIssueDetail(
 			Repository: repositorySummary,
 			Issue:      issueSummary,
 		},
+		Dependencies:      repository.manifestDependencies(),
 		RepositorySignals: signals,
 		Activity:          activity,
 		Comments:          repository.Issue.commentObservations(),
@@ -435,6 +440,7 @@ type graphQLIssueDetailRepository struct {
 	TestRoot           *graphQLGitObject         `json:"testRoot"`
 	SpecsRoot          *graphQLGitObject         `json:"specsRoot"`
 	PackageManifest    *graphQLBlob              `json:"packageManifest"`
+	GoManifest         *graphQLBlob              `json:"goManifest"`
 }
 
 func (repository *graphQLIssueDetailRepository) UnmarshalJSON(
@@ -712,18 +718,8 @@ func (repository graphQLIssueDetailRepository) testSignalState() issue.SignalSta
 }
 
 func packageManifestHasTests(manifest *graphQLBlob) bool {
-	if manifest == nil ||
-		manifest.TypeName != "Blob" ||
-		manifest.IsBinary ||
-		manifest.Text == nil ||
-		manifest.ByteSize < 0 ||
-		manifest.ByteSize > maxManifestBytes {
-		return false
-	}
-	var payload struct {
-		Scripts map[string]string `json:"scripts"`
-	}
-	if err := json.Unmarshal([]byte(*manifest.Text), &payload); err != nil {
+	payload, valid := decodePackageManifest(manifest)
+	if !valid {
 		return false
 	}
 	for name, command := range payload.Scripts {
@@ -735,6 +731,125 @@ func packageManifestHasTests(manifest *graphQLBlob) bool {
 		}
 	}
 	return false
+}
+
+type packageManifestPayload struct {
+	Scripts              map[string]string `json:"scripts"`
+	Dependencies         map[string]string `json:"dependencies"`
+	DevDependencies      map[string]string `json:"devDependencies"`
+	PeerDependencies     map[string]string `json:"peerDependencies"`
+	OptionalDependencies map[string]string `json:"optionalDependencies"`
+}
+
+func decodePackageManifest(
+	manifest *graphQLBlob,
+) (packageManifestPayload, bool) {
+	text, valid := manifestText(manifest)
+	if !valid {
+		return packageManifestPayload{}, false
+	}
+	var payload packageManifestPayload
+	if err := json.Unmarshal([]byte(text), &payload); err != nil {
+		return packageManifestPayload{}, false
+	}
+	return payload, true
+}
+
+func manifestText(manifest *graphQLBlob) (string, bool) {
+	if manifest == nil ||
+		manifest.TypeName != "Blob" ||
+		manifest.IsBinary ||
+		manifest.Text == nil ||
+		manifest.ByteSize < 0 ||
+		manifest.ByteSize > maxManifestBytes ||
+		len(*manifest.Text) > maxManifestBytes {
+		return "", false
+	}
+	return *manifest.Text, true
+}
+
+func (repository graphQLIssueDetailRepository) manifestDependencies() []string {
+	found := make(map[string]struct{}, issue.MaximumAnalysisDependencies)
+	if payload, valid := decodePackageManifest(
+		repository.PackageManifest,
+	); valid {
+		for _, dependencies := range []map[string]string{
+			payload.Dependencies,
+			payload.DevDependencies,
+			payload.PeerDependencies,
+			payload.OptionalDependencies,
+		} {
+			for _, dependency := range sortedManifestDependencyKeys(
+				dependencies,
+			) {
+				addManifestDependency(found, dependency)
+			}
+		}
+	}
+	if content, valid := manifestText(repository.GoManifest); valid {
+		for _, dependency := range parseGoModDependencies(content) {
+			addManifestDependency(found, dependency)
+		}
+	}
+	dependencies := make([]string, 0, len(found))
+	for dependency := range found {
+		dependencies = append(dependencies, dependency)
+	}
+	slices.Sort(dependencies)
+	if len(dependencies) > issue.MaximumAnalysisDependencies {
+		dependencies = dependencies[:issue.MaximumAnalysisDependencies]
+	}
+	return dependencies
+}
+
+func sortedManifestDependencyKeys(dependencies map[string]string) []string {
+	keys := make([]string, 0, len(dependencies))
+	for dependency := range dependencies {
+		keys = append(keys, dependency)
+	}
+	slices.Sort(keys)
+	return keys
+}
+
+func addManifestDependency(found map[string]struct{}, raw string) {
+	dependency := strings.TrimSpace(strings.ToLower(raw))
+	if dependency == "" || len(dependency) > 256 {
+		return
+	}
+	if _, exists := found[dependency]; !exists &&
+		len(found) >= issue.MaximumAnalysisDependencies {
+		return
+	}
+	found[dependency] = struct{}{}
+}
+
+func parseGoModDependencies(content string) []string {
+	dependencies := make([]string, 0)
+	inRequireBlock := false
+	for _, rawLine := range strings.Split(content, "\n") {
+		line := strings.TrimSpace(rawLine)
+		switch {
+		case line == "require (":
+			inRequireBlock = true
+			continue
+		case inRequireBlock && line == ")":
+			inRequireBlock = false
+			continue
+		case strings.HasPrefix(line, "require "):
+			line = strings.TrimSpace(strings.TrimPrefix(line, "require "))
+		case !inRequireBlock:
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 || strings.HasPrefix(fields[0], "//") {
+			continue
+		}
+		dependencies = append(dependencies, fields[0])
+		if len(dependencies) >= issue.MaximumAnalysisDependencies {
+			break
+		}
+	}
+	return dependencies
 }
 
 func repositorySignal(

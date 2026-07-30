@@ -57,6 +57,10 @@ func cloneIssueDetailResult(
 		[]string(nil),
 		entry.Candidate.Issue.Assignees...,
 	)
+	cloned.Dependencies = append(
+		make([]string, 0, len(entry.Dependencies)),
+		entry.Dependencies...,
+	)
 	cloned.RepositorySignals = make(
 		[]issue.RepositorySignal,
 		len(entry.RepositorySignals),

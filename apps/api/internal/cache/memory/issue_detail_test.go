@@ -26,6 +26,7 @@ func TestIssueDetailCacheReturnsIndependentCopies(t *testing.T) {
 				RuleID: "repository.signal.readme",
 			}},
 		}},
+		Dependencies: []string{"github.com/gin-gonic/gin"},
 		Comments: []issue.CommentObservation{{
 			AuthorLogin: "reader",
 		}},
@@ -41,6 +42,7 @@ func TestIssueDetailCacheReturnsIndependentCopies(t *testing.T) {
 	first.Candidate.Issue.Labels[0] = "mutated"
 	first.Candidate.Issue.Assignees[0] = "mutated"
 	first.RepositorySignals[0].Evidence[0].RuleID = "mutated"
+	first.Dependencies[0] = "mutated"
 	first.Comments[0].AuthorLogin = "mutated"
 
 	second, found, err := cache.Get(context.Background(), "owner/repo#1")
@@ -51,6 +53,7 @@ func TestIssueDetailCacheReturnsIndependentCopies(t *testing.T) {
 		second.Candidate.Issue.Assignees[0] != "contributor" ||
 		second.RepositorySignals[0].Evidence[0].RuleID !=
 			"repository.signal.readme" ||
+		second.Dependencies[0] != "github.com/gin-gonic/gin" ||
 		second.Comments[0].AuthorLogin != "reader" {
 		t.Fatalf("cached detail was mutated = %+v", second)
 	}
