@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { BrowserRouter, Route, Routes } from "react-router";
 
 import { AppShell } from "../components/layout/AppShell";
@@ -9,6 +9,20 @@ const HomePage = lazy(async () => {
   const module = await import("../pages/HomePage");
   return { default: module.HomePage };
 });
+
+const ProfilePage = lazy(async () => {
+  const module = await import("../pages/ProfilePage");
+  return { default: module.ProfilePage };
+});
+
+const NotFoundPage = lazy(async () => {
+  const module = await import("../pages/NotFoundPage");
+  return { default: module.NotFoundPage };
+});
+
+function LazyPage({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<RouteFallback />}>{children}</Suspense>;
+}
 
 function RouteFallback() {
   return (
@@ -31,11 +45,27 @@ export function AppRoutes() {
         <Route element={<AppShell />}>
           <Route
             element={
-              <Suspense fallback={<RouteFallback />}>
+              <LazyPage>
                 <HomePage />
-              </Suspense>
+              </LazyPage>
             }
             path={appRoutes.home}
+          />
+          <Route
+            element={
+              <LazyPage>
+                <ProfilePage />
+              </LazyPage>
+            }
+            path={appRoutes.profilePattern}
+          />
+          <Route
+            element={
+              <LazyPage>
+                <NotFoundPage />
+              </LazyPage>
+            }
+            path="*"
           />
         </Route>
       </Routes>

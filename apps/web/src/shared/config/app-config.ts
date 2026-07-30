@@ -42,6 +42,12 @@ export const appRoutes = Object.freeze({
   },
 });
 
+export const externalLinks = Object.freeze({
+  gitHubProfile(username: string): string {
+    return `https://github.com/${encodeURIComponent(username)}`;
+  },
+});
+
 export const profileEndpoints = Object.freeze({
   analysis(username: string): `/${string}` {
     return `/api/github/users/${encodeURIComponent(username)}/profile-analysis`;
