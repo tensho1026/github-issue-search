@@ -3,6 +3,28 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (
+            id.includes("/node_modules/react-hook-form/") ||
+            id.endsWith("/features/profile/components/ProfileSearchForm.tsx")
+          ) {
+            return "form-runtime";
+          }
+          if (
+            id.includes("/src/components/ui/") ||
+            id.includes("/src/shared/") ||
+            id.includes("/src/features/issue-search/model/") ||
+            id.includes("/node_modules/@tanstack/")
+          ) {
+            return "app-shared";
+          }
+        },
+      },
+    },
+  },
   plugins: [react(), tailwindcss()],
   server: {
     host: "127.0.0.1",
