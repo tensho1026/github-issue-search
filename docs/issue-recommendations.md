@@ -85,12 +85,12 @@ and unsupported keys, and deduplicates case-insensitively.
 
 The bounded detail query checks:
 
-- `README.md` and `readme.md`;
-- `CONTRIBUTING.md` and `.github/CONTRIBUTING.md`;
+- common README names in the root, `.github`, and `docs`;
+- common CONTRIBUTING names in the root, `.github`, and `docs`;
 - `.github/workflows`;
 - `tests`, `test`, and `spec`;
 - the bounded root `package.json` test scripts;
-- `CODE_OF_CONDUCT.md` and `.github/CODE_OF_CONDUCT.md`.
+- `CODE_OF_CONDUCT.md` in the root, `.github`, and `docs`.
 
 Each result is independent. A package manifest is proof only when it defines a
 non-empty `test` or `test:*` script. Because ecosystems such as Go colocate

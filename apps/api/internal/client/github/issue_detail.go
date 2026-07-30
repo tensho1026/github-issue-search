@@ -120,11 +120,20 @@ const (
       assignees(first: 10) { nodes { login } }
     }
     readmeRoot: object(expression: "HEAD:README.md") { __typename }
+    readmePlain: object(expression: "HEAD:README") { __typename }
     readmeLower: object(expression: "HEAD:readme.md") { __typename }
+    readmeRST: object(expression: "HEAD:README.rst") { __typename }
+    readmeText: object(expression: "HEAD:README.txt") { __typename }
+    readmeGitHub: object(expression: "HEAD:.github/README.md") { __typename }
+    readmeDocs: object(expression: "HEAD:docs/README.md") { __typename }
     contributingRoot: object(expression: "HEAD:CONTRIBUTING.md") { __typename }
+    contributingPlain: object(expression: "HEAD:CONTRIBUTING") { __typename }
+    contributingRST: object(expression: "HEAD:CONTRIBUTING.rst") { __typename }
     contributingGitHub: object(expression: "HEAD:.github/CONTRIBUTING.md") { __typename }
+    contributingDocs: object(expression: "HEAD:docs/CONTRIBUTING.md") { __typename }
     conductRoot: object(expression: "HEAD:CODE_OF_CONDUCT.md") { __typename }
     conductGitHub: object(expression: "HEAD:.github/CODE_OF_CONDUCT.md") { __typename }
+    conductDocs: object(expression: "HEAD:docs/CODE_OF_CONDUCT.md") { __typename }
     workflows: object(expression: "HEAD:.github/workflows") { __typename }
     testsRoot: object(expression: "HEAD:tests") { __typename }
     testRoot: object(expression: "HEAD:test") { __typename }
@@ -407,11 +416,20 @@ type graphQLIssueDetailRepository struct {
 	Issues             graphQLDetailIssueHistory `json:"issues"`
 	PullRequests       graphQLPullRequestHistory `json:"pullRequests"`
 	ReadmeRoot         *graphQLGitObject         `json:"readmeRoot"`
+	ReadmePlain        *graphQLGitObject         `json:"readmePlain"`
 	ReadmeLower        *graphQLGitObject         `json:"readmeLower"`
+	ReadmeRST          *graphQLGitObject         `json:"readmeRST"`
+	ReadmeText         *graphQLGitObject         `json:"readmeText"`
+	ReadmeGitHub       *graphQLGitObject         `json:"readmeGitHub"`
+	ReadmeDocs         *graphQLGitObject         `json:"readmeDocs"`
 	ContributingRoot   *graphQLGitObject         `json:"contributingRoot"`
+	ContributingPlain  *graphQLGitObject         `json:"contributingPlain"`
+	ContributingRST    *graphQLGitObject         `json:"contributingRST"`
 	ContributingGitHub *graphQLGitObject         `json:"contributingGitHub"`
+	ContributingDocs   *graphQLGitObject         `json:"contributingDocs"`
 	ConductRoot        *graphQLGitObject         `json:"conductRoot"`
 	ConductGitHub      *graphQLGitObject         `json:"conductGitHub"`
+	ConductDocs        *graphQLGitObject         `json:"conductDocs"`
 	Workflows          *graphQLGitObject         `json:"workflows"`
 	TestsRoot          *graphQLGitObject         `json:"testsRoot"`
 	TestRoot           *graphQLGitObject         `json:"testRoot"`
@@ -648,11 +666,19 @@ func (repository graphQLIssueDetailRepository) repositorySignals(
 	return []issue.RepositorySignal{
 		repositorySignal(issue.RepositoryREADME, state(
 			repository.ReadmeRoot,
+			repository.ReadmePlain,
 			repository.ReadmeLower,
+			repository.ReadmeRST,
+			repository.ReadmeText,
+			repository.ReadmeGitHub,
+			repository.ReadmeDocs,
 		)),
 		repositorySignal(issue.RepositoryContributing, state(
 			repository.ContributingRoot,
+			repository.ContributingPlain,
+			repository.ContributingRST,
 			repository.ContributingGitHub,
+			repository.ContributingDocs,
 		)),
 		repositorySignal(issue.RepositoryCI, state(repository.Workflows)),
 		repositorySignal(
@@ -662,6 +688,7 @@ func (repository graphQLIssueDetailRepository) repositorySignals(
 		repositorySignal(issue.RepositoryCodeOfConduct, state(
 			repository.ConductRoot,
 			repository.ConductGitHub,
+			repository.ConductDocs,
 		)),
 	}
 }
