@@ -53,7 +53,9 @@ export default defineConfig({
       cwd: repositoryRoot,
       env: {
         ALLOWED_ORIGINS: webBaseURL,
+        APP_ENV: "test",
         PORT: "18080",
+        USE_GITHUB_API_MOCK: "true",
       },
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,

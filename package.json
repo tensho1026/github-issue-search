@@ -22,7 +22,7 @@
     "coverage:web": "pnpm --filter @issuescout/web test:coverage && node scripts/ci/check-web-coverage.mjs",
     "dev:api": "go -C apps/api run ./cmd/api",
     "dev:web": "pnpm --filter @issuescout/web dev",
-    "e2e": "pnpm run build && playwright test --config apps/web/playwright.config.ts",
+    "e2e": "pnpm run build:api && node scripts/test/build-e2e.mjs && playwright test --config apps/web/playwright.config.ts",
     "format": "prettier --write . && gofmt -w apps/api",
     "format:check": "prettier --check . && test -z \"$(gofmt -l apps/api)\"",
     "lint": "pnpm run lint:web && pnpm run lint:api && pnpm run architecture:check",

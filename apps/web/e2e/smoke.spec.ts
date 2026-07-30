@@ -107,6 +107,74 @@ test("analyzes a valid username through the production profile route", async ({
   await expect(languageOrder).toContainText("A–Z");
 });
 
+test("completes profile, search, and detail through the built API", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await page.getByRole("textbox", { name: "GitHub username" }).fill("octocat");
+  await page.getByRole("button", { name: "Analyze profile" }).click();
+
+  await expect(page).toHaveURL("/profiles/octocat");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "The Octocat" }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Find matching issues" }).click();
+  await expect(page).toHaveURL(/\/search\?username=octocat/);
+
+  await page.getByRole("button", { name: "Find ranked issues" }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Improve keyboard navigation in the command palette",
+    }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "View recommendation details" }).click();
+
+  const detailHeading = page.getByRole("heading", {
+    level: 1,
+    name: "Improve keyboard navigation in the command palette",
+  });
+  await expect(detailHeading).toBeVisible();
+  await expect(detailHeading).toBeFocused();
+  await expect(
+    page.getByRole("heading", { name: "Contributor readiness" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Open original GitHub issue" }),
+  ).toHaveAttribute(
+    "href",
+    "https://github.com/octocat/typed-service/issues/42",
+  );
+});
+
+test("renders built API not-found and rate-limit states", async ({ page }) => {
+  await page.goto("/profiles/missing-user");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Profile not found" }),
+  ).toBeVisible();
+
+  await page.goto("/profiles/rate-limited");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "GitHub needs a breather" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Retry analysis" }),
+  ).toBeVisible();
+});
+
+test("renders an explicit empty search from the built API", async ({
+  page,
+}) => {
+  await page.goto("/search?username=no-results&search=1");
+
+  await expect(
+    page.getByRole("heading", { name: "No eligible issues found" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Broaden the filters" }),
+  ).toBeVisible();
+});
+
 test("rejects malformed usernames without making an API request", async ({
   page,
 }) => {
