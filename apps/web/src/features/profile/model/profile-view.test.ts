@@ -9,16 +9,16 @@ import {
   profileTechnologyTags,
   sortLanguages,
 } from "./profile-view";
+import { profileAnalysisFixture } from "../../../test/profile-fixtures";
 
 const analysis: ProfileAnalysis = {
+  ...profileAnalysisFixture.data,
   frameworks: ["React", "react", "Gin"],
   languages: [
     { name: "TypeScript", percentage: 70 },
     { name: "Go", percentage: 30 },
   ],
   repositoriesAnalyzed: 2,
-  username: "octocat",
-  warnings: [],
 };
 
 describe("profile view selectors", () => {

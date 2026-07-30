@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/profile"
@@ -18,6 +19,7 @@ import (
 
 func TestGitHubProfileAnalysisHandlerGet(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	now := time.Date(2026, time.July, 30, 12, 0, 0, 0, time.UTC)
 	analyze := &analyzeGitHubProfileStub{
 		output: usecase.AnalyzeGitHubProfileOutput{
 			Analysis: profile.Analysis{
@@ -26,7 +28,101 @@ func TestGitHubProfileAnalysisHandlerGet(t *testing.T) {
 					{Name: "Go", Percentage: 60},
 					{Name: "TypeScript", Percentage: 40},
 				},
-				Frameworks:           []string{"Gin", "React"},
+				Frameworks: []string{"Gin", "React"},
+				RecentTechnologies: []profile.RecentTechnology{{
+					Name:            "Go",
+					Kind:            profile.TechnologyLanguage,
+					LastUsedAt:      now.Add(-time.Hour),
+					RepositoryCount: 2,
+					RepositorySources: []profile.RepositorySource{
+						profile.RepositoryContributed,
+						profile.RepositoryOwned,
+					},
+					Confidence: profile.ConfidenceMedium,
+				}},
+				Contributions: profile.ContributionAnalysis{
+					WindowDays: profile.AnalysisWindowDays,
+					Commits: profile.CountMetric{
+						Value:  10,
+						Status: profile.EvidenceSampled,
+					},
+					IssuesOpened: profile.CountMetric{
+						Value:  2,
+						Status: profile.EvidenceExact,
+					},
+					PullRequestsOpened: profile.CountMetric{
+						Value:  5,
+						Status: profile.EvidenceExact,
+					},
+					PullRequestReviews: profile.CountMetric{
+						Value:  3,
+						Status: profile.EvidenceSampled,
+					},
+					RepositoriesTouched: profile.CountMetric{
+						Value:  2,
+						Status: profile.EvidenceExact,
+					},
+				},
+				OSSExperience: profile.OSSExperience{
+					Level:      "active",
+					Confidence: profile.ConfidenceHigh,
+					PublicOnly: true,
+					Evidence: []profile.TechnologyEvidence{{
+						Kind:   "authored_pull_requests",
+						Value:  5,
+						Status: profile.EvidenceExact,
+					}},
+				},
+				RepositoryEvidence: profile.RepositoryEvidence{
+					Owned: profile.RepositorySample{
+						Status:         profile.EvidenceSampled,
+						Observed:       2,
+						Total:          profileTotal(5),
+						Limit:          20,
+						ActiveInWindow: 2,
+						PrimaryTechnologies: []profile.LanguageShare{{
+							Name:       "Go",
+							Percentage: 60,
+						}},
+					},
+					Contributed: profile.RepositorySample{
+						Status:         profile.EvidenceExact,
+						Observed:       2,
+						Total:          profileTotal(2),
+						Limit:          20,
+						ActiveInWindow: 2,
+					},
+					Starred: profile.RepositorySample{
+						Status:   profile.EvidenceSampled,
+						Observed: 1,
+						Limit:    20,
+					},
+					Forked: profile.RepositorySample{
+						Status:   profile.EvidenceExact,
+						Observed: 0,
+						Total:    profileTotal(0),
+						Limit:    20,
+					},
+				},
+				Proficiency: []profile.TechnologyProficiency{{
+					Name:       "Go",
+					Kind:       profile.TechnologyLanguage,
+					Level:      4,
+					Label:      "advanced",
+					Score:      65,
+					Confidence: profile.ConfidenceMedium,
+					Evidence: []profile.TechnologyEvidence{{
+						Kind:   "owned_repositories",
+						Value:  2,
+						Status: profile.EvidenceSampled,
+					}},
+				}},
+				Window: profile.AnalysisWindow{
+					From:       now.AddDate(0, 0, -profile.AnalysisWindowDays),
+					To:         now,
+					Days:       profile.AnalysisWindowDays,
+					PublicOnly: true,
+				},
 				RepositoriesAnalyzed: 2,
 				Warnings: []profile.Warning{{
 					Code:       "manifest_data_unavailable",
@@ -58,6 +154,15 @@ func TestGitHubProfileAnalysisHandlerGet(t *testing.T) {
 		`"username":"octocat"`,
 		`"name":"Go","percentage":60`,
 		`"frameworks":["Gin","React"]`,
+		`"recentTechnologies":[{"name":"Go","kind":"language"`,
+		`"repositorySources":["contributed","owned"]`,
+		`"commits":{"value":10,"status":"sampled"}`,
+		`"pullRequestsOpened":{"value":5,"status":"exact"}`,
+		`"ossExperience":{"level":"active","confidence":"high","publicOnly":true`,
+		`"owned":{"status":"sampled","observed":2,"total":5`,
+		`"starred":{"status":"sampled","observed":1,"total":null`,
+		`"proficiency":[{"name":"Go","kind":"language","level":4,"label":"advanced"`,
+		`"analysisWindow":{"from":"2025-07-30T12:00:00Z","to":"2026-07-30T12:00:00Z","days":365,"publicOnly":true}`,
 		`"repositoriesAnalyzed":2`,
 		`"code":"manifest_data_unavailable"`,
 		`"repository":"octocat/private"`,
@@ -138,3 +243,7 @@ func (stub *analyzeGitHubProfileStub) Execute(
 }
 
 var _ usecase.AnalyzeGitHubProfile = (*analyzeGitHubProfileStub)(nil)
+
+func profileTotal(value int) *int {
+	return &value
+}
