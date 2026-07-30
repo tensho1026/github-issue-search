@@ -1,5 +1,22 @@
 export const queryKeys = Object.freeze({
   issues: Object.freeze({
+    detail(
+      owner: string,
+      repository: string,
+      issueNumber: number,
+      skills: readonly string[],
+    ) {
+      return [
+        "issues",
+        "detail",
+        owner.toLowerCase(),
+        repository.toLowerCase(),
+        issueNumber,
+        [...skills].sort((left, right) =>
+          left.localeCompare(right, "en", { sensitivity: "base" }),
+        ),
+      ] as const;
+    },
     root: ["issues"] as const,
     search(canonicalSearch: string) {
       return ["issues", "search", canonicalSearch] as const;
