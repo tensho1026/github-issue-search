@@ -178,10 +178,11 @@ func (usecase *searchRepositories) loadRepositoryDiscovery(
 		return port.RepositoryDiscoveryCacheEntry{}, err
 	}
 
+	now := usecase.now().UTC()
 	candidates := prefilterDiscoveryCandidates(
 		searchResult.Candidates,
 		criteria,
-		usecase.now().UTC(),
+		now,
 	)
 	if len(candidates) > usecase.enrichmentLimit {
 		candidates = candidates[:usecase.enrichmentLimit]
@@ -224,7 +225,7 @@ func (usecase *searchRepositories) loadRepositoryDiscovery(
 			candidate,
 			evidence,
 			criteria.Technologies(),
-			usecase.now(),
+			now,
 		)
 		if matchesAnalyzedDiscovery(result, criteria) {
 			results = append(results, result)

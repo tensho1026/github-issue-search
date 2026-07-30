@@ -246,6 +246,18 @@ func TestRepositoryDiscoveryHandlerRejectsInvalidRequests(t *testing.T) {
 			body:        `{"unexpected":true}`,
 		},
 		{
+			name:        "null body",
+			target:      "/api/repositories/search",
+			contentType: "application/json",
+			body:        `null`,
+		},
+		{
+			name:        "null field",
+			target:      "/api/repositories/search",
+			contentType: "application/json",
+			body:        `{"languages":null}`,
+		},
+		{
 			name:        "trailing JSON",
 			target:      "/api/repositories/search",
 			contentType: "application/json",
@@ -259,6 +271,12 @@ func TestRepositoryDiscoveryHandlerRejectsInvalidRequests(t *testing.T) {
 		},
 		{
 			name:        "oversized page",
+			target:      "/api/repositories/search?page=51",
+			contentType: "application/json",
+			body:        `{}`,
+		},
+		{
+			name:        "oversized page size",
 			target:      "/api/repositories/search?perPage=51",
 			contentType: "application/json",
 			body:        `{}`,

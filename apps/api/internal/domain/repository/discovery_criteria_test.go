@@ -102,6 +102,9 @@ func TestNewDiscoveryPaginationBounds(t *testing.T) {
 	if _, err := NewDiscoveryPagination(0, 20); err == nil {
 		t.Fatal("NewDiscoveryPagination(page=0) error = nil")
 	}
+	if _, err := NewDiscoveryPagination(MaximumDiscoveryPage+1, 20); err == nil {
+		t.Fatal("NewDiscoveryPagination(oversized page) error = nil")
+	}
 	if _, err := NewDiscoveryPagination(1, MaximumDiscoveryPageSize+1); err == nil {
 		t.Fatal("NewDiscoveryPagination(oversized) error = nil")
 	}

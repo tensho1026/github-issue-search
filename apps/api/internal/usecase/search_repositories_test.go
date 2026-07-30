@@ -64,7 +64,11 @@ func TestSearchRepositoriesFiltersEnrichesSortsPaginatesAndCaches(
 	if !ok {
 		t.Fatalf("NewSearchRepositories() type = %T", contract)
 	}
-	implementation.now = func() time.Time { return now }
+	nowCalls := 0
+	implementation.now = func() time.Time {
+		nowCalls++
+		return now
+	}
 	hasJapanese := true
 	minimumStars := 10
 	criteria, err := repository.NewDiscoveryCriteria(
@@ -114,12 +118,16 @@ func TestSearchRepositoriesFiltersEnrichesSortsPaginatesAndCaches(
 	if err != nil {
 		t.Fatalf("second Execute() error = %v", err)
 	}
-	if !second.CacheHit || searcher.calls != 1 || enricher.calls != 1 {
+	if !second.CacheHit ||
+		searcher.calls != 1 ||
+		enricher.calls != 1 ||
+		nowCalls != 1 {
 		t.Fatalf(
-			"cache hit = %t, search calls = %d, enrichment calls = %d",
+			"cache hit = %t, search calls = %d, enrichment calls = %d, now calls = %d",
 			second.CacheHit,
 			searcher.calls,
 			enricher.calls,
+			nowCalls,
 		)
 	}
 }

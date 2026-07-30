@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -139,14 +140,26 @@ func decodeRepositoryDiscoveryRequest(
 		maxRepositoryDiscoveryRequestBytes,
 	)
 	defer body.Close()
-	decoder := json.NewDecoder(body)
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		return repositoryDiscoveryRequest{}, fmt.Errorf(
+			"read repository discovery request: %w",
+			err,
+		)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 
-	var request repositoryDiscoveryRequest
+	var request *repositoryDiscoveryRequest
 	if err := decoder.Decode(&request); err != nil {
 		return repositoryDiscoveryRequest{}, fmt.Errorf(
 			"decode repository discovery request: %w",
 			err,
+		)
+	}
+	if request == nil {
+		return repositoryDiscoveryRequest{}, fmt.Errorf(
+			"repository discovery request must be a JSON object",
 		)
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
@@ -160,7 +173,22 @@ func decodeRepositoryDiscoveryRequest(
 			err,
 		)
 	}
-	return request, nil
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return repositoryDiscoveryRequest{}, fmt.Errorf(
+			"inspect repository discovery request: %w",
+			err,
+		)
+	}
+	for field, value := range fields {
+		if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			return repositoryDiscoveryRequest{}, fmt.Errorf(
+				"repository discovery field %q cannot be null",
+				field,
+			)
+		}
+	}
+	return *request, nil
 }
 
 func parseRepositoryDiscoveryPagination(

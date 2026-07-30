@@ -24,6 +24,7 @@ const (
 	MaximumDiscoveryUpdatedWithinDays = 3650
 	MaximumDiscoveryCandidateResults  = 50
 	MaximumDiscoveryEnrichmentResults = 20
+	MaximumDiscoveryPage              = 50
 	MaximumDiscoveryPageSize          = 50
 	MaximumDiscoveryCountFilter       = 10_000_000
 )
@@ -452,10 +453,11 @@ type DiscoveryPagination struct {
 }
 
 func NewDiscoveryPagination(page, perPage int) (DiscoveryPagination, error) {
-	if page < 1 {
+	if page < 1 || page > MaximumDiscoveryPage {
 		return DiscoveryPagination{}, fmt.Errorf(
-			"%w: page must be at least 1",
+			"%w: page must be between 1 and %d",
 			ErrInvalidDiscoveryCriteria,
+			MaximumDiscoveryPage,
 		)
 	}
 	if perPage < 1 || perPage > MaximumDiscoveryPageSize {

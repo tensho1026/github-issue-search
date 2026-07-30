@@ -49,7 +49,7 @@ analysis and is excluded from the canonical cache key.
 | Open issues        | 0–unbounded | Each explicit bound is 0–10,000,000 |
 | Updated within     | 365 days    | 1–3,650 days                        |
 | Maximum difficulty | unset       | 1–5                                 |
-| Minimum readiness  | unset       | `needs_work`, `promising`, `ready`  |
+| Minimum readiness  | 0           | Inclusive score from 0–100          |
 | Japanese README    | unset       | `true` or `false`                   |
 | Fork policy        | `exclude`   | `exclude`, `include`, `only`        |
 | Exclude archived   | `true`      | `true` or `false`                   |
@@ -63,10 +63,10 @@ identifiers and categories use allowlists.
 
 ## Classification and evidence
 
-Category classification follows one deterministic priority:
-documentation, security, education, framework, data, infrastructure, tooling,
-application, then library. Topics and bounded README text are matched as
-complete normalized technology terms rather than arbitrary substrings.
+Category classification follows one deterministic priority: security, data,
+infrastructure, documentation, education, framework, library, tooling, then
+application. Topics and bounded README text are matched as complete normalized
+technology terms rather than arbitrary substrings.
 
 Japanese README evidence reports:
 

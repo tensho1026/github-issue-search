@@ -23,7 +23,7 @@ Content-Type: application/json
   "maximumOpenIssues": 500,
   "updatedWithinDays": 180,
   "maximumDifficulty": 3,
-  "minimumReadiness": "promising",
+  "minimumReadiness": 50,
   "forkPolicy": "exclude",
   "excludeArchived": true
 }
