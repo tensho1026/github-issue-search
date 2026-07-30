@@ -159,7 +159,7 @@ Measured gzip sizes on 2026-07-30:
 | ----------------------------------------------- | -------------: | ---------: |
 | UI system before landing/profile feature routes |     123.83 KiB | within cap |
 | Landing and complete profile journey            |     160.84 KiB | 117.62 KiB |
-| Profile plus ranked issue search journey        |     175.24 KiB | 118.30 KiB |
+| Profile plus ranked issue search journey        |     175.35 KiB | 118.32 KiB |
 | Enforced maximum                                |     180.00 KiB | 140.00 KiB |
 
 Run `pnpm run build:web && pnpm run bundle:check` after frontend dependency or
