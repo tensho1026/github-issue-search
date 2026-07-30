@@ -27,6 +27,11 @@ describe("IssueSearchForm", () => {
     await user.click(screen.getByRole("checkbox", { name: "React" }));
     await user.keyboard("{Escape}");
 
+    await user.click(screen.getByRole("button", { name: "Issue labels" }));
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+    await user.click(screen.getByRole("checkbox", { name: "bug" }));
+    await user.keyboard("{Escape}");
+
     await user.clear(
       screen.getByRole("spinbutton", { name: "Minimum repository stars" }),
     );
@@ -45,21 +50,42 @@ describe("IssueSearchForm", () => {
       screen.getByRole("slider", { name: "Maximum difficulty" }),
       { target: { value: "4" } },
     );
+    const effort = screen.getByRole("combobox", { name: "Available time" });
+    effort.focus();
+    await user.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}{Enter}");
     await user.click(
       screen.getByRole("checkbox", { name: /Include documentation/ }),
     );
+    await user.click(
+      screen.getByRole("checkbox", { name: /Include English issues/ }),
+    );
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: /Exclude archived repositories/,
+      }),
+    );
+    const pageSize = screen.getByRole("combobox", {
+      name: "Results per page",
+    });
+    pageSize.focus();
+    await user.keyboard("{ArrowDown}{Home}{Enter}");
     await user.click(
       screen.getByRole("button", { name: "Find ranked issues" }),
     );
 
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
+        excludeArchived: false,
         frameworks: ["React"],
         includeDocumentation: true,
+        includeEnglish: false,
+        labels: ["bug"],
         languages: ["Go"],
         maximumDifficulty: 4,
+        maximumEffort: "half_day",
         minimumStars: 25,
         page: 1,
+        perPage: 10,
         updatedWithinDays: 90,
         username: "OctoCat",
       }),
