@@ -32,8 +32,8 @@ Change detection avoids unrelated expensive work, but `CI required` always runs.
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
 | Repository quality | Prettier, gofmt, architecture dependencies, actionlint, workflow policy, ShellCheck, Markdown, Conventional Commits, PR template |
 | Frontend           | Type-aware ESLint, strict TypeScript, Vitest coverage, production build, gzip bundle budget                                      |
-| Backend            | golangci-lint, race detector, atomic coverage, production build                                                                  |
-| API contracts      | Redocly OpenAPI lint and bidirectional Gin route drift                                                                           |
+| Backend            | golangci-lint, race detector, atomic coverage, bounded fuzzing, performance budgets, production build                            |
+| API contracts      | Redocly OpenAPI lint, JSON Schema fixtures, generated type drift, and bidirectional Gin route drift                              |
 | Release artifacts  | Cross-compiled API and static web archives, checksums, manifests, packaged smoke test                                            |
 | Documentation      | markdownlint across repository-owned Markdown                                                                                    |
 | End-to-end         | Production Vite preview and compiled Go API in Chromium                                                                          |
@@ -58,6 +58,8 @@ Run the stricter CI gates with:
 
 ```sh
 pnpm run coverage:api
+pnpm run fuzz:api
+pnpm run performance:api
 pnpm run coverage:web
 pnpm run bundle:check
 pnpm run contracts:check
@@ -74,6 +76,8 @@ pnpm run e2e
 
 - API statement coverage: at least 82%;
 - web statements, branches, functions, and lines: at least 70%;
+- bounded analysis: at most 5 ms, 256 KiB, and 200 allocations per operation;
+- recommendation scoring: at most 1 ms, 128 KiB, and 1,000 allocations per operation;
 - largest JavaScript asset: no more than 140 KiB gzip;
 - all JavaScript and CSS assets: no more than 180 KiB gzip.
 

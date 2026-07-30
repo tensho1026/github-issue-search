@@ -184,6 +184,10 @@ pnpm run bundle:check
 pnpm run e2e
 ```
 
-The E2E journey uses the production Vite build and compiled Go API. Profile and
-issue-search responses are intercepted with contract-shaped fixtures so
-browser behavior is deterministic and does not consume GitHub rate limits.
+The E2E journey uses the production Vite build and compiled Go API with
+`APP_ENV=test` and the deterministic GitHub port adapter. The primary
+profile → search → detail journey therefore crosses the real browser, HTTP,
+handler, usecase, cache, and response-mapping boundaries without live GitHub
+traffic. Focused browser-boundary tests still intercept selected requests with
+the shared contract fixtures when they need exact pagination or unsafe-content
+payloads.
