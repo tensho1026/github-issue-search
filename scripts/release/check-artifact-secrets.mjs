@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -54,11 +54,10 @@ try {
         );
       }
 
-      const fileSize = (await stat(filename)).size;
-      if (fileSize > 100 * 1024 * 1024) {
+      const contents = await readFile(filename);
+      if (contents.length > 100 * 1024 * 1024) {
         throw new Error(`${archive} contains an unexpectedly large file`);
       }
-      const contents = await readFile(filename);
       const text = contents.toString("latin1");
       if (secretPatterns.some((pattern) => pattern.test(text))) {
         throw new Error(
