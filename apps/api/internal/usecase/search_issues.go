@@ -36,16 +36,17 @@ type SearchIssuesPagination struct {
 // SearchIssuesOutput retains operational metadata without exposing GitHub
 // payloads directly to the transport layer.
 type SearchIssuesOutput struct {
-	Items               []issue.RankedIssue
-	Pagination          SearchIssuesPagination
-	ExclusionCounts     map[issue.ExclusionReason]int
-	CandidatesChecked   int
-	UpstreamTotal       int
-	EnrichmentAttempted int
-	EnrichmentFailed    int
-	IncompleteResults   bool
-	RateLimit           port.RateLimit
-	CacheHit            bool
+	Items                []issue.RankedIssue
+	Pagination           SearchIssuesPagination
+	ExclusionCounts      map[issue.ExclusionReason]int
+	CandidatesChecked    int
+	UpstreamTotal        int
+	EnrichmentAttempted  int
+	EnrichmentFailed     int
+	GitHubIncomplete     bool
+	EnrichmentIncomplete bool
+	RateLimit            port.RateLimit
+	CacheHit             bool
 }
 
 type SearchIssues interface {
@@ -270,15 +271,15 @@ func (usecase *searchIssues) issueSearchOutput(
 			TotalPages: totalPages,
 			HasNext:    input.Pagination.Page < totalPages,
 		},
-		ExclusionCounts:     cloneExclusionCounts(entry.ExclusionCounts),
-		CandidatesChecked:   entry.CandidatesChecked,
-		UpstreamTotal:       entry.UpstreamTotal,
-		EnrichmentAttempted: recommendationMeta.attempted,
-		EnrichmentFailed:    recommendationMeta.failed,
-		IncompleteResults: entry.IncompleteResults ||
-			recommendationMeta.incomplete,
-		RateLimit: rateLimit,
-		CacheHit:  cacheHit,
+		ExclusionCounts:      cloneExclusionCounts(entry.ExclusionCounts),
+		CandidatesChecked:    entry.CandidatesChecked,
+		UpstreamTotal:        entry.UpstreamTotal,
+		EnrichmentAttempted:  recommendationMeta.attempted,
+		EnrichmentFailed:     recommendationMeta.failed,
+		GitHubIncomplete:     entry.IncompleteResults,
+		EnrichmentIncomplete: recommendationMeta.incomplete,
+		RateLimit:            rateLimit,
+		CacheHit:             cacheHit,
 	}, nil
 }
 

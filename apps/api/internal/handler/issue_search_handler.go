@@ -305,11 +305,18 @@ func newIssueSearchResponse(
 		})
 	}
 
-	warnings := make([]searchWarningResponse, 0, 1)
-	if output.IncompleteResults {
+	warnings := make([]searchWarningResponse, 0, 2)
+	if output.GitHubIncomplete {
 		warnings = append(warnings, searchWarningResponse{
 			Code:    "github_search_incomplete",
 			Message: "GitHub returned an incomplete search result window",
+		})
+	}
+	if output.EnrichmentIncomplete {
+		warnings = append(warnings, searchWarningResponse{
+			Code: "issue_enrichment_incomplete",
+			Message: "One or more bounded issue detail inspections were " +
+				"unavailable or incomplete",
 		})
 	}
 

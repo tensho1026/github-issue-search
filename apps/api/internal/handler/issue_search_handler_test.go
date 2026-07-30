@@ -69,11 +69,14 @@ func TestIssueSearchHandlerReturnsNormalizedSearchResponse(t *testing.T) {
 			issue.ExclusionAlreadyAssigned: 1,
 			issue.ExclusionBotGenerated:    2,
 		},
-		CandidatesChecked: 8,
-		UpstreamTotal:     150,
-		IncompleteResults: true,
-		RateLimit:         port.RateLimit{Known: true, Remaining: 29},
-		CacheHit:          true,
+		CandidatesChecked:    8,
+		UpstreamTotal:        150,
+		EnrichmentAttempted:  2,
+		EnrichmentFailed:     1,
+		GitHubIncomplete:     true,
+		EnrichmentIncomplete: true,
+		RateLimit:            port.RateLimit{Known: true, Remaining: 29},
+		CacheHit:             true,
 	}}
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
@@ -112,10 +115,13 @@ func TestIssueSearchHandlerReturnsNormalizedSearchResponse(t *testing.T) {
 		`"totalPages":2`,
 		`"candidatesChecked":8`,
 		`"upstreamTotal":150`,
+		`"enrichmentAttempted":2`,
+		`"enrichmentFailed":1`,
 		`"reason":"already_assigned","count":1`,
 		`"reason":"bot_generated","count":2`,
 		`"reason":"stale","count":3`,
 		`"code":"github_search_incomplete"`,
+		`"code":"issue_enrichment_incomplete"`,
 		`"rateLimitRemaining":29`,
 	} {
 		if !strings.Contains(recorder.Body.String(), fragment) {

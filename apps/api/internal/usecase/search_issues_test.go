@@ -58,7 +58,8 @@ func TestSearchIssuesFiltersPaginatesAndCachesCandidates(t *testing.T) {
 		}) ||
 		first.CandidatesChecked != 4 ||
 		first.UpstreamTotal != 900 ||
-		!first.IncompleteResults ||
+		!first.GitHubIncomplete ||
+		first.EnrichmentIncomplete ||
 		first.RateLimit.Remaining != 27 ||
 		first.CacheHit {
 		t.Fatalf("first output = %+v", first)
@@ -377,7 +378,8 @@ func TestSearchIssuesFallsBackWhenOptionalEnrichmentFails(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 	if output.EnrichmentFailed != 1 ||
-		!output.IncompleteResults ||
+		!output.EnrichmentIncomplete ||
+		output.GitHubIncomplete ||
 		len(output.Items) != 1 {
 		t.Fatalf("output = %+v", output)
 	}

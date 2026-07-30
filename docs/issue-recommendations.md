@@ -169,7 +169,9 @@ sample.
 Detail maps not-found, rate-limit, timeout, and upstream failures normally.
 Search treats enrichment as optional: a non-cancellation failure produces a
 candidate-only score, `detail_enrichment_unavailable`, increments
-`enrichmentFailed`, and sets `incompleteResults` without discarding the issue.
+`enrichmentFailed`, and emits `issue_enrichment_incomplete` without discarding
+the issue. The independent `github_search_incomplete` warning is reserved for
+GitHub's search API reporting a partial result window.
 
 ## Privacy, security, and verification
 

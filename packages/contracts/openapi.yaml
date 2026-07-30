@@ -636,7 +636,7 @@ components:
           $ref: "#/components/schemas/SearchSummary"
         warnings:
           type: array
-          maxItems: 1
+          maxItems: 2
           items:
             $ref: "#/components/schemas/SearchWarning"
     IssueSearchItem:
@@ -837,7 +837,9 @@ components:
       properties:
         code:
           type: string
-          const: github_search_incomplete
+          enum:
+            - github_search_incomplete
+            - issue_enrichment_incomplete
         message:
           type: string
           minLength: 1
