@@ -64,6 +64,20 @@ describe("ProfilePage", () => {
     ).toBeInTheDocument();
     expect(screen.getAllByText("React")).toHaveLength(2);
     expect(screen.getByText("typed-service")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Public contribution activity" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("progressbar", {
+        name: "TypeScript diagnostic level 2 of 5",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /discover repositories/i }),
+    ).toHaveAttribute(
+      "href",
+      expect.stringMatching(/^\/repositories\?.*language=TypeScript/),
+    );
     expect(request).toHaveBeenCalledTimes(2);
     for (const [, options] of request.mock.calls) {
       expect(options?.signal).toBeInstanceOf(AbortSignal);

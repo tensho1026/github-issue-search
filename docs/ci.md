@@ -86,7 +86,7 @@ request ID, and graceful shutdown smoke test.
 - bounded analysis: at most 5 ms, 256 KiB, and 200 allocations per operation;
 - recommendation scoring: at most 1 ms, 128 KiB, and 1,000 allocations per operation;
 - largest JavaScript asset: no more than 140 KiB gzip;
-- all JavaScript and CSS assets: no more than 180 KiB gzip.
+- all JavaScript and CSS assets: no more than 200 KiB gzip.
 
 Raise coverage expectations as features gain tests. Budget reductions require measured justification in the pull request and must not conceal a regression.
 

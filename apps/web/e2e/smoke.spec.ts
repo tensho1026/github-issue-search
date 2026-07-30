@@ -4,6 +4,7 @@ import {
   issueDetailFixture,
   issueSearchFixture,
 } from "../src/test/issue-fixtures";
+import { repositoryDiscoveryFixture } from "../src/test/repository-fixtures";
 import gitHubUserFixture from "../../../packages/contracts/fixtures/github-user.success.json" with { type: "json" };
 import profileAnalysisFixture from "../../../packages/contracts/fixtures/profile-analysis.success.json" with { type: "json" };
 
@@ -54,6 +55,17 @@ test("analyzes a valid username through the production profile route", async ({
     page.getByRole("progressbar", { name: "TypeScript 65%" }),
   ).toBeVisible();
   await expect(page.getByText("typed-service")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Public contribution activity" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("progressbar", {
+      name: "TypeScript diagnostic level 2 of 5",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Repository source evidence" }),
+  ).toBeVisible();
 
   const languageOrder = page.getByRole("combobox", { name: "Sort languages" });
   await languageOrder.press("ArrowDown");
@@ -245,6 +257,107 @@ test("keeps search popovers usable on a mobile viewport", async ({ page }) => {
   await expect(languages).toBeFocused();
 });
 
+test("submits accessible repository filters and explains partial evidence", async ({
+  page,
+}) => {
+  let requestBody: unknown;
+  await page.route("**/api/repositories/search**", async (route) => {
+    requestBody = route.request().postDataJSON();
+    await route.fulfill({
+      body: JSON.stringify(repositoryDiscoveryFixture),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await page.setViewportSize({ height: 844, width: 390 });
+  await page.goto(
+    "/repositories?language=TypeScript&technology=React&minimumStars=10",
+  );
+
+  await expect(page.getByText("Shape an OSS shortlist")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Languages" })).toContainText(
+    "TypeScript",
+  );
+  await page.getByRole("combobox", { name: "Japanese README" }).click();
+  await page.getByRole("option", { name: "Japanese detected" }).click();
+  await page.getByRole("slider", { name: "Minimum readiness" }).fill("65");
+  await page.getByRole("button", { name: "Discover repositories" }).click();
+
+  await expect(page).toHaveURL(/search=1/);
+  await expect(
+    page.getByRole("heading", { name: "1 eligible repositories" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /example\/typed-service/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/Some repository evidence is partial/i),
+  ).toBeVisible();
+  expect(requestBody).toMatchObject({
+    hasJapaneseReadme: true,
+    languages: ["TypeScript"],
+    minimumReadiness: 65,
+    technologies: ["React"],
+  });
+
+  const confidence = page.getByRole("button", { name: "Medium confidence" });
+  await confidence.focus();
+  await expect(page.getByRole("tooltip")).toContainText(/Heuristic only/i);
+
+  const overflow =
+    await page.evaluate(`Array.from(document.querySelectorAll("*"))
+    .filter((element) => {
+      const bounds = element.getBoundingClientRect();
+      return bounds.left < -1 || bounds.right > window.innerWidth + 1;
+    })
+    .map((element) => ({
+      className: element.className,
+      right: Math.round(element.getBoundingClientRect().right),
+      tagName: element.tagName,
+      text: element.textContent?.slice(0, 80),
+    }))`);
+  expect(overflow).toEqual([]);
+});
+
+test("keeps repository discovery usable at the 320 CSS pixel equivalent of 200% zoom", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  // A 320 CSS pixel viewport exercises the reflow available when a
+  // 640-pixel-wide browser is zoomed to 200%, including responsive breakpoints.
+  await page.setViewportSize({ height: 900, width: 320 });
+  await page.goto("/repositories");
+
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Find a repository ready for your contribution.",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Discover repositories" }),
+  ).toBeVisible();
+  const transitionDuration = await page.evaluate(
+    `getComputedStyle(document.querySelector('button[type="submit"]')).transitionDuration`,
+  );
+  expect(["0.01ms", "1e-05s"]).toContain(transitionDuration);
+
+  const overflow =
+    await page.evaluate(`Array.from(document.querySelectorAll("*"))
+    .filter((element) => {
+      const bounds = element.getBoundingClientRect();
+      return bounds.left < -1 || bounds.right > window.innerWidth + 1;
+    })
+    .map((element) => ({
+      className: element.className,
+      left: Math.round(element.getBoundingClientRect().left),
+      right: Math.round(element.getBoundingClientRect().right),
+      tagName: element.tagName,
+      text: element.textContent?.slice(0, 80),
+    }))`);
+  expect(overflow).toEqual([]);
+});
+
 test("opens a safe issue detail and restores the exact ranked search", async ({
   page,
 }) => {
@@ -350,6 +463,45 @@ test("serves the built API with the shared response envelope", async ({
     },
     meta: {
       requestId: requestID,
+    },
+  });
+});
+
+test("serves anonymous repository discovery without database state", async ({
+  request,
+}) => {
+  const response = await request.post(
+    `${apiBaseURL}/api/repositories/search?page=1&perPage=20`,
+    {
+      data: {
+        excludeArchived: true,
+        forkPolicy: "exclude",
+        languages: ["TypeScript"],
+        maximumDifficulty: 3,
+        maximumOpenIssues: 500,
+        minimumForks: 0,
+        minimumOpenIssues: 1,
+        minimumReadiness: 40,
+        minimumStars: 10,
+        technologies: ["React"],
+        updatedWithinDays: 365,
+      },
+    },
+  );
+
+  expect(response.status()).toBe(200);
+  await expect(response.json()).resolves.toMatchObject({
+    data: {
+      items: [
+        {
+          repository: {
+            fullName: "octocat/typed-service",
+          },
+        },
+      ],
+    },
+    meta: {
+      requestId: expect.any(String),
     },
   });
 });

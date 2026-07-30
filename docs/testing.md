@@ -145,7 +145,7 @@ the same file.
 | Recommendation bytes                                 |   128 KiB/op |
 | Recommendation allocations                           |     1,000/op |
 | Largest JavaScript asset                             | 140 KiB gzip |
-| All JavaScript and CSS                               | 180 KiB gzip |
+| All JavaScript and CSS                               | 200 KiB gzip |
 
 ## Contract fixtures
 

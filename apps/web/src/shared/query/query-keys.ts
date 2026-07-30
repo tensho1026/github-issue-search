@@ -29,4 +29,10 @@ export const queryKeys = Object.freeze({
       return ["profile", username.toLowerCase(), "user"] as const;
     },
   }),
+  repositories: Object.freeze({
+    root: ["repositories"] as const,
+    search(canonicalSearch: string) {
+      return ["repositories", "search", canonicalSearch] as const;
+    },
+  }),
 });

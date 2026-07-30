@@ -83,6 +83,12 @@ function NavigationLinks() {
       >
         Find issues
       </Link>
+      <Link
+        className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        to={appRoutes.repositories}
+      >
+        Discover repositories
+      </Link>
       <Button asChild size="small" variant="outline">
         <Link to="/#analyze">Analyze a profile</Link>
       </Button>
