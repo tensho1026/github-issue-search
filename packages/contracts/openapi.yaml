@@ -31,12 +31,17 @@ paths:
       responses:
         "200":
           description: The API process is ready to serve requests.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthEnvelope"
         "403":
           $ref: "#/components/responses/ForbiddenOrigin"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
         "504":
           $ref: "#/components/responses/RequestTimeout"
   /api/github/users/{username}:
@@ -50,18 +55,25 @@ paths:
       responses:
         "200":
           description: The public profile and bounded repository summaries.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/GitHubUserEnvelope"
         "400":
           $ref: "#/components/responses/InvalidRequest"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
         "404":
           $ref: "#/components/responses/GitHubUserNotFound"
         "429":
           $ref: "#/components/responses/GitHubRateLimited"
         "502":
           $ref: "#/components/responses/GitHubUpstreamError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
         "504":
           $ref: "#/components/responses/RequestTimeout"
   /api/github/users/{username}/profile-analysis:
@@ -75,18 +87,25 @@ paths:
       responses:
         "200":
           description: A bounded analysis with optional partial-data warnings.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProfileAnalysisEnvelope"
         "400":
           $ref: "#/components/responses/InvalidRequest"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
         "404":
           $ref: "#/components/responses/GitHubUserNotFound"
         "429":
           $ref: "#/components/responses/GitHubRateLimited"
         "502":
           $ref: "#/components/responses/GitHubUpstreamError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
         "504":
           $ref: "#/components/responses/RequestTimeout"
   /api/issues/search:
@@ -164,6 +183,8 @@ paths:
             Eligible, normalized candidates and bounded pagination metadata.
             A successful response can contain no items.
           headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
             X-IssueScout-Cache:
               description: Whether the canonical condition was served from cache.
               schema:
@@ -183,6 +204,8 @@ paths:
           $ref: "#/components/responses/GitHubRateLimited"
         "502":
           $ref: "#/components/responses/GitHubUpstreamError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
         "504":
           $ref: "#/components/responses/RequestTimeout"
   /api/issues/{owner}/{repository}/{issueNumber}:
@@ -230,6 +253,8 @@ paths:
         "200":
           description: Complete normalized issue recommendation.
           headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
             X-IssueScout-Cache:
               description: Whether the normalized detail snapshot came from cache.
               schema:
@@ -251,9 +276,21 @@ paths:
           $ref: "#/components/responses/GitHubRateLimited"
         "502":
           $ref: "#/components/responses/GitHubUpstreamError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
         "504":
           $ref: "#/components/responses/RequestTimeout"
 components:
+  headers:
+    RequestID:
+      description: |
+        Request correlation identifier. A valid inbound X-Request-ID is echoed;
+        otherwise the API generates one. This value matches meta.requestId.
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
   parameters:
     GitHubUsername:
       name: username
@@ -300,42 +337,72 @@ components:
   responses:
     InvalidRequest:
       description: A path or request value failed validation.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
     ForbiddenOrigin:
       description: The browser Origin is not in the configured allowlist.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
     GitHubUserNotFound:
       description: The requested GitHub user does not exist.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
     GitHubRateLimited:
       description: GitHub refused the request because its rate limit was exhausted.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
     GitHubUpstreamError:
       description: Required public data could not be retrieved from GitHub.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
     GitHubIssueNotFound:
       description: The public repository or issue does not exist or is not visible.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
     RequestTimeout:
       description: The bounded request deadline elapsed or the client cancelled.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    InternalServerError:
+      description: An unexpected internal failure was recovered without exposing details.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
       content:
         application/json:
           schema:
