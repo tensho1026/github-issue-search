@@ -8,6 +8,8 @@
   },
   "scripts": {
     "build": "tsc -b && vite build",
+    "contracts:check": "pnpm run contracts:generate && git diff --exit-code -- src/shared/api/generated",
+    "contracts:generate": "openapi-ts -i ../../packages/contracts/openapi.yaml -o src/shared/api/generated -p @hey-api/typescript && prettier --write src/shared/api/generated",
     "dev": "vite",
     "lint": "eslint . --max-warnings 0",
     "preview": "vite preview",
