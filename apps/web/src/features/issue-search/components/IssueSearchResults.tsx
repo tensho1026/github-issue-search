@@ -5,6 +5,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from "../../../components/ui/alert";
+import { Button } from "../../../components/ui/button";
 import {
   Card,
   CardContent,
@@ -30,6 +31,10 @@ export function IssueSearchResults({
 }: IssueSearchResultsProps) {
   const { items, pagination, searchSummary, warnings } = envelope.data;
   if (items.length === 0) {
+    const outOfRange =
+      pagination.total > 0 &&
+      pagination.totalPages > 0 &&
+      pagination.page > pagination.totalPages;
     return (
       <Card>
         <CardContent className="grid justify-items-center gap-4 p-8 text-center sm:p-12">
@@ -37,19 +42,27 @@ export function IssueSearchResults({
             <Icon className="size-6" icon={CircleOff} />
           </span>
           <div>
-            <h2 className="text-xl font-semibold">No eligible issues found</h2>
+            <h2 className="text-xl font-semibold">
+              {outOfRange
+                ? "This result page is no longer available"
+                : "No eligible issues found"}
+            </h2>
             <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
-              GitHub candidates were checked, but none met every validated
-              condition. Try fewer framework terms, a lower star threshold, or
-              more available time.
+              {outOfRange
+                ? "The eligible result set changed after this URL was shared. Return to the first server-ranked page."
+                : "GitHub candidates were checked, but none met every validated condition. Try fewer framework terms, a lower star threshold, or more available time."}
             </p>
           </div>
-          <a
-            className="rounded-lg text-sm font-semibold text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-            href="#search-filters"
-          >
-            Broaden the filters
-          </a>
+          {outOfRange ? (
+            <Button onClick={() => onPageChange(1)}>Return to page 1</Button>
+          ) : (
+            <a
+              className="rounded-lg text-sm font-semibold text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+              href="#search-filters"
+            >
+              Broaden the filters
+            </a>
+          )}
         </CardContent>
       </Card>
     );

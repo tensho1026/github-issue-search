@@ -50,6 +50,11 @@ export const appRoutes = Object.freeze({
 });
 
 export const externalLinks = Object.freeze({
+  gitHubIssue(owner: string, repository: string, issueNumber: number): string {
+    return `https://github.com/${encodeURIComponent(
+      owner,
+    )}/${encodeURIComponent(repository)}/issues/${issueNumber}`;
+  },
   gitHubProfile(username: string): string {
     return `https://github.com/${encodeURIComponent(username)}`;
   },

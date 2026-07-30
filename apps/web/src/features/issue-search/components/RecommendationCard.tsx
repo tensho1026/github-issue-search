@@ -12,7 +12,7 @@ import {
 } from "../../../components/ui/card";
 import { Icon } from "../../../components/ui/icon";
 import type { IssueSearchItem } from "../../../shared/api/generated";
-import { appRoutes } from "../../../shared/config/app-config";
+import { appRoutes, externalLinks } from "../../../shared/config/app-config";
 import {
   formatCompactNumber,
   formatDate,
@@ -196,7 +196,15 @@ export function RecommendationCard({ item, rank }: RecommendationCardProps) {
           <Link to={detailPath}>View recommendation details</Link>
         </Button>
         <Button asChild variant="outline">
-          <a href={item.issue.url} rel="noreferrer" target="_blank">
+          <a
+            href={externalLinks.gitHubIssue(
+              item.repository.owner,
+              item.repository.name,
+              item.issue.number,
+            )}
+            rel="noreferrer"
+            target="_blank"
+          >
             Open GitHub issue
             <Icon icon={ArrowUpRight} />
           </a>
