@@ -65,7 +65,7 @@ function requestUrl(path: `/${string}`): string {
 }
 
 export function createApiClient(
-  request: typeof fetch = globalThis.fetch,
+  request: typeof fetch = (...arguments_) => globalThis.fetch(...arguments_),
 ): ApiClient {
   return {
     async get<TResponse>(
