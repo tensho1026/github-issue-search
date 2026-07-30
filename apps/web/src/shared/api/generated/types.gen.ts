@@ -222,6 +222,237 @@ export type TechnologyProficiency = {
   evidence: Array<TechnologyEvidence>;
 };
 
+export type RepositoryDiscoveryRequest = {
+  /**
+   * Accepted primary languages. Matching is case-insensitive logical
+   * OR. An omitted or empty array accepts every language.
+   *
+   */
+  languages?: Array<SearchFilterValue>;
+  /**
+   * Framework or technology terms matched as complete terms in public
+   * topics or bounded README text. If enrichment is unavailable, a
+   * configured technology filter conservatively excludes that item.
+   *
+   */
+  technologies?: Array<SearchFilterValue>;
+  /**
+   * Supported SPDX identifiers. License matching is logical OR.
+   * Repositories without a recognized SPDX identifier do not match.
+   *
+   */
+  licenses?: Array<SupportedSpdxLicense>;
+  /**
+   * Explainable topic-and-description category, matched by OR.
+   */
+  categories?: Array<OssCategory>;
+  minimumStars?: number;
+  minimumForks?: number;
+  minimumOpenIssues?: number;
+  /**
+   * Inclusive maximum. It must be greater than or equal to
+   * minimumOpenIssues when both are present.
+   *
+   */
+  maximumOpenIssues?: number;
+  /**
+   * Maximum age of the repository's last public push.
+   */
+  updatedWithinDays?: number;
+  /**
+   * Inclusive preliminary contribution difficulty. This rule-based
+   * value evaluates documentation and starter-issue availability; it
+   * does not estimate a specific issue.
+   *
+   */
+  maximumDifficulty?: number;
+  /**
+   * Inclusive explainable contribution-readiness score.
+   */
+  minimumReadiness?: number;
+  /**
+   * When true, requires Japanese-script README evidence. When false,
+   * requires analyzed README evidence without detected Japanese text.
+   * Unavailable evidence matches neither value.
+   *
+   */
+  hasJapaneseReadme?: boolean;
+  forkPolicy?: "exclude" | "include" | "only";
+  excludeArchived?: boolean;
+};
+
+export type SupportedSpdxLicense =
+  | "0BSD"
+  | "AGPL-3.0"
+  | "Apache-2.0"
+  | "BSD-2-Clause"
+  | "BSD-3-Clause"
+  | "BSL-1.0"
+  | "CC0-1.0"
+  | "EPL-2.0"
+  | "GPL-2.0"
+  | "GPL-3.0"
+  | "ISC"
+  | "LGPL-2.1"
+  | "LGPL-3.0"
+  | "MIT"
+  | "MPL-2.0"
+  | "Unlicense";
+
+export type OssCategory =
+  | "application"
+  | "data"
+  | "documentation"
+  | "education"
+  | "framework"
+  | "infrastructure"
+  | "library"
+  | "security"
+  | "tooling";
+
+export type RepositoryDiscoveryEnvelope = {
+  data: RepositoryDiscoveryResult;
+  meta: Meta;
+};
+
+export type RepositoryDiscoveryResult = {
+  items: Array<RepositoryDiscoveryItem>;
+  pagination: SearchPagination;
+  searchSummary: RepositoryDiscoverySummary;
+  warnings: Array<RepositoryDiscoveryWarning>;
+};
+
+export type RepositoryDiscoveryItem = {
+  repository: RepositoryDiscoveryIdentity;
+  topics: Array<string>;
+  /**
+   * Requested technology terms found in topics or README.
+   */
+  technologies: Array<string>;
+  /**
+   * Empty when GitHub has no primary-language evidence.
+   */
+  language: string;
+  category: OssCategory;
+  license: RepositoryDiscoveryLicense;
+  popularity: RepositoryDiscoveryPopularity;
+  activity: RepositoryDiscoveryActivity;
+  readiness: RepositoryDiscoveryReadiness;
+  documentation: RepositoryDiscoveryDocumentation;
+  difficulty: RepositoryDiscoveryDifficulty;
+  warnings: Array<RepositoryDiscoveryWarning>;
+};
+
+export type RepositoryDiscoveryIdentity = {
+  owner: string;
+  name: string;
+  fullName: string;
+  description: string;
+  url: string;
+  isFork: boolean;
+  isArchived: boolean;
+};
+
+export type RepositoryDiscoveryLicense = {
+  spdxId:
+    | "0BSD"
+    | "AGPL-3.0"
+    | "Apache-2.0"
+    | "BSD-2-Clause"
+    | "BSD-3-Clause"
+    | "BSL-1.0"
+    | "CC0-1.0"
+    | "EPL-2.0"
+    | "GPL-2.0"
+    | "GPL-3.0"
+    | "ISC"
+    | "LGPL-2.1"
+    | "LGPL-3.0"
+    | "MIT"
+    | "MPL-2.0"
+    | "Unlicense"
+    | null;
+  name: string;
+  status: EvidenceStatus;
+};
+
+export type RepositoryDiscoveryPopularity = {
+  stars: number;
+  forks: number;
+  watchers: number;
+  openIssues: number;
+};
+
+export type RepositoryDiscoveryActivity = {
+  updatedAt: string;
+  pushedAt: string;
+};
+
+export type RepositoryDiscoveryReadiness = {
+  /**
+   * Deterministic sum of bounded activity, documentation, community
+   * files, starter issues, and public discussion signals.
+   *
+   */
+  score: number;
+  band: "needs_work" | "promising" | "ready";
+  reasons: Array<string>;
+  goodFirstIssues: number;
+  helpWantedIssues: number;
+  issuesEnabled: boolean;
+  discussionsEnabled: boolean;
+};
+
+export type RepositoryDiscoveryDocumentation = {
+  status: EvidenceStatus;
+  readmeAvailable: boolean;
+  contributingGuide: boolean;
+  codeOfConduct: boolean;
+  securityPolicy: boolean;
+  japaneseReadme: JapaneseReadmeEvidence;
+};
+
+export type JapaneseReadmeEvidence = {
+  /**
+   * True only when at least 20 Japanese-script runes comprise at least
+   * five percent of analyzed letters. This is heuristic evidence.
+   *
+   */
+  detected: boolean;
+  status: EvidenceStatus;
+  confidence: EvidenceConfidence;
+  japaneseRunes: number;
+  letterRunes: number;
+  analyzedBytes: number;
+};
+
+export type RepositoryDiscoveryDifficulty = {
+  level: number;
+  label: "very_low" | "low" | "medium" | "high" | "very_high";
+  reasons: Array<string>;
+};
+
+export type RepositoryDiscoverySummary = {
+  candidatesChecked: number;
+  /**
+   * GitHub total before the bounded candidate window.
+   */
+  upstreamTotal: number;
+  enrichmentAttempted: number;
+  enrichmentFailed: number;
+  githubIncomplete: boolean;
+  enrichmentIncomplete: boolean;
+};
+
+export type RepositoryDiscoveryWarning = {
+  code:
+    | "enrichment_unavailable"
+    | "github_results_incomplete"
+    | "readme_content_sampled"
+    | "repository_enrichment_incomplete";
+  message: string;
+};
+
 export type IssueSearchRequest = {
   /**
    * The profile whose preferences will be used by later recommendation
@@ -961,6 +1192,70 @@ export type SearchGitHubIssuesResponses = {
 
 export type SearchGitHubIssuesResponse =
   SearchGitHubIssuesResponses[keyof SearchGitHubIssuesResponses];
+
+export type SearchGitHubRepositoriesData = {
+  /**
+   * Validated public repository filters. Unknown fields and unsupported
+   * SPDX identifiers or range combinations are rejected before GitHub.
+   *
+   */
+  body: RepositoryDiscoveryRequest;
+  path?: never;
+  query?: {
+    /**
+     * One-based page over the bounded analyzed shortlist.
+     */
+    page?: number;
+    /**
+     * Maximum analyzed repositories returned on this page.
+     */
+    perPage?: number;
+  };
+  url: "/api/repositories/search";
+};
+
+export type SearchGitHubRepositoriesErrors = {
+  /**
+   * A path or request value failed validation.
+   */
+  400: ErrorEnvelope;
+  /**
+   * The browser Origin is not in the configured allowlist.
+   */
+  403: ErrorEnvelope;
+  /**
+   * GitHub refused the request because its rate limit was exhausted.
+   */
+  429: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
+  /**
+   * Required public data could not be retrieved from GitHub.
+   */
+  502: ErrorEnvelope;
+  /**
+   * The bounded request deadline elapsed or the client cancelled.
+   */
+  504: ErrorEnvelope;
+};
+
+export type SearchGitHubRepositoriesError =
+  SearchGitHubRepositoriesErrors[keyof SearchGitHubRepositoriesErrors];
+
+export type SearchGitHubRepositoriesResponses = {
+  /**
+   * Deterministically ordered normalized repositories with bounded
+   * enrichment, evidence precision, and pagination metadata. A
+   * successful partial or empty result is valid.
+   *
+   */
+  200: RepositoryDiscoveryEnvelope;
+};
+
+export type SearchGitHubRepositoriesResponse =
+  SearchGitHubRepositoriesResponses[keyof SearchGitHubRepositoriesResponses];
 
 export type GetIssueRecommendationData = {
   body?: never;

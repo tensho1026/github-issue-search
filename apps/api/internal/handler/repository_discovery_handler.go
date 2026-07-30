@@ -207,6 +207,7 @@ type repositoryDiscoveryItemResponse struct {
 	Topics        []string                                 `json:"topics"`
 	Technologies  []string                                 `json:"technologies"`
 	Language      string                                   `json:"language"`
+	Category      repository.Category                      `json:"category"`
 	License       repositoryDiscoveryLicenseResponse       `json:"license"`
 	Popularity    repositoryDiscoveryPopularityResponse    `json:"popularity"`
 	Activity      repositoryDiscoveryActivityResponse      `json:"activity"`
@@ -366,6 +367,7 @@ func newRepositoryDiscoveryItemResponse(
 		Topics:       slices.Clone(item.Topics),
 		Technologies: slices.Clone(item.Technologies),
 		Language:     item.Repository.MainLanguage,
+		Category:     item.Category,
 		License: repositoryDiscoveryLicenseResponse{
 			SPDXID: spdxID,
 			Name:   item.LicenseName,

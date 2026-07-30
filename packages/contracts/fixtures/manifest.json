@@ -17,6 +17,10 @@
       "schema": "IssueSearchEnvelope"
     },
     {
+      "file": "repository-discovery.success.json",
+      "schema": "RepositoryDiscoveryEnvelope"
+    },
+    {
       "file": "issue-detail.success.json",
       "schema": "IssueDetailEnvelope"
     },

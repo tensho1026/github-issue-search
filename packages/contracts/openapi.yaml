@@ -1,10 +1,10 @@
 openapi: 3.1.0
 info:
   title: IssueScout API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     Stateless API for analyzing a public GitHub profile and finding suitable
-    open-source issues. GitHub credentials remain server-side.
+    open-source repositories and issues. GitHub credentials remain server-side.
   license:
     name: MIT
     identifier: MIT
@@ -19,6 +19,8 @@ tags:
     description: Normalized public GitHub profile and technology analysis.
   - name: Issue discovery
     description: Bounded, validated discovery of eligible public GitHub issues.
+  - name: Repository discovery
+    description: Bounded, evidence-oriented discovery of public OSS repositories.
   - name: Issue recommendations
     description: Explainable scoring and bounded repository-maintainer analysis.
 paths:
@@ -208,6 +210,108 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/IssueSearchEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "429":
+          $ref: "#/components/responses/GitHubRateLimited"
+        "502":
+          $ref: "#/components/responses/GitHubUpstreamError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/repositories/search:
+    post:
+      operationId: searchGitHubRepositories
+      summary: Find contribution-ready public OSS repositories
+      description: |
+        Executes one bounded GitHub GraphQL repository search containing at
+        most 50 normalized public candidates. Cheap language, SPDX license,
+        popularity, fork, issue-count, archive, and recency filters run before
+        a shortlist of at most 20 repositories receives one batched GraphQL
+        documentation enrichment. README language and technology detection are
+        heuristics over at most 64 KiB of text and always expose evidence
+        status and confidence. The final order is deterministic: readiness,
+        stars, last push, then canonical full name. Equivalent validated
+        conditions share a five-minute bounded in-memory cache. Anonymous
+        requests never access a database or persist the query or results.
+      tags:
+        - Repository discovery
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: One-based page over the bounded analyzed shortlist.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          example: 1
+        - name: perPage
+          in: query
+          required: false
+          description: Maximum analyzed repositories returned on this page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+          example: 20
+      requestBody:
+        required: true
+        description: |
+          Validated public repository filters. Unknown fields and unsupported
+          SPDX identifiers or range combinations are rejected before GitHub.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RepositoryDiscoveryRequest"
+            examples:
+              typed-japanese-projects:
+                summary: Active React or TypeScript projects with Japanese docs
+                value:
+                  languages:
+                    - TypeScript
+                  technologies:
+                    - React
+                  licenses:
+                    - MIT
+                    - Apache-2.0
+                  categories:
+                    - framework
+                    - tooling
+                  minimumStars: 50
+                  minimumForks: 2
+                  minimumOpenIssues: 1
+                  maximumOpenIssues: 500
+                  updatedWithinDays: 180
+                  maximumDifficulty: 3
+                  minimumReadiness: 50
+                  hasJapaneseReadme: true
+                  forkPolicy: exclude
+                  excludeArchived: true
+      responses:
+        "200":
+          description: |
+            Deterministically ordered normalized repositories with bounded
+            enrichment, evidence precision, and pagination metadata. A
+            successful partial or empty result is valid.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+            X-IssueScout-Cache:
+              description: Whether the canonical condition was served from cache.
+              schema:
+                type: string
+                enum:
+                  - HIT
+                  - MISS
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepositoryDiscoveryEnvelope"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "403":
@@ -926,6 +1030,493 @@ components:
           maxItems: 6
           items:
             $ref: "#/components/schemas/TechnologyEvidence"
+    RepositoryDiscoveryRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        languages:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          description: |
+            Accepted primary languages. Matching is case-insensitive logical
+            OR. An omitted or empty array accepts every language.
+          items:
+            $ref: "#/components/schemas/SearchFilterValue"
+        technologies:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          description: |
+            Framework or technology terms matched as complete terms in public
+            topics or bounded README text. If enrichment is unavailable, a
+            configured technology filter conservatively excludes that item.
+          items:
+            $ref: "#/components/schemas/SearchFilterValue"
+        licenses:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          description: |
+            Supported SPDX identifiers. License matching is logical OR.
+            Repositories without a recognized SPDX identifier do not match.
+          items:
+            $ref: "#/components/schemas/SupportedSPDXLicense"
+        categories:
+          type: array
+          maxItems: 9
+          uniqueItems: true
+          description: Explainable topic-and-description category, matched by OR.
+          items:
+            $ref: "#/components/schemas/OSSCategory"
+        minimumStars:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+          default: 10
+        minimumForks:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+          default: 0
+        minimumOpenIssues:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+          default: 0
+        maximumOpenIssues:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+          description: |
+            Inclusive maximum. It must be greater than or equal to
+            minimumOpenIssues when both are present.
+        updatedWithinDays:
+          type: integer
+          minimum: 1
+          maximum: 3650
+          default: 365
+          description: Maximum age of the repository's last public push.
+        maximumDifficulty:
+          type: integer
+          minimum: 1
+          maximum: 5
+          default: 5
+          description: |
+            Inclusive preliminary contribution difficulty. This rule-based
+            value evaluates documentation and starter-issue availability; it
+            does not estimate a specific issue.
+        minimumReadiness:
+          type: integer
+          minimum: 0
+          maximum: 100
+          default: 0
+          description: Inclusive explainable contribution-readiness score.
+        hasJapaneseReadme:
+          type: boolean
+          description: |
+            When true, requires Japanese-script README evidence. When false,
+            requires analyzed README evidence without detected Japanese text.
+            Unavailable evidence matches neither value.
+        forkPolicy:
+          type: string
+          enum:
+            - exclude
+            - include
+            - only
+          default: exclude
+        excludeArchived:
+          type: boolean
+          default: true
+    SupportedSPDXLicense:
+      type: string
+      enum:
+        - 0BSD
+        - AGPL-3.0
+        - Apache-2.0
+        - BSD-2-Clause
+        - BSD-3-Clause
+        - BSL-1.0
+        - CC0-1.0
+        - EPL-2.0
+        - GPL-2.0
+        - GPL-3.0
+        - ISC
+        - LGPL-2.1
+        - LGPL-3.0
+        - MIT
+        - MPL-2.0
+        - Unlicense
+    OSSCategory:
+      type: string
+      enum:
+        - application
+        - data
+        - documentation
+        - education
+        - framework
+        - infrastructure
+        - library
+        - security
+        - tooling
+    RepositoryDiscoveryEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/RepositoryDiscoveryResult"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    RepositoryDiscoveryResult:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - pagination
+        - searchSummary
+        - warnings
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/RepositoryDiscoveryItem"
+        pagination:
+          $ref: "#/components/schemas/SearchPagination"
+        searchSummary:
+          $ref: "#/components/schemas/RepositoryDiscoverySummary"
+        warnings:
+          type: array
+          maxItems: 2
+          items:
+            $ref: "#/components/schemas/RepositoryDiscoveryWarning"
+    RepositoryDiscoveryItem:
+      type: object
+      additionalProperties: false
+      required:
+        - activity
+        - category
+        - difficulty
+        - documentation
+        - language
+        - license
+        - popularity
+        - readiness
+        - repository
+        - technologies
+        - topics
+        - warnings
+      properties:
+        repository:
+          $ref: "#/components/schemas/RepositoryDiscoveryIdentity"
+        topics:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+        technologies:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          description: Requested technology terms found in topics or README.
+          items:
+            type: string
+            minLength: 1
+        language:
+          type: string
+          description: Empty when GitHub has no primary-language evidence.
+        category:
+          $ref: "#/components/schemas/OSSCategory"
+        license:
+          $ref: "#/components/schemas/RepositoryDiscoveryLicense"
+        popularity:
+          $ref: "#/components/schemas/RepositoryDiscoveryPopularity"
+        activity:
+          $ref: "#/components/schemas/RepositoryDiscoveryActivity"
+        readiness:
+          $ref: "#/components/schemas/RepositoryDiscoveryReadiness"
+        documentation:
+          $ref: "#/components/schemas/RepositoryDiscoveryDocumentation"
+        difficulty:
+          $ref: "#/components/schemas/RepositoryDiscoveryDifficulty"
+        warnings:
+          type: array
+          maxItems: 2
+          items:
+            $ref: "#/components/schemas/RepositoryDiscoveryWarning"
+    RepositoryDiscoveryIdentity:
+      type: object
+      additionalProperties: false
+      required:
+        - description
+        - fullName
+        - isArchived
+        - isFork
+        - name
+        - owner
+        - url
+      properties:
+        owner:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        fullName:
+          type: string
+          minLength: 3
+        description:
+          type: string
+        url:
+          type: string
+          format: uri
+        isFork:
+          type: boolean
+        isArchived:
+          type: boolean
+    RepositoryDiscoveryLicense:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - spdxId
+        - status
+      properties:
+        spdxId:
+          type:
+            - string
+            - "null"
+          enum:
+            - 0BSD
+            - AGPL-3.0
+            - Apache-2.0
+            - BSD-2-Clause
+            - BSD-3-Clause
+            - BSL-1.0
+            - CC0-1.0
+            - EPL-2.0
+            - GPL-2.0
+            - GPL-3.0
+            - ISC
+            - LGPL-2.1
+            - LGPL-3.0
+            - MIT
+            - MPL-2.0
+            - Unlicense
+            - null
+        name:
+          type: string
+        status:
+          $ref: "#/components/schemas/EvidenceStatus"
+    RepositoryDiscoveryPopularity:
+      type: object
+      additionalProperties: false
+      required:
+        - forks
+        - openIssues
+        - stars
+        - watchers
+      properties:
+        stars:
+          type: integer
+          minimum: 0
+        forks:
+          type: integer
+          minimum: 0
+        watchers:
+          type: integer
+          minimum: 0
+        openIssues:
+          type: integer
+          minimum: 0
+    RepositoryDiscoveryActivity:
+      type: object
+      additionalProperties: false
+      required:
+        - pushedAt
+        - updatedAt
+      properties:
+        updatedAt:
+          type: string
+          format: date-time
+        pushedAt:
+          type: string
+          format: date-time
+    RepositoryDiscoveryReadiness:
+      type: object
+      additionalProperties: false
+      required:
+        - band
+        - discussionsEnabled
+        - goodFirstIssues
+        - helpWantedIssues
+        - issuesEnabled
+        - reasons
+        - score
+      properties:
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: |
+            Deterministic sum of bounded activity, documentation, community
+            files, starter issues, and public discussion signals.
+        band:
+          type: string
+          enum:
+            - needs_work
+            - promising
+            - ready
+        reasons:
+          type: array
+          maxItems: 8
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+        goodFirstIssues:
+          type: integer
+          minimum: 0
+        helpWantedIssues:
+          type: integer
+          minimum: 0
+        issuesEnabled:
+          type: boolean
+        discussionsEnabled:
+          type: boolean
+    RepositoryDiscoveryDocumentation:
+      type: object
+      additionalProperties: false
+      required:
+        - codeOfConduct
+        - contributingGuide
+        - japaneseReadme
+        - readmeAvailable
+        - securityPolicy
+        - status
+      properties:
+        status:
+          $ref: "#/components/schemas/EvidenceStatus"
+        readmeAvailable:
+          type: boolean
+        contributingGuide:
+          type: boolean
+        codeOfConduct:
+          type: boolean
+        securityPolicy:
+          type: boolean
+        japaneseReadme:
+          $ref: "#/components/schemas/JapaneseREADMEEvidence"
+    JapaneseREADMEEvidence:
+      type: object
+      additionalProperties: false
+      required:
+        - analyzedBytes
+        - confidence
+        - detected
+        - japaneseRunes
+        - letterRunes
+        - status
+      properties:
+        detected:
+          type: boolean
+          description: |
+            True only when at least 20 Japanese-script runes comprise at least
+            five percent of analyzed letters. This is heuristic evidence.
+        status:
+          $ref: "#/components/schemas/EvidenceStatus"
+        confidence:
+          $ref: "#/components/schemas/EvidenceConfidence"
+        japaneseRunes:
+          type: integer
+          minimum: 0
+        letterRunes:
+          type: integer
+          minimum: 0
+        analyzedBytes:
+          type: integer
+          minimum: 0
+          maximum: 65536
+    RepositoryDiscoveryDifficulty:
+      type: object
+      additionalProperties: false
+      required:
+        - label
+        - level
+        - reasons
+      properties:
+        level:
+          type: integer
+          minimum: 1
+          maximum: 5
+        label:
+          type: string
+          enum:
+            - very_low
+            - low
+            - medium
+            - high
+            - very_high
+        reasons:
+          type: array
+          maxItems: 4
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+    RepositoryDiscoverySummary:
+      type: object
+      additionalProperties: false
+      required:
+        - candidatesChecked
+        - enrichmentAttempted
+        - enrichmentFailed
+        - enrichmentIncomplete
+        - githubIncomplete
+        - upstreamTotal
+      properties:
+        candidatesChecked:
+          type: integer
+          minimum: 0
+          maximum: 50
+        upstreamTotal:
+          type: integer
+          minimum: 0
+          description: GitHub total before the bounded candidate window.
+        enrichmentAttempted:
+          type: integer
+          minimum: 0
+          maximum: 20
+        enrichmentFailed:
+          type: integer
+          minimum: 0
+          maximum: 20
+        githubIncomplete:
+          type: boolean
+        enrichmentIncomplete:
+          type: boolean
+    RepositoryDiscoveryWarning:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          enum:
+            - enrichment_unavailable
+            - github_results_incomplete
+            - readme_content_sampled
+            - repository_enrichment_incomplete
+        message:
+          type: string
+          minLength: 1
     IssueSearchRequest:
       type: object
       additionalProperties: false

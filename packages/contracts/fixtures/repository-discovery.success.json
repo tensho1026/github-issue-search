@@ -1,0 +1,108 @@
+{
+  "data": {
+    "items": [
+      {
+        "repository": {
+          "owner": "example",
+          "name": "typed-service",
+          "fullName": "example/typed-service",
+          "description": "A typed React and Go developer tool",
+          "url": "https://github.com/example/typed-service",
+          "isFork": false,
+          "isArchived": false
+        },
+        "topics": ["developer-tools", "react"],
+        "technologies": ["React"],
+        "language": "TypeScript",
+        "category": "tooling",
+        "license": {
+          "spdxId": "MIT",
+          "name": "MIT License",
+          "status": "exact"
+        },
+        "popularity": {
+          "stars": 420,
+          "forks": 32,
+          "watchers": 18,
+          "openIssues": 14
+        },
+        "activity": {
+          "updatedAt": "2026-07-30T09:00:00Z",
+          "pushedAt": "2026-07-30T08:00:00Z"
+        },
+        "readiness": {
+          "score": 88,
+          "band": "ready",
+          "reasons": [
+            "readme_available",
+            "contributing_guide_available",
+            "good_first_issues_available"
+          ],
+          "goodFirstIssues": 4,
+          "helpWantedIssues": 6,
+          "issuesEnabled": true,
+          "discussionsEnabled": true
+        },
+        "documentation": {
+          "status": "sampled",
+          "readmeAvailable": true,
+          "contributingGuide": true,
+          "codeOfConduct": true,
+          "securityPolicy": true,
+          "japaneseReadme": {
+            "detected": true,
+            "status": "sampled",
+            "confidence": "medium",
+            "japaneseRunes": 80,
+            "letterRunes": 200,
+            "analyzedBytes": 4096
+          }
+        },
+        "difficulty": {
+          "level": 1,
+          "label": "very_low",
+          "reasons": [
+            "contributing_guide_available",
+            "good_first_issues_available"
+          ]
+        },
+        "warnings": [
+          {
+            "code": "readme_content_sampled",
+            "message": "README language and technology evidence uses a bounded content sample"
+          }
+        ]
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "perPage": 20,
+      "total": 1,
+      "totalPages": 1,
+      "hasNext": false
+    },
+    "searchSummary": {
+      "candidatesChecked": 50,
+      "upstreamTotal": 200,
+      "enrichmentAttempted": 20,
+      "enrichmentFailed": 1,
+      "githubIncomplete": true,
+      "enrichmentIncomplete": true
+    },
+    "warnings": [
+      {
+        "code": "github_results_incomplete",
+        "message": "GitHub reported more repositories than the bounded candidate window"
+      },
+      {
+        "code": "repository_enrichment_incomplete",
+        "message": "Some shortlist documentation evidence was unavailable"
+      }
+    ]
+  },
+  "meta": {
+    "requestId": "req_repository_discovery",
+    "timestamp": "2026-07-30T10:00:00Z",
+    "rateLimitRemaining": 58
+  }
+}

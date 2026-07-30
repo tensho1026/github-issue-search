@@ -139,6 +139,7 @@ func TestRepositoryDiscoveryHandlerReturnsEvidenceOrientedResponse(
 		`"fullName":"example/typed-service"`,
 		`"topics":["developer-tools","react"]`,
 		`"technologies":["React"]`,
+		`"category":"tooling"`,
 		`"spdxId":"MIT"`,
 		`"stars":420`,
 		`"score":88`,
