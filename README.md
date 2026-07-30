@@ -27,7 +27,8 @@ authentication and persistence boundaries.
 ```
 
 See [the architecture guide](docs/architecture.md) for dependency rules and
-future extension seams, [the CI guide](docs/ci.md) for quality gates,
+future extension seams, [the frontend guide](docs/frontend.md) for the
+accessible profile journey and state ownership, [the CI guide](docs/ci.md) for quality gates,
 [secure delivery](docs/delivery.md) for Docker-free releases, and
 [security engineering](docs/security.md) for trust boundaries and incident
 response. The [issue recommendation guide](docs/issue-recommendations.md)

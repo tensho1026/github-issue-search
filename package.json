@@ -16,7 +16,7 @@
     "build:web": "pnpm --filter @issuescout/web build",
     "bundle:check": "node scripts/ci/check-web-bundle.mjs",
     "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build",
-    "contracts:check": "pnpm run contracts:lint && node scripts/ci/check-contract-routes.mjs",
+    "contracts:check": "pnpm run contracts:lint && pnpm --filter @issuescout/web contracts:check && node scripts/ci/check-contract-routes.mjs",
     "contracts:lint": "redocly lint --config .redocly.yaml packages/contracts/openapi.yaml",
     "coverage:api": "bash scripts/ci/check-go-coverage.sh",
     "coverage:web": "pnpm --filter @issuescout/web test:coverage && node scripts/ci/check-web-coverage.mjs",
@@ -43,5 +43,10 @@
     "markdownlint-cli2": "0.23.2",
     "prettier": "3.9.6",
     "yaml": "2.9.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "js-yaml@4.2.0": "4.3.0"
+    }
   }
 }
