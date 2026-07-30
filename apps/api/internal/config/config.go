@@ -11,25 +11,30 @@ import (
 	"time"
 
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/issue"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/repository"
 )
 
 const (
-	defaultAppEnvironment               = "development"
-	defaultPort                         = "8080"
-	defaultAllowedOrigins               = "http://127.0.0.1:5173"
-	defaultGitHubAPIBaseURL             = "https://api.github.com"
-	defaultGitHubRequestTimeout         = 10 * time.Second
-	defaultGitHubMaxConcurrency         = 5
-	defaultProfileRepositoryLimit       = 20
-	defaultProfileAnalysisCacheTTL      = 30 * time.Minute
-	defaultProfileAnalysisCacheCapacity = 500
-	defaultIssueSearchResultLimit       = issue.MaximumCandidateResults
-	defaultIssueSearchCacheTTL          = 5 * time.Minute
-	defaultIssueSearchCacheCapacity     = 1000
-	defaultIssueDetailAnalysisLimit     = 20
-	defaultIssueDetailCacheTTL          = 5 * time.Minute
-	defaultIssueDetailCacheCapacity     = 500
-	defaultManifestFileLimit            = 3
+	defaultAppEnvironment                     = "development"
+	defaultPort                               = "8080"
+	defaultAllowedOrigins                     = "http://127.0.0.1:5173"
+	defaultGitHubAPIBaseURL                   = "https://api.github.com"
+	defaultGitHubRequestTimeout               = 10 * time.Second
+	defaultGitHubMaxConcurrency               = 5
+	defaultProfileRepositoryLimit             = 20
+	defaultProfileAnalysisCacheTTL            = 30 * time.Minute
+	defaultProfileAnalysisCacheCapacity       = 500
+	defaultIssueSearchResultLimit             = issue.MaximumCandidateResults
+	defaultIssueSearchCacheTTL                = 5 * time.Minute
+	defaultIssueSearchCacheCapacity           = 1000
+	defaultIssueDetailAnalysisLimit           = 20
+	defaultIssueDetailCacheTTL                = 5 * time.Minute
+	defaultIssueDetailCacheCapacity           = 500
+	defaultRepositoryDiscoveryResultLimit     = repository.MaximumDiscoveryCandidateResults
+	defaultRepositoryDiscoveryEnrichmentLimit = repository.MaximumDiscoveryEnrichmentResults
+	defaultRepositoryDiscoveryCacheTTL        = 5 * time.Minute
+	defaultRepositoryDiscoveryCacheCapacity   = 1000
+	defaultManifestFileLimit                  = 3
 )
 
 var errInvalidConfig = errors.New("invalid configuration")
@@ -37,33 +42,38 @@ var errInvalidConfig = errors.New("invalid configuration")
 // Config is the immutable process-level configuration assembled at startup.
 // Secrets remain server-side and callers must never serialize this type.
 type Config struct {
-	AppEnvironment               string
-	Port                         string
-	AllowedOrigins               []string
-	GitHubToken                  string
-	GitHubAPIBaseURL             *url.URL
-	GitHubRequestTimeout         time.Duration
-	GitHubMaxConcurrency         int
-	ProfileRepositoryLimit       int
-	ProfileAnalysisCacheTTL      time.Duration
-	ProfileAnalysisCacheCapacity int
-	IssueSearchResultLimit       int
-	IssueSearchCacheTTL          time.Duration
-	IssueSearchCacheCapacity     int
-	IssueDetailAnalysisLimit     int
-	IssueDetailCacheTTL          time.Duration
-	IssueDetailCacheCapacity     int
-	ManifestFileLimit            int
-	UseGitHubAPIMock             bool
-	ReadHeaderTimeout            time.Duration
-	ReadTimeout                  time.Duration
-	WriteTimeout                 time.Duration
-	IdleTimeout                  time.Duration
-	ShutdownTimeout              time.Duration
-	NormalRequestTimeout         time.Duration
-	ProfileRequestTimeout        time.Duration
-	IssueSearchRequestTimeout    time.Duration
-	IssueDetailRequestTimeout    time.Duration
+	AppEnvironment                     string
+	Port                               string
+	AllowedOrigins                     []string
+	GitHubToken                        string
+	GitHubAPIBaseURL                   *url.URL
+	GitHubRequestTimeout               time.Duration
+	GitHubMaxConcurrency               int
+	ProfileRepositoryLimit             int
+	ProfileAnalysisCacheTTL            time.Duration
+	ProfileAnalysisCacheCapacity       int
+	IssueSearchResultLimit             int
+	IssueSearchCacheTTL                time.Duration
+	IssueSearchCacheCapacity           int
+	IssueDetailAnalysisLimit           int
+	IssueDetailCacheTTL                time.Duration
+	IssueDetailCacheCapacity           int
+	RepositoryDiscoveryResultLimit     int
+	RepositoryDiscoveryEnrichmentLimit int
+	RepositoryDiscoveryCacheTTL        time.Duration
+	RepositoryDiscoveryCacheCapacity   int
+	ManifestFileLimit                  int
+	UseGitHubAPIMock                   bool
+	ReadHeaderTimeout                  time.Duration
+	ReadTimeout                        time.Duration
+	WriteTimeout                       time.Duration
+	IdleTimeout                        time.Duration
+	ShutdownTimeout                    time.Duration
+	NormalRequestTimeout               time.Duration
+	ProfileRequestTimeout              time.Duration
+	IssueSearchRequestTimeout          time.Duration
+	IssueDetailRequestTimeout          time.Duration
+	RepositoryDiscoveryRequestTimeout  time.Duration
 }
 
 // Load reads and validates all process configuration once. Optional values
@@ -201,6 +211,45 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	repositoryDiscoveryResultLimit, err := parseInt(
+		"REPOSITORY_DISCOVERY_RESULT_LIMIT",
+		defaultRepositoryDiscoveryResultLimit,
+		1,
+		repository.MaximumDiscoveryCandidateResults,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	repositoryDiscoveryEnrichmentLimit, err := parseInt(
+		"REPOSITORY_DISCOVERY_ENRICHMENT_LIMIT",
+		defaultRepositoryDiscoveryEnrichmentLimit,
+		1,
+		min(
+			repositoryDiscoveryResultLimit,
+			repository.MaximumDiscoveryEnrichmentResults,
+		),
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	repositoryDiscoveryCacheTTL, err := parseDuration(
+		"REPOSITORY_DISCOVERY_CACHE_TTL",
+		defaultRepositoryDiscoveryCacheTTL,
+		24*time.Hour,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	repositoryDiscoveryCacheCapacity, err := parseInt(
+		"REPOSITORY_DISCOVERY_CACHE_CAPACITY",
+		defaultRepositoryDiscoveryCacheCapacity,
+		1,
+		10_000,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+
 	manifestFileLimit, err := parseInt(
 		"MANIFEST_FILE_LIMIT",
 		defaultManifestFileLimit,
@@ -223,33 +272,38 @@ func Load() (Config, error) {
 	}
 
 	return Config{
-		AppEnvironment:               appEnvironment,
-		Port:                         port,
-		AllowedOrigins:               allowedOrigins,
-		GitHubToken:                  os.Getenv("GITHUB_TOKEN"),
-		GitHubAPIBaseURL:             gitHubAPIBaseURL,
-		GitHubRequestTimeout:         gitHubRequestTimeout,
-		GitHubMaxConcurrency:         gitHubMaxConcurrency,
-		ProfileRepositoryLimit:       profileRepositoryLimit,
-		ProfileAnalysisCacheTTL:      profileAnalysisCacheTTL,
-		ProfileAnalysisCacheCapacity: profileCacheCapacity,
-		IssueSearchResultLimit:       issueSearchResultLimit,
-		IssueSearchCacheTTL:          issueSearchCacheTTL,
-		IssueSearchCacheCapacity:     issueSearchCacheCapacity,
-		IssueDetailAnalysisLimit:     issueDetailAnalysisLimit,
-		IssueDetailCacheTTL:          issueDetailCacheTTL,
-		IssueDetailCacheCapacity:     issueDetailCacheCapacity,
-		ManifestFileLimit:            manifestFileLimit,
-		UseGitHubAPIMock:             useGitHubAPIMock,
-		ReadHeaderTimeout:            5 * time.Second,
-		ReadTimeout:                  20 * time.Second,
-		WriteTimeout:                 20 * time.Second,
-		IdleTimeout:                  60 * time.Second,
-		ShutdownTimeout:              10 * time.Second,
-		NormalRequestTimeout:         5 * time.Second,
-		ProfileRequestTimeout:        15 * time.Second,
-		IssueSearchRequestTimeout:    15 * time.Second,
-		IssueDetailRequestTimeout:    15 * time.Second,
+		AppEnvironment:                     appEnvironment,
+		Port:                               port,
+		AllowedOrigins:                     allowedOrigins,
+		GitHubToken:                        os.Getenv("GITHUB_TOKEN"),
+		GitHubAPIBaseURL:                   gitHubAPIBaseURL,
+		GitHubRequestTimeout:               gitHubRequestTimeout,
+		GitHubMaxConcurrency:               gitHubMaxConcurrency,
+		ProfileRepositoryLimit:             profileRepositoryLimit,
+		ProfileAnalysisCacheTTL:            profileAnalysisCacheTTL,
+		ProfileAnalysisCacheCapacity:       profileCacheCapacity,
+		IssueSearchResultLimit:             issueSearchResultLimit,
+		IssueSearchCacheTTL:                issueSearchCacheTTL,
+		IssueSearchCacheCapacity:           issueSearchCacheCapacity,
+		IssueDetailAnalysisLimit:           issueDetailAnalysisLimit,
+		IssueDetailCacheTTL:                issueDetailCacheTTL,
+		IssueDetailCacheCapacity:           issueDetailCacheCapacity,
+		RepositoryDiscoveryResultLimit:     repositoryDiscoveryResultLimit,
+		RepositoryDiscoveryEnrichmentLimit: repositoryDiscoveryEnrichmentLimit,
+		RepositoryDiscoveryCacheTTL:        repositoryDiscoveryCacheTTL,
+		RepositoryDiscoveryCacheCapacity:   repositoryDiscoveryCacheCapacity,
+		ManifestFileLimit:                  manifestFileLimit,
+		UseGitHubAPIMock:                   useGitHubAPIMock,
+		ReadHeaderTimeout:                  5 * time.Second,
+		ReadTimeout:                        20 * time.Second,
+		WriteTimeout:                       20 * time.Second,
+		IdleTimeout:                        60 * time.Second,
+		ShutdownTimeout:                    10 * time.Second,
+		NormalRequestTimeout:               5 * time.Second,
+		ProfileRequestTimeout:              15 * time.Second,
+		IssueSearchRequestTimeout:          15 * time.Second,
+		IssueDetailRequestTimeout:          15 * time.Second,
+		RepositoryDiscoveryRequestTimeout:  15 * time.Second,
 	}, nil
 }
 

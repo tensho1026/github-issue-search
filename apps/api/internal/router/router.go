@@ -20,6 +20,7 @@ type Dependencies struct {
 	GetGitHubUser        usecase.GetGitHubUser
 	AnalyzeGitHubProfile usecase.AnalyzeGitHubProfile
 	SearchIssues         usecase.SearchIssues
+	SearchRepositories   usecase.SearchRepositories
 	RecommendIssue       usecase.IssueRecommender
 }
 
@@ -39,6 +40,11 @@ func New(dependencies Dependencies) (http.Handler, error) {
 	}
 	if dependencies.SearchIssues == nil {
 		return nil, fmt.Errorf("compose router: search issues usecase is required")
+	}
+	if dependencies.SearchRepositories == nil {
+		return nil, fmt.Errorf(
+			"compose router: search repositories usecase is required",
+		)
 	}
 	if dependencies.RecommendIssue == nil {
 		return nil, fmt.Errorf(
@@ -76,6 +82,10 @@ func New(dependencies Dependencies) (http.Handler, error) {
 		dependencies.RecommendIssue,
 		dependencies.Responder,
 	)
+	repositoryDiscoveryHandler := handler.NewRepositoryDiscoveryHandler(
+		dependencies.SearchRepositories,
+		dependencies.Responder,
+	)
 	api := engine.Group("/api")
 	api.GET(
 		"/health",
@@ -108,6 +118,14 @@ func New(dependencies Dependencies) (http.Handler, error) {
 			dependencies.Responder,
 		),
 		issueSearchHandler.Search,
+	)
+	api.POST(
+		"/repositories/search",
+		middleware.Timeout(
+			dependencies.Config.RepositoryDiscoveryRequestTimeout,
+			dependencies.Responder,
+		),
+		repositoryDiscoveryHandler.Search,
 	)
 	api.GET(
 		"/issues/:owner/:repository/:issueNumber",

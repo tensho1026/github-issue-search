@@ -25,6 +25,10 @@ var configurationKeys = []string{
 	"ISSUE_DETAIL_ANALYSIS_LIMIT",
 	"ISSUE_DETAIL_CACHE_TTL",
 	"ISSUE_DETAIL_CACHE_CAPACITY",
+	"REPOSITORY_DISCOVERY_RESULT_LIMIT",
+	"REPOSITORY_DISCOVERY_ENRICHMENT_LIMIT",
+	"REPOSITORY_DISCOVERY_CACHE_TTL",
+	"REPOSITORY_DISCOVERY_CACHE_CAPACITY",
 	"MANIFEST_FILE_LIMIT",
 	"USE_GITHUB_API_MOCK",
 }
@@ -71,6 +75,16 @@ func TestLoadUsesSafeDefaults(t *testing.T) {
 		cfg.IssueDetailCacheCapacity != defaultIssueDetailCacheCapacity {
 		t.Fatalf("Load() issue detail cache defaults = %+v", cfg)
 	}
+	if cfg.RepositoryDiscoveryResultLimit !=
+		defaultRepositoryDiscoveryResultLimit ||
+		cfg.RepositoryDiscoveryEnrichmentLimit !=
+			defaultRepositoryDiscoveryEnrichmentLimit ||
+		cfg.RepositoryDiscoveryCacheTTL !=
+			defaultRepositoryDiscoveryCacheTTL ||
+		cfg.RepositoryDiscoveryCacheCapacity !=
+			defaultRepositoryDiscoveryCacheCapacity {
+		t.Fatalf("Load() repository discovery defaults = %+v", cfg)
+	}
 }
 
 func TestLoadReadsConfiguredValues(t *testing.T) {
@@ -94,6 +108,10 @@ func TestLoadReadsConfiguredValues(t *testing.T) {
 	t.Setenv("ISSUE_DETAIL_ANALYSIS_LIMIT", "10")
 	t.Setenv("ISSUE_DETAIL_CACHE_TTL", "3m")
 	t.Setenv("ISSUE_DETAIL_CACHE_CAPACITY", "450")
+	t.Setenv("REPOSITORY_DISCOVERY_RESULT_LIMIT", "40")
+	t.Setenv("REPOSITORY_DISCOVERY_ENRICHMENT_LIMIT", "12")
+	t.Setenv("REPOSITORY_DISCOVERY_CACHE_TTL", "2m")
+	t.Setenv("REPOSITORY_DISCOVERY_CACHE_CAPACITY", "700")
 	t.Setenv("MANIFEST_FILE_LIMIT", "2")
 	t.Setenv("USE_GITHUB_API_MOCK", "true")
 
@@ -118,6 +136,10 @@ func TestLoadReadsConfiguredValues(t *testing.T) {
 		cfg.IssueDetailAnalysisLimit != 10 ||
 		cfg.IssueDetailCacheTTL != 3*time.Minute ||
 		cfg.IssueDetailCacheCapacity != 450 ||
+		cfg.RepositoryDiscoveryResultLimit != 40 ||
+		cfg.RepositoryDiscoveryEnrichmentLimit != 12 ||
+		cfg.RepositoryDiscoveryCacheTTL != 2*time.Minute ||
+		cfg.RepositoryDiscoveryCacheCapacity != 700 ||
 		cfg.ManifestFileLimit != 2 ||
 		!cfg.UseGitHubAPIMock {
 		t.Fatalf("Load() did not parse configured limits: %+v", cfg)
@@ -233,6 +255,32 @@ func TestLoadRejectsInvalidConfiguration(t *testing.T) {
 			key:     "ISSUE_DETAIL_CACHE_CAPACITY",
 			value:   "0",
 			message: "ISSUE_DETAIL_CACHE_CAPACITY",
+		},
+		{
+			name:    "repository discovery result limit",
+			key:     "REPOSITORY_DISCOVERY_RESULT_LIMIT",
+			value:   "51",
+			message: "REPOSITORY_DISCOVERY_RESULT_LIMIT",
+		},
+		{
+			name:     "repository enrichment exceeds result limit",
+			key:      "REPOSITORY_DISCOVERY_ENRICHMENT_LIMIT",
+			value:    "11",
+			message:  "REPOSITORY_DISCOVERY_ENRICHMENT_LIMIT",
+			preKey:   "REPOSITORY_DISCOVERY_RESULT_LIMIT",
+			preValue: "10",
+		},
+		{
+			name:    "repository discovery cache TTL",
+			key:     "REPOSITORY_DISCOVERY_CACHE_TTL",
+			value:   "25h",
+			message: "REPOSITORY_DISCOVERY_CACHE_TTL",
+		},
+		{
+			name:    "repository discovery cache capacity",
+			key:     "REPOSITORY_DISCOVERY_CACHE_CAPACITY",
+			value:   "0",
+			message: "REPOSITORY_DISCOVERY_CACHE_CAPACITY",
 		},
 		{
 			name:    "manifest limit",

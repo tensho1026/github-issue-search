@@ -93,6 +93,25 @@ func main() {
 		logger.Error("compose issue search usecase", "error", err)
 		os.Exit(1)
 	}
+	repositoryDiscoveryCache, err := memory.NewRepositoryDiscovery(
+		cfg.RepositoryDiscoveryCacheCapacity,
+		cfg.RepositoryDiscoveryCacheTTL,
+	)
+	if err != nil {
+		logger.Error("compose repository discovery cache", "error", err)
+		os.Exit(1)
+	}
+	searchRepositories, err := usecase.NewSearchRepositories(
+		gitHubClient,
+		gitHubClient,
+		repositoryDiscoveryCache,
+		cfg.RepositoryDiscoveryResultLimit,
+		cfg.RepositoryDiscoveryEnrichmentLimit,
+	)
+	if err != nil {
+		logger.Error("compose repository discovery usecase", "error", err)
+		os.Exit(1)
+	}
 	httpHandler, err := router.New(router.Dependencies{
 		Config:               cfg,
 		Logger:               logger,
@@ -100,6 +119,7 @@ func main() {
 		GetGitHubUser:        getGitHubUser,
 		AnalyzeGitHubProfile: analyzeGitHubProfile,
 		SearchIssues:         searchIssues,
+		SearchRepositories:   searchRepositories,
 		RecommendIssue:       recommendIssue,
 	})
 	if err != nil {
