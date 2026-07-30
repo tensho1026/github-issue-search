@@ -13,17 +13,19 @@ func TestParseEffortBandValidatesClosedVocabulary(t *testing.T) {
 		EffortOneDay,
 		EffortThreeDays,
 	} {
-		parsed, err := ParseEffortBand(" " + string(value) + " ")
+		parsed, err := ParseEffortBand(string(value))
 		if err != nil || parsed != value {
 			t.Fatalf("ParseEffortBand(%q) = %q, %v", value, parsed, err)
 		}
 	}
 
-	if _, err := ParseEffortBand("weekend"); !errors.Is(
-		err,
-		ErrInvalidSearchCriteria,
-	) {
-		t.Fatalf("ParseEffortBand(invalid) error = %v", err)
+	for _, value := range []string{"weekend", " half_day "} {
+		if _, err := ParseEffortBand(value); !errors.Is(
+			err,
+			ErrInvalidSearchCriteria,
+		) {
+			t.Fatalf("ParseEffortBand(%q) error = %v", value, err)
+		}
 	}
 }
 

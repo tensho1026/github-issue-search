@@ -1,9 +1,6 @@
 package issue
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 const (
 	// MaximumAnalysisTextBytes bounds the title and body inspected by the rule
@@ -186,7 +183,7 @@ const (
 // ParseEffortBand validates the closed, ordered effort vocabulary used by
 // search filters and analysis responses.
 func ParseEffortBand(value string) (EffortBand, error) {
-	band := EffortBand(strings.TrimSpace(value))
+	band := EffortBand(value)
 	switch band {
 	case EffortThirtyMinutes,
 		EffortTwoHours,
