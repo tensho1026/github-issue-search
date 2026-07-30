@@ -21,6 +21,7 @@ const result = spawnSync(
     "-benchmem",
     "-count=3",
     "./internal/domain/issue",
+    "./internal/domain/profile",
   ],
   {
     encoding: "utf8",

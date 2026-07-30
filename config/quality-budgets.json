@@ -14,6 +14,11 @@
       "maximumBytesPerOperation": 262144,
       "maximumNanosecondsPerOperation": 5000000
     },
+    "BenchmarkAnalyzeProfileSnapshotBounded": {
+      "maximumAllocationsPerOperation": 5000,
+      "maximumBytesPerOperation": 524288,
+      "maximumNanosecondsPerOperation": 2000000
+    },
     "BenchmarkRecommendBounded": {
       "maximumAllocationsPerOperation": 1000,
       "maximumBytesPerOperation": 131072,
