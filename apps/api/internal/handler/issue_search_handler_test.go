@@ -45,8 +45,14 @@ func TestIssueSearchHandlerReturnsNormalizedSearchResponse(t *testing.T) {
 			},
 			Analysis: issue.Analysis{
 				Difficulty: issue.DifficultyAssessment{
-					Level: 1,
-					Label: "Very easy",
+					Level:      1,
+					Label:      "Very easy",
+					Confidence: issue.ConfidenceHigh,
+				},
+				Effort: issue.EffortEstimate{
+					Band:       issue.EffortTwoHours,
+					Label:      "About two hours",
+					Confidence: issue.ConfidenceMedium,
 				},
 			},
 			Recommendation: issue.Recommendation{
@@ -90,6 +96,7 @@ func TestIssueSearchHandlerReturnsNormalizedSearchResponse(t *testing.T) {
 			"labels":["good first issue"],
 			"minimumStars":0,
 			"maximumDifficulty":3,
+			"maximumEffort":"two_hours",
 			"updatedWithinDays":30,
 			"includeDocumentation":false,
 			"includeEnglish":true,
@@ -109,6 +116,8 @@ func TestIssueSearchHandlerReturnsNormalizedSearchResponse(t *testing.T) {
 	for _, fragment := range []string{
 		`"fullName":"example/api"`,
 		`"estimatedDifficulty":1`,
+		`"difficulty":{"level":1,"label":"Very easy","confidence":"high"}`,
+		`"effort":{"band":"two_hours","label":"About two hours","confidence":"medium"}`,
 		`"score":88`,
 		`"percentage":100`,
 		`"page":2`,
@@ -133,6 +142,9 @@ func TestIssueSearchHandlerReturnsNormalizedSearchResponse(t *testing.T) {
 		search.input.Criteria.Username() != "octocat" ||
 		search.input.Criteria.MinimumStars() != 0 {
 		t.Fatalf("usecase input = %+v", search.input)
+	}
+	if maximumEffort, configured := search.input.Criteria.MaximumEffort(); !configured || maximumEffort != issue.EffortTwoHours {
+		t.Fatalf("maximum effort = %q, %t", maximumEffort, configured)
 	}
 }
 
@@ -180,6 +192,12 @@ func TestIssueSearchHandlerRejectsInvalidRequests(t *testing.T) {
 		contentType string
 		body        string
 	}{
+		{
+			name:        "invalid maximum effort",
+			target:      "/api/issues/search",
+			contentType: "application/json",
+			body:        `{"username":"octocat","maximumEffort":"weekend"}`,
+		},
 		{
 			name:   "missing content type",
 			target: "/api/issues/search",

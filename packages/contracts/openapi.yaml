@@ -97,12 +97,15 @@ paths:
         Searches one bounded, authenticated GitHub GraphQL Search window of at
         most 50 candidates and retrieves the required repository fields in the
         same request. It then applies repository and issue eligibility rules
-        before application pagination. Equivalent validated filter orderings
-        share a five-minute in-memory cache. The endpoint never follows
-        unbounded upstream pages, fans out to repository detail requests, or
-        returns GitHub response objects directly. The IssueScout endpoint is
-        anonymous to browser clients, while the API process requires a
-        server-only GITHUB_TOKEN for its upstream GraphQL request.
+        before bounded detail enrichment, effort filtering, stable ranking,
+        and application pagination. Equivalent validated discovery filter
+        orderings share a five-minute in-memory candidate cache. At most 20
+        candidates are enriched with bounded concurrency, and effort-only
+        changes reuse the candidate window. The endpoint never follows
+        unbounded upstream pages or returns GitHub response objects directly.
+        The IssueScout endpoint is anonymous to browser clients, while the API
+        process requires a server-only GITHUB_TOKEN for upstream GraphQL
+        requests.
       tags:
         - Issue discovery
       parameters:
@@ -150,6 +153,7 @@ paths:
                     - help wanted
                   minimumStars: 10
                   maximumDifficulty: 3
+                  maximumEffort: one_day
                   updatedWithinDays: 180
                   includeDocumentation: false
                   includeEnglish: true
@@ -575,6 +579,18 @@ components:
           description: |
             Maximum preliminary label-derived difficulty. Full rule-based
             analysis is performed by the recommendation stage.
+        maximumEffort:
+          type: string
+          enum:
+            - thirty_minutes
+            - two_hours
+            - half_day
+            - one_day
+            - three_days
+          description: |
+            Inclusive maximum rule-derived effort applied after bounded
+            recommendation analysis and before pagination. When omitted, every
+            effort band is allowed.
         updatedWithinDays:
           type: integer
           minimum: 1
@@ -643,6 +659,8 @@ components:
       type: object
       additionalProperties: false
       required:
+        - difficulty
+        - effort
         - issue
         - recommendation
         - repository
@@ -651,8 +669,50 @@ components:
           $ref: "#/components/schemas/IssueSearchRepository"
         issue:
           $ref: "#/components/schemas/IssueSearchIssue"
+        difficulty:
+          $ref: "#/components/schemas/IssueSearchDifficultySummary"
+        effort:
+          $ref: "#/components/schemas/IssueSearchEffortSummary"
         recommendation:
           $ref: "#/components/schemas/Recommendation"
+    IssueSearchDifficultySummary:
+      type: object
+      additionalProperties: false
+      required:
+        - confidence
+        - label
+        - level
+      properties:
+        level:
+          type: integer
+          minimum: 1
+          maximum: 5
+        label:
+          type: string
+          minLength: 1
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+    IssueSearchEffortSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - band
+        - confidence
+        - label
+      properties:
+        band:
+          type: string
+          enum:
+            - thirty_minutes
+            - two_hours
+            - half_day
+            - one_day
+            - three_days
+        label:
+          type: string
+          minLength: 1
+        confidence:
+          $ref: "#/components/schemas/Confidence"
     IssueSearchRepository:
       type: object
       additionalProperties: false

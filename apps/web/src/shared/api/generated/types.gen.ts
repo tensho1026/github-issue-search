@@ -99,6 +99,14 @@ export type IssueSearchRequest = {
    */
   maximumDifficulty?: number;
   /**
+   * Inclusive maximum rule-derived effort applied after bounded
+   * recommendation analysis and before pagination. When omitted, every
+   * effort band is allowed.
+   *
+   */
+  maximumEffort?:
+    "thirty_minutes" | "two_hours" | "half_day" | "one_day" | "three_days";
+  /**
    * Maximum age for both the issue update and repository update.
    *
    */
@@ -141,7 +149,21 @@ export type IssueSearchResult = {
 export type IssueSearchItem = {
   repository: IssueSearchRepository;
   issue: IssueSearchIssue;
+  difficulty: IssueSearchDifficultySummary;
+  effort: IssueSearchEffortSummary;
   recommendation: Recommendation;
+};
+
+export type IssueSearchDifficultySummary = {
+  level: number;
+  label: string;
+  confidence: Confidence;
+};
+
+export type IssueSearchEffortSummary = {
+  band: "thirty_minutes" | "two_hours" | "half_day" | "one_day" | "three_days";
+  label: string;
+  confidence: Confidence;
 };
 
 export type IssueSearchRepository = {
