@@ -48,7 +48,8 @@ func TestGetProfileAnalysisUsesOnePublicBoundedGraphQLSnapshot(
 			"includeUserRepositories: false",
 			"visibility",
 			"author:octocat",
-			"created:>=2025-07-30",
+			"created:>=2025-07-30T12:00:00+00:00",
+			"created:<=2026-07-30T12:00:00+00:00",
 		} {
 			if !strings.Contains(
 				payload.Query+payload.Variables.PullRequestQuery+

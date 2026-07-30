@@ -227,12 +227,22 @@ func (c *Client) GetProfileAnalysis(
 	windowTo := c.now().UTC()
 	windowFrom := windowTo.AddDate(0, 0, -profile.AnalysisWindowDays)
 	variables := graphQLProfileAnalysisVariables{
-		Login:            username.String(),
-		RepositoryLimit:  repositoryLimit,
-		WindowFrom:       windowFrom,
-		WindowTo:         windowTo,
-		PullRequestQuery: publicAuthoredQuery(username, true, windowFrom),
-		IssueQuery:       publicAuthoredQuery(username, false, windowFrom),
+		Login:           username.String(),
+		RepositoryLimit: repositoryLimit,
+		WindowFrom:      windowFrom,
+		WindowTo:        windowTo,
+		PullRequestQuery: publicAuthoredQuery(
+			username,
+			true,
+			windowFrom,
+			windowTo,
+		),
+		IssueQuery: publicAuthoredQuery(
+			username,
+			false,
+			windowFrom,
+			windowTo,
+		),
 	}
 	requestPayload, err := json.Marshal(graphQLProfileAnalysisRequest{
 		Query:     graphQLProfileAnalysisDocument,
@@ -311,16 +321,19 @@ func publicAuthoredQuery(
 	username user.Username,
 	pullRequests bool,
 	from time.Time,
+	to time.Time,
 ) string {
 	kind := "is:issue"
 	if pullRequests {
 		kind = "is:pr"
 	}
+	const searchTimestamp = "2006-01-02T15:04:05-07:00"
 	return strings.Join([]string{
 		kind,
 		"is:public",
 		"author:" + username.String(),
-		"created:>=" + from.Format(time.DateOnly),
+		"created:>=" + from.UTC().Format(searchTimestamp),
+		"created:<=" + to.UTC().Format(searchTimestamp),
 	}, " ")
 }
 
