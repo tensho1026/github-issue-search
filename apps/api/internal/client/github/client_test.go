@@ -160,39 +160,67 @@ func TestGetUserMapsNonRetryableStatuses(t *testing.T) {
 }
 
 func TestGetUserRetriesTransientStatuses(t *testing.T) {
-	var requests atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(
-		writer http.ResponseWriter,
-		_ *http.Request,
-	) {
-		attempt := requests.Add(1)
-		if attempt < maxAttempts {
-			writer.WriteHeader(http.StatusBadGateway)
-			_, _ = io.WriteString(writer, "temporary failure")
-			return
-		}
-		writer.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(writer, `{"login":"octocat"}`)
-	}))
-	defer server.Close()
+	for _, status := range []int{
+		http.StatusBadGateway,
+		http.StatusServiceUnavailable,
+		http.StatusGatewayTimeout,
+	} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			var requests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(
+				writer http.ResponseWriter,
+				_ *http.Request,
+			) {
+				attempt := requests.Add(1)
+				if attempt < maxAttempts {
+					writer.WriteHeader(status)
+					_, _ = io.WriteString(writer, "temporary failure")
+					return
+				}
+				writer.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(writer, `{"login":"octocat"}`)
+			}))
+			defer server.Close()
 
-	client := newTestClient(t, server.URL, "")
-	var sleeps atomic.Int32
-	client.backoff = func(int) time.Duration { return 0 }
-	client.sleep = func(context.Context, time.Duration) error {
-		sleeps.Add(1)
-		return nil
+			client := newTestClient(t, server.URL, "")
+			var sleeps atomic.Int32
+			client.backoff = func(int) time.Duration { return 0 }
+			client.sleep = func(context.Context, time.Duration) error {
+				sleeps.Add(1)
+				return nil
+			}
+
+			_, err := client.GetUser(context.Background(), "octocat")
+			if err != nil {
+				t.Fatalf("GetUser() error = %v", err)
+			}
+			if got := requests.Load(); got != maxAttempts {
+				t.Fatalf("requests = %d, want %d", got, maxAttempts)
+			}
+			if got := sleeps.Load(); got != maxAttempts-1 {
+				t.Fatalf("sleeps = %d, want %d", got, maxAttempts-1)
+			}
+		})
 	}
+}
+
+func TestGetUserBoundsTransportFailureRetries(t *testing.T) {
+	var requests atomic.Int32
+	client := newTestClient(t, "https://api.github.example", "")
+	client.httpClient = roundTripFunc(func(*http.Request) (*http.Response, error) {
+		requests.Add(1)
+		return nil, errors.New("temporary transport failure")
+	})
+	client.backoff = func(int) time.Duration { return 0 }
+	client.sleep = func(context.Context, time.Duration) error { return nil }
 
 	_, err := client.GetUser(context.Background(), "octocat")
-	if err != nil {
+
+	if !port.IsGitHubError(err, port.GitHubErrorUpstream) {
 		t.Fatalf("GetUser() error = %v", err)
 	}
 	if got := requests.Load(); got != maxAttempts {
 		t.Fatalf("requests = %d, want %d", got, maxAttempts)
-	}
-	if got := sleeps.Load(); got != maxAttempts-1 {
-		t.Fatalf("sleeps = %d, want %d", got, maxAttempts-1)
 	}
 }
 
