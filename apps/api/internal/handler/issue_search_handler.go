@@ -55,6 +55,7 @@ func (handler IssueSearchHandler) Search(ctx *gin.Context) {
 		Labels:               request.Labels,
 		MinimumStars:         request.MinimumStars,
 		MaximumDifficulty:    request.MaximumDifficulty,
+		MaximumEffort:        request.MaximumEffort,
 		UpdatedWithinDays:    request.UpdatedWithinDays,
 		IncludeDocumentation: request.IncludeDocumentation,
 		IncludeEnglish:       request.IncludeEnglish,
@@ -114,6 +115,7 @@ type issueSearchRequest struct {
 	Labels               []string `json:"labels"`
 	MinimumStars         *int     `json:"minimumStars"`
 	MaximumDifficulty    *int     `json:"maximumDifficulty"`
+	MaximumEffort        *string  `json:"maximumEffort"`
 	UpdatedWithinDays    *int     `json:"updatedWithinDays"`
 	IncludeDocumentation *bool    `json:"includeDocumentation"`
 	IncludeEnglish       *bool    `json:"includeEnglish"`
@@ -206,7 +208,21 @@ type issueSearchResponse struct {
 type issueSearchItemResponse struct {
 	Repository     repositorySearchResponse `json:"repository"`
 	Issue          issueSummaryResponse     `json:"issue"`
+	Difficulty     searchDifficultyResponse `json:"difficulty"`
+	Effort         searchEffortResponse     `json:"effort"`
 	Recommendation recommendationResponse   `json:"recommendation"`
+}
+
+type searchDifficultyResponse struct {
+	Level      int              `json:"level"`
+	Label      string           `json:"label"`
+	Confidence issue.Confidence `json:"confidence"`
+}
+
+type searchEffortResponse struct {
+	Band       issue.EffortBand `json:"band"`
+	Label      string           `json:"label"`
+	Confidence issue.Confidence `json:"confidence"`
 }
 
 type repositorySearchResponse struct {
@@ -285,6 +301,16 @@ func newIssueSearchResponse(
 				EstimatedDifficulty: ranked.Analysis.Difficulty.Level.Int(),
 				CreatedAt:           candidate.Issue.CreatedAt,
 				UpdatedAt:           candidate.Issue.UpdatedAt,
+			},
+			Difficulty: searchDifficultyResponse{
+				Level:      ranked.Analysis.Difficulty.Level.Int(),
+				Label:      ranked.Analysis.Difficulty.Label,
+				Confidence: ranked.Analysis.Difficulty.Confidence,
+			},
+			Effort: searchEffortResponse{
+				Band:       ranked.Analysis.Effort.Band,
+				Label:      ranked.Analysis.Effort.Label,
+				Confidence: ranked.Analysis.Effort.Confidence,
 			},
 			Recommendation: newRecommendationResponse(
 				ranked.Recommendation,

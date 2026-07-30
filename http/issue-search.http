@@ -1,0 +1,50 @@
+@apiBaseUrl = http://127.0.0.1:8080
+@username = octocat
+
+### Search with documented MVP defaults
+# @name searchIssuesDefault
+POST {{apiBaseUrl}}/api/issues/search
+Content-Type: application/json
+
+{
+  "username": "{{username}}"
+}
+
+### Search issues that fit within half a day
+# @name searchIssuesByAvailableTime
+POST {{apiBaseUrl}}/api/issues/search?page=1&perPage=20
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "languages": ["Go", "TypeScript"],
+  "frameworks": ["Gin", "React"],
+  "labels": ["good first issue", "help wanted"],
+  "minimumStars": 10,
+  "maximumDifficulty": 3,
+  "maximumEffort": "half_day",
+  "updatedWithinDays": 180,
+  "includeDocumentation": false,
+  "includeEnglish": true,
+  "excludeArchived": true
+}
+
+### Request the second server-ranked page
+# @name searchIssuesSecondPage
+POST {{apiBaseUrl}}/api/issues/search?page=2&perPage=5
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "maximumEffort": "one_day"
+}
+
+### Reject an unsupported effort band before GitHub I/O
+# @name searchIssuesInvalidEffort
+POST {{apiBaseUrl}}/api/issues/search
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "maximumEffort": "weekend"
+}

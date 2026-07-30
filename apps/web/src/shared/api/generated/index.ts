@@ -50,6 +50,8 @@ export type {
   IssueDetailEnvelope,
   IssueDetailIssue,
   IssueDetailRepository,
+  IssueSearchDifficultySummary,
+  IssueSearchEffortSummary,
   IssueSearchEnvelope,
   IssueSearchIssue,
   IssueSearchItem,

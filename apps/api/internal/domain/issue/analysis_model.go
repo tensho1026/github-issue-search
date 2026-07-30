@@ -1,5 +1,7 @@
 package issue
 
+import "fmt"
+
 const (
 	// MaximumAnalysisTextBytes bounds the title and body inspected by the rule
 	// engine. GitHub content beyond this limit cannot increase complexity
@@ -177,6 +179,48 @@ const (
 	EffortOneDay        EffortBand = "one_day"
 	EffortThreeDays     EffortBand = "three_days"
 )
+
+// ParseEffortBand validates the closed, ordered effort vocabulary used by
+// search filters and analysis responses.
+func ParseEffortBand(value string) (EffortBand, error) {
+	band := EffortBand(value)
+	switch band {
+	case EffortThirtyMinutes,
+		EffortTwoHours,
+		EffortHalfDay,
+		EffortOneDay,
+		EffortThreeDays:
+		return band, nil
+	default:
+		return "", fmt.Errorf(
+			"%w: maximumEffort must be a supported effort band",
+			ErrInvalidSearchCriteria,
+		)
+	}
+}
+
+// IsAtMost reports whether an estimate fits within an inclusive maximum.
+func (band EffortBand) IsAtMost(maximum EffortBand) bool {
+	return effortBandRank(band) > 0 &&
+		effortBandRank(band) <= effortBandRank(maximum)
+}
+
+func effortBandRank(band EffortBand) int {
+	switch band {
+	case EffortThirtyMinutes:
+		return 1
+	case EffortTwoHours:
+		return 2
+	case EffortHalfDay:
+		return 3
+	case EffortOneDay:
+		return 4
+	case EffortThreeDays:
+		return 5
+	default:
+		return 0
+	}
+}
 
 // EffortEstimate is a coarse, explicitly estimated duration.
 type EffortEstimate struct {

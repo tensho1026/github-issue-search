@@ -95,6 +95,7 @@ type SearchCriteriaOptions struct {
 	Labels               []string
 	MinimumStars         *int
 	MaximumDifficulty    *int
+	MaximumEffort        *string
 	UpdatedWithinDays    *int
 	IncludeDocumentation *bool
 	IncludeEnglish       *bool
@@ -111,6 +112,7 @@ type SearchCriteria struct {
 	labels               []FilterValue
 	minimumStars         int
 	maximumDifficulty    Difficulty
+	maximumEffort        *EffortBand
 	updatedWithinDays    int
 	includeDocumentation bool
 	includeEnglish       bool
@@ -168,6 +170,15 @@ func NewSearchCriteria(options SearchCriteriaOptions) (SearchCriteria, error) {
 		return SearchCriteria{}, err
 	}
 
+	var maximumEffort *EffortBand
+	if options.MaximumEffort != nil {
+		parsed, parseErr := ParseEffortBand(*options.MaximumEffort)
+		if parseErr != nil {
+			return SearchCriteria{}, parseErr
+		}
+		maximumEffort = &parsed
+	}
+
 	updatedWithinDays := intOrDefault(
 		options.UpdatedWithinDays,
 		DefaultUpdatedWithinDays,
@@ -188,6 +199,7 @@ func NewSearchCriteria(options SearchCriteriaOptions) (SearchCriteria, error) {
 		labels:               labels,
 		minimumStars:         minimumStars,
 		maximumDifficulty:    maximumDifficulty,
+		maximumEffort:        maximumEffort,
 		updatedWithinDays:    updatedWithinDays,
 		includeDocumentation: includeDocumentation,
 		includeEnglish:       valueOrDefault(options.IncludeEnglish, true),
@@ -219,6 +231,13 @@ func (criteria SearchCriteria) MaximumDifficulty() Difficulty {
 	return criteria.maximumDifficulty
 }
 
+func (criteria SearchCriteria) MaximumEffort() (EffortBand, bool) {
+	if criteria.maximumEffort == nil {
+		return "", false
+	}
+	return *criteria.maximumEffort, true
+}
+
 func (criteria SearchCriteria) UpdatedWithinDays() int {
 	return criteria.updatedWithinDays
 }
@@ -236,8 +255,8 @@ func (criteria SearchCriteria) ExcludesArchived() bool {
 }
 
 // CacheKey returns a stable hash for the validated discovery criteria.
-// Pagination is intentionally excluded because cached candidates are paged
-// after eligibility filtering.
+// Pagination and maximum effort are intentionally excluded because both are
+// applied after the reusable GitHub candidate window is loaded.
 func (criteria SearchCriteria) CacheKey() string {
 	var canonical strings.Builder
 	appendCanonical(&canonical, "username", strings.ToLower(criteria.username.String()))
