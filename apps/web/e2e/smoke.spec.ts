@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { issueSearchFixture } from "../src/test/issue-fixtures";
+
 const apiBaseURL = "http://127.0.0.1:18080";
 const responseMeta = {
   rateLimitRemaining: 4_992,
@@ -137,6 +139,85 @@ test("keeps mobile navigation keyboard accessible", async ({ page }) => {
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(trigger).toBeFocused();
+});
+
+test("submits shareable issue filters and restores server pagination history", async ({
+  page,
+}) => {
+  const requestBodies: unknown[] = [];
+  await page.route("**/api/issues/search**", async (route) => {
+    const requestURL = new URL(route.request().url());
+    const requestedPage = Number(requestURL.searchParams.get("page") ?? "1");
+    requestBodies.push(route.request().postDataJSON());
+    await route.fulfill({
+      body: JSON.stringify({
+        ...issueSearchFixture,
+        data: {
+          ...issueSearchFixture.data,
+          pagination: {
+            ...issueSearchFixture.data.pagination,
+            hasNext: requestedPage < 2,
+            page: requestedPage,
+          },
+        },
+      }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+
+  await page.goto(
+    "/search?username=octocat&language=TypeScript&framework=React",
+  );
+  await expect(page.getByText("Shape a realistic search")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Languages" })).toContainText(
+    "TypeScript",
+  );
+
+  await page.getByRole("combobox", { name: "Available time" }).click();
+  await page.getByRole("option", { name: "Up to half a day" }).click();
+  await page.getByRole("slider", { name: "Maximum difficulty" }).fill("4");
+  await page.getByRole("checkbox", { name: /Include documentation/ }).check();
+  await page.getByRole("button", { name: "Find ranked issues" }).click();
+
+  await expect(page).toHaveURL(/search=1/);
+  await expect(
+    page.getByRole("heading", {
+      name: "Improve keyboard navigation in the command palette",
+    }),
+  ).toBeVisible();
+  expect(requestBodies[0]).toMatchObject({
+    frameworks: ["React"],
+    includeDocumentation: true,
+    languages: ["TypeScript"],
+    maximumDifficulty: 4,
+    maximumEffort: "half_day",
+    username: "octocat",
+  });
+
+  await page.getByRole("button", { name: "Go to page 2" }).click();
+  await expect(page).toHaveURL(/page=2/);
+  await expect(page.getByText("Page 2 of 2")).toBeVisible();
+
+  await page.goBack();
+  await expect(page).toHaveURL(/page=1/);
+  await expect(page.getByText("Page 1 of 2")).toBeVisible();
+  await page.goForward();
+  await expect(page).toHaveURL(/page=2/);
+  await expect(page.getByText("Page 2 of 2")).toBeVisible();
+});
+
+test("keeps search popovers usable on a mobile viewport", async ({ page }) => {
+  await page.setViewportSize({ height: 844, width: 390 });
+  await page.goto("/search?username=octocat");
+
+  const languages = page.getByRole("button", { name: "Languages" });
+  await languages.click();
+  await expect(
+    page.getByRole("searchbox", { name: "Search languages" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(languages).toBeFocused();
 });
 
 test("serves the built API with the shared response envelope", async ({
