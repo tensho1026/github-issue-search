@@ -49,7 +49,7 @@ describe("ProfileSearchForm", () => {
     await user.click(screen.getByRole("button", { name: /analyze profile/i }));
 
     expect(
-      screen.getByRole("heading", { name: "Profile destination" }),
+      await screen.findByRole("heading", { name: "Profile destination" }),
     ).toBeInTheDocument();
   });
 });
