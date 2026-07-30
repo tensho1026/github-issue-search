@@ -4,13 +4,13 @@ import { describe, expect, it } from "vitest";
 import { App } from "./App";
 
 describe("App", () => {
-  it("renders the IssueScout application shell", () => {
+  it("renders the IssueScout application shell", async () => {
     render(<App />);
 
     expect(
-      screen.getByRole("heading", {
+      await screen.findByRole("heading", {
         level: 1,
-        name: /find the issue you can finish/i,
+        name: /your next contribution, decoded/i,
       }),
     ).toBeInTheDocument();
     expect(
