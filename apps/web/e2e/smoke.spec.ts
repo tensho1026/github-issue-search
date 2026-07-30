@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 
-import { issueSearchFixture } from "../src/test/issue-fixtures";
+import {
+  issueDetailFixture,
+  issueSearchFixture,
+} from "../src/test/issue-fixtures";
 
 const apiBaseURL = "http://127.0.0.1:18080";
 const responseMeta = {
@@ -218,6 +221,93 @@ test("keeps search popovers usable on a mobile viewport", async ({ page }) => {
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(languages).toBeFocused();
+});
+
+test("opens a safe issue detail and restores the exact ranked search", async ({
+  page,
+}) => {
+  const detail = structuredClone(issueDetailFixture);
+  detail.data.issue.body =
+    "<script>globalThis.compromised=true</script>\n[unsafe](javascript:alert(1))";
+  let detailRequest: URL | undefined;
+  await page.route("**/api/issues/search**", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        ...issueSearchFixture,
+        data: {
+          ...issueSearchFixture.data,
+          pagination: {
+            ...issueSearchFixture.data.pagination,
+            hasNext: false,
+            page: 2,
+          },
+        },
+      }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await page.route(
+    "**/api/issues/octocat/typed-service/42**",
+    async (route) => {
+      detailRequest = new URL(route.request().url());
+      await route.fulfill({
+        body: JSON.stringify(detail),
+        contentType: "application/json",
+        status: 200,
+      });
+    },
+  );
+  await page.setViewportSize({ height: 844, width: 390 });
+  const searchURL =
+    "/search?username=octocat&language=TypeScript&framework=React&page=2&search=1";
+  await page.goto(searchURL);
+
+  await page.getByRole("link", { name: "View recommendation details" }).click();
+
+  const title = page.getByRole("heading", {
+    level: 1,
+    name: "Improve keyboard navigation in the command palette",
+  });
+  await expect(title).toBeVisible();
+  await expect(title).toBeFocused();
+  await expect(
+    page.getByRole("heading", { name: "Contributor readiness" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Maintainer activity" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/<script>globalThis\.compromised=true<\/script>/),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "unsafe" })).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "Open original GitHub issue" }),
+  ).toHaveAttribute(
+    "href",
+    "https://github.com/octocat/typed-service/issues/42",
+  );
+  expect(detailRequest?.searchParams.getAll("skills")).toEqual([
+    "TypeScript",
+    "React",
+  ]);
+  const overflow =
+    await page.evaluate(`Array.from(document.querySelectorAll("*"))
+    .filter((element) => {
+      const bounds = element.getBoundingClientRect();
+      return bounds.left < -1 || bounds.right > window.innerWidth + 1;
+    })
+    .map((element) => ({
+      className: element.className,
+      right: Math.round(element.getBoundingClientRect().right),
+      tagName: element.tagName,
+      text: element.textContent?.slice(0, 80),
+    }))`);
+  expect(overflow).toEqual([]);
+
+  await page.getByRole("link", { name: "Back to search results" }).click();
+  await expect(page).toHaveURL(searchURL);
+  await expect(page.getByText("Page 2 of 2")).toBeVisible();
 });
 
 test("serves the built API with the shared response envelope", async ({

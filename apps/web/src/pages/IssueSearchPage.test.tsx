@@ -67,6 +67,17 @@ describe("IssueSearchPage", () => {
     expect(request.mock.calls[0]?.[0]).toBe(
       "/api/issues/search?page=1&perPage=20",
     );
+    const detailLink = screen.getByRole("link", {
+      name: "View recommendation details",
+    });
+    const destination = new URL(
+      detailLink.getAttribute("href") ?? "",
+      "https://issuescout.invalid",
+    );
+    expect(destination.pathname).toBe("/issues/octocat/typed-service/42");
+    expect(destination.searchParams.get("from")).toBe(
+      `/search?${parameters.toString()}`,
+    );
   });
 
   it("blocks invalid shared URLs before the API boundary", async () => {

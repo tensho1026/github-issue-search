@@ -55,6 +55,11 @@ export const externalLinks = Object.freeze({
       owner,
     )}/${encodeURIComponent(repository)}/issues/${issueNumber}`;
   },
+  gitHubRepository(owner: string, repository: string): string {
+    return `https://github.com/${encodeURIComponent(
+      owner,
+    )}/${encodeURIComponent(repository)}`;
+  },
   gitHubProfile(username: string): string {
     return `https://github.com/${encodeURIComponent(username)}`;
   },
@@ -70,6 +75,21 @@ export const profileEndpoints = Object.freeze({
 });
 
 export const issueEndpoints = Object.freeze({
+  detail(
+    owner: string,
+    repository: string,
+    issueNumber: number,
+    skills: readonly string[],
+  ): `/${string}` {
+    const query = new URLSearchParams();
+    for (const skill of skills) {
+      query.append("skills", skill);
+    }
+    const suffix = query.size > 0 ? `?${query.toString()}` : "";
+    return `/api/issues/${encodeURIComponent(owner)}/${encodeURIComponent(
+      repository,
+    )}/${issueNumber}${suffix}`;
+  },
   search(page: number, perPage: number): `/${string}` {
     const query = new URLSearchParams({
       page: page.toString(),

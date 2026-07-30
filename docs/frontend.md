@@ -153,6 +153,12 @@ Route components are loaded with `React.lazy`. The profile dashboard and form
 dependencies are split from the application shell so visitors do not download
 every feature before choosing a profile.
 
+Vite keeps the route chunks independent while grouping the always-shared UI,
+query, and search-presentation modules into `app-shared`. React Hook Form and
+the profile form that always consumes it share a lazy `form-runtime` chunk.
+This keeps initial-route boundaries intact and avoids paying separate gzip
+dictionary overhead for modules that are fetched together.
+
 Measured gzip sizes on 2026-07-30:
 
 | Checkpoint                                      | Total JS + CSS | Largest JS |
@@ -160,6 +166,7 @@ Measured gzip sizes on 2026-07-30:
 | UI system before landing/profile feature routes |     123.83 KiB | within cap |
 | Landing and complete profile journey            |     160.84 KiB | 117.62 KiB |
 | Profile plus ranked issue search journey        |     175.35 KiB | 118.32 KiB |
+| Search plus complete issue recommendation       |     179.49 KiB |  68.80 KiB |
 | Enforced maximum                                |     180.00 KiB | 140.00 KiB |
 
 Run `pnpm run build:web && pnpm run bundle:check` after frontend dependency or
