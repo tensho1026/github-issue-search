@@ -49,8 +49,10 @@ describe("accessible UI primitives", () => {
       screen.getByRole("dialog", { name: "Evidence details" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("dialog", { name: "Evidence details" }),
-    ).toContainElement(document.activeElement);
+      screen
+        .getByRole("dialog", { name: "Evidence details" })
+        .contains(document.activeElement),
+    ).toBe(true);
 
     await user.keyboard("{Escape}");
 
