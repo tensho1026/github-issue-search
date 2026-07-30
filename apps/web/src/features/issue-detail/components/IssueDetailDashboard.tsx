@@ -58,7 +58,7 @@ type Sample = Pick<
 
 function Section({ children, title }: { children: ReactNode; title: string }) {
   return (
-    <Card>
+    <Card className="min-w-0 overflow-hidden">
       <CardHeader className="border-b border-border bg-muted/25">
         <CardTitle>{title}</CardTitle>
       </CardHeader>
