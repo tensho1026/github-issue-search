@@ -4,56 +4,10 @@ import {
   issueDetailFixture,
   issueSearchFixture,
 } from "../src/test/issue-fixtures";
+import gitHubUserFixture from "../../../packages/contracts/fixtures/github-user.success.json" with { type: "json" };
+import profileAnalysisFixture from "../../../packages/contracts/fixtures/profile-analysis.success.json" with { type: "json" };
 
 const apiBaseURL = "http://127.0.0.1:18080";
-const responseMeta = {
-  rateLimitRemaining: 4_992,
-  requestId: "req_profile_e2e",
-  timestamp: "2026-07-30T00:00:00Z",
-};
-const gitHubUserFixture = {
-  data: {
-    avatarUrl: "https://avatars.githubusercontent.com/u/1?v=4",
-    bio: "Builds useful developer tools.",
-    followers: 1_250,
-    following: 42,
-    login: "octocat",
-    name: "The Octocat",
-    publicRepos: 8,
-    repositories: [
-      {
-        defaultBranch: "main",
-        description: "A typed service",
-        forks: 3,
-        fullName: "octocat/typed-service",
-        isArchived: false,
-        isFork: false,
-        mainLanguage: "TypeScript",
-        name: "typed-service",
-        openIssues: 4,
-        owner: "octocat",
-        pushedAt: "2026-07-29T00:00:00Z",
-        stars: 120,
-        updatedAt: "2026-07-29T00:00:00Z",
-        url: "https://github.com/octocat/typed-service",
-      },
-    ],
-  },
-  meta: responseMeta,
-};
-const profileAnalysisFixture = {
-  data: {
-    frameworks: ["React", "Gin"],
-    languages: [
-      { name: "TypeScript", percentage: 65 },
-      { name: "Go", percentage: 35 },
-    ],
-    repositoriesAnalyzed: 8,
-    username: "octocat",
-    warnings: [],
-  },
-  meta: responseMeta,
-};
 
 test("serves the production application shell with keyboard navigation", async ({
   page,

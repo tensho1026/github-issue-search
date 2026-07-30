@@ -1,0 +1,291 @@
+{
+  "data": {
+    "activity": {
+      "ci": "unknown",
+      "contributors": {
+        "confidence": "low",
+        "sampleSize": 0,
+        "status": "unavailable",
+        "truncated": false,
+        "value": null,
+        "windowDays": 180
+      },
+      "issueResponse": {
+        "confidence": "low",
+        "medianSeconds": null,
+        "percentile90Seconds": null,
+        "sampleSize": 0,
+        "status": "unavailable",
+        "truncated": false,
+        "windowDays": 180
+      },
+      "lastMeaningfulUpdate": "2026-07-29T12:00:00Z",
+      "pullRequestMerge": {
+        "confidence": "low",
+        "denominator": null,
+        "numerator": null,
+        "percentage": null,
+        "sampleSize": 0,
+        "status": "unavailable",
+        "truncated": false,
+        "windowDays": 180
+      },
+      "pullRequestMergeTime": {
+        "confidence": "low",
+        "medianSeconds": null,
+        "percentile90Seconds": null,
+        "sampleSize": 0,
+        "status": "unavailable",
+        "truncated": false,
+        "windowDays": 180
+      },
+      "pullRequestReview": {
+        "confidence": "low",
+        "medianSeconds": null,
+        "percentile90Seconds": null,
+        "sampleSize": 0,
+        "status": "unavailable",
+        "truncated": false,
+        "windowDays": 180
+      },
+      "pullRequestsOpened": {
+        "confidence": "low",
+        "sampleSize": 0,
+        "status": "unavailable",
+        "truncated": false,
+        "value": null,
+        "windowDays": 180
+      },
+      "staleOpenPullRequests": {
+        "confidence": "low",
+        "sampleSize": 0,
+        "status": "unavailable",
+        "truncated": false,
+        "value": null,
+        "windowDays": 180
+      },
+      "unansweredIssues": {
+        "confidence": "low",
+        "sampleSize": 0,
+        "status": "unavailable",
+        "truncated": false,
+        "value": null,
+        "windowDays": 180
+      }
+    },
+    "analysis": {
+      "category": {
+        "confidence": "high",
+        "evidence": [],
+        "matches": ["accessibility"],
+        "primary": "accessibility"
+      },
+      "confidence": "medium",
+      "difficulty": {
+        "confidence": "high",
+        "evidence": [],
+        "label": "Very Easy",
+        "level": 1
+      },
+      "effort": {
+        "band": "two_hours",
+        "confidence": "high",
+        "evidence": [],
+        "label": "2 hours"
+      },
+      "quality": {
+        "confidence": "medium",
+        "score": 33,
+        "signals": [
+          {
+            "evidence": [],
+            "key": "problem_description",
+            "state": "present"
+          },
+          {
+            "evidence": [],
+            "key": "current_behavior",
+            "state": "not_applicable"
+          },
+          {
+            "evidence": [],
+            "key": "expected_behavior",
+            "state": "not_applicable"
+          },
+          {
+            "evidence": [],
+            "key": "reproduction_steps",
+            "state": "not_applicable"
+          },
+          {
+            "evidence": [],
+            "key": "implementation_guidance",
+            "state": "absent"
+          },
+          {
+            "evidence": [],
+            "key": "related_files",
+            "state": "absent"
+          },
+          {
+            "evidence": [],
+            "key": "screenshot",
+            "state": "absent"
+          },
+          {
+            "evidence": [],
+            "key": "test_method",
+            "state": "absent"
+          },
+          {
+            "evidence": [],
+            "key": "acceptance_criteria",
+            "state": "present"
+          }
+        ]
+      },
+      "requiredTechnologies": [
+        {
+          "confidence": "high",
+          "evidence": [],
+          "kind": "language",
+          "name": "TypeScript"
+        }
+      ],
+      "scope": {
+        "areas": ["frontend", "tests"],
+        "confidence": "medium",
+        "databaseChange": "absent",
+        "evidence": [],
+        "fileCount": {
+          "label": "1–3 files",
+          "maximum": 3,
+          "minimum": 1
+        }
+      }
+    },
+    "inspection": {
+      "incomplete": false
+    },
+    "issue": {
+      "assignees": [],
+      "author": {
+        "login": "maintainer",
+        "type": "User"
+      },
+      "body": "Improve keyboard navigation and document the verification steps.",
+      "comments": 1,
+      "createdAt": "2026-07-16T00:00:00Z",
+      "labels": ["good first issue", "accessibility"],
+      "locked": false,
+      "number": 42,
+      "state": "open",
+      "title": "Improve keyboard navigation in the command palette",
+      "updatedAt": "2026-07-29T00:00:00Z",
+      "url": "https://github.com/octocat/typed-service/issues/42"
+    },
+    "recommendation": {
+      "breakdown": [
+        {
+          "maximum": 30,
+          "name": "skill_match",
+          "reasons": [],
+          "score": 0
+        },
+        {
+          "maximum": 20,
+          "name": "issue_quality",
+          "reasons": [],
+          "score": 0
+        },
+        {
+          "maximum": 15,
+          "name": "repository_quality",
+          "reasons": [],
+          "score": 0
+        },
+        {
+          "maximum": 15,
+          "name": "activity",
+          "reasons": [],
+          "score": 0
+        },
+        {
+          "maximum": 10,
+          "name": "maintainer_responsiveness",
+          "reasons": [],
+          "score": 0
+        },
+        {
+          "maximum": 10,
+          "name": "availability",
+          "reasons": [],
+          "score": 0
+        }
+      ],
+      "claim": {
+        "claimed": false,
+        "confidence": "low",
+        "evidence": []
+      },
+      "reasons": [],
+      "score": 0,
+      "skillMatch": {
+        "denominator": 0,
+        "matched": 0,
+        "percentage": 0,
+        "skills": []
+      },
+      "warnings": []
+    },
+    "repository": {
+      "defaultBranch": "main",
+      "description": "A typed service with accessible contributor workflows.",
+      "forks": 32,
+      "fullName": "octocat/typed-service",
+      "id": 1,
+      "isArchived": false,
+      "isFork": false,
+      "mainLanguage": "TypeScript",
+      "name": "typed-service",
+      "openIssues": 4,
+      "owner": "octocat",
+      "pushedAt": "2026-07-29T10:00:00Z",
+      "stars": 1250,
+      "updatedAt": "2026-07-29T12:00:00Z",
+      "url": "https://github.com/octocat/typed-service"
+    },
+    "repositoryHealth": [
+      {
+        "evidence": [],
+        "key": "readme",
+        "state": "present"
+      },
+      {
+        "evidence": [],
+        "key": "contributing",
+        "state": "present"
+      },
+      {
+        "evidence": [],
+        "key": "ci",
+        "state": "present"
+      },
+      {
+        "evidence": [],
+        "key": "tests",
+        "state": "present"
+      },
+      {
+        "evidence": [],
+        "key": "code_of_conduct",
+        "state": "absent"
+      }
+    ]
+  },
+  "meta": {
+    "rateLimitRemaining": 4992,
+    "requestId": "fixture_issue_detail",
+    "timestamp": "2026-07-30T00:00:00Z"
+  }
+}

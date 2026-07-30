@@ -1,0 +1,25 @@
+{
+  "data": {
+    "items": [],
+    "pagination": {
+      "hasNext": false,
+      "page": 1,
+      "perPage": 20,
+      "total": 0,
+      "totalPages": 0
+    },
+    "searchSummary": {
+      "candidatesChecked": 0,
+      "enrichmentAttempted": 0,
+      "enrichmentFailed": 0,
+      "excludedByReason": [],
+      "upstreamTotal": 0
+    },
+    "warnings": []
+  },
+  "meta": {
+    "rateLimitRemaining": 4992,
+    "requestId": "fixture_issue_search_empty",
+    "timestamp": "2026-07-30T00:00:00Z"
+  }
+}
