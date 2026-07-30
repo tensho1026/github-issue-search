@@ -20,6 +20,7 @@ type Dependencies struct {
 	GetGitHubUser        usecase.GetGitHubUser
 	AnalyzeGitHubProfile usecase.AnalyzeGitHubProfile
 	SearchIssues         usecase.SearchIssues
+	RecommendIssue       usecase.IssueRecommender
 }
 
 // New composes concrete HTTP dependencies. Feature handlers are constructed by
@@ -38,6 +39,11 @@ func New(dependencies Dependencies) (http.Handler, error) {
 	}
 	if dependencies.SearchIssues == nil {
 		return nil, fmt.Errorf("compose router: search issues usecase is required")
+	}
+	if dependencies.RecommendIssue == nil {
+		return nil, fmt.Errorf(
+			"compose router: recommend issue usecase is required",
+		)
 	}
 
 	engine := gin.New()
@@ -64,6 +70,10 @@ func New(dependencies Dependencies) (http.Handler, error) {
 	)
 	issueSearchHandler := handler.NewIssueSearchHandler(
 		dependencies.SearchIssues,
+		dependencies.Responder,
+	)
+	issueDetailHandler := handler.NewIssueDetailHandler(
+		dependencies.RecommendIssue,
 		dependencies.Responder,
 	)
 	api := engine.Group("/api")
@@ -98,6 +108,14 @@ func New(dependencies Dependencies) (http.Handler, error) {
 			dependencies.Responder,
 		),
 		issueSearchHandler.Search,
+	)
+	api.GET(
+		"/issues/:owner/:repository/:issueNumber",
+		middleware.Timeout(
+			dependencies.Config.IssueDetailRequestTimeout,
+			dependencies.Responder,
+		),
+		issueDetailHandler.Get,
 	)
 
 	engine.NoRoute(dependencies.Responder.NotFound)

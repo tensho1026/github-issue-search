@@ -13,6 +13,9 @@ may orchestrate the engine, but they must not duplicate or override its rules.
 
 `AnalyzeIssue` accepts the normalized issue/repository candidate from discovery
 plus optional manifest dependency identifiers and a maintainer-guidance flag.
+The recommendation use case supplies those identifiers from size-bounded root
+`package.json` and `go.mod` blobs; the pure engine does not read manifests
+itself.
 It inspects at most:
 
 | Input                           | Limit  | Behavior beyond the limit                     |

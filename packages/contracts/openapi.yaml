@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: IssueScout API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     Stateless API for analyzing a public GitHub profile and finding suitable
     open-source issues. GitHub credentials remain server-side.
@@ -19,6 +19,8 @@ tags:
     description: Normalized public GitHub profile and technology analysis.
   - name: Issue discovery
     description: Bounded, validated discovery of eligible public GitHub issues.
+  - name: Issue recommendations
+    description: Explainable scoring and bounded repository-maintainer analysis.
 paths:
   /api/health:
     get:
@@ -179,6 +181,74 @@ paths:
           $ref: "#/components/responses/GitHubUpstreamError"
         "504":
           $ref: "#/components/responses/RequestTimeout"
+  /api/issues/{owner}/{repository}/{issueNumber}:
+    parameters:
+      - $ref: "#/components/parameters/GitHubOwner"
+      - $ref: "#/components/parameters/GitHubRepository"
+      - $ref: "#/components/parameters/GitHubIssueNumber"
+    get:
+      operationId: getIssueRecommendation
+      summary: Get a complete explainable issue recommendation
+      description: |
+        Retrieves one bounded public GitHub GraphQL snapshot and returns the
+        normalized repository, full issue, rule analysis, 100-point score,
+        repository-readiness signals, and sampled maintainer activity. Commit,
+        issue, pull-request, review, and comment collections are bounded and
+        never paginated beyond the documented sample. Missing or partial
+        upstream evidence is `unknown` or `unavailable`, never a misleading
+        zero or absence. Equivalent owner/repository/number references share a
+        five-minute bounded LRU snapshot cache.
+      tags:
+        - Issue recommendations
+      parameters:
+        - name: skills
+          in: query
+          required: false
+          description: |
+            Repeatable contributor skill. Matching is case-insensitive and
+            deduplicated. Low-confidence requirements and a missing skill set
+            are excluded from the explicit percentage denominator.
+          schema:
+            type: array
+            maxItems: 20
+            items:
+              type: string
+              minLength: 1
+              maxLength: 64
+          style: form
+          explode: true
+          examples:
+            go-react:
+              value:
+                - Go
+                - React
+      responses:
+        "200":
+          description: Complete normalized issue recommendation.
+          headers:
+            X-IssueScout-Cache:
+              description: Whether the normalized detail snapshot came from cache.
+              schema:
+                type: string
+                enum:
+                  - HIT
+                  - MISS
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssueDetailEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "404":
+          $ref: "#/components/responses/GitHubIssueNotFound"
+        "429":
+          $ref: "#/components/responses/GitHubRateLimited"
+        "502":
+          $ref: "#/components/responses/GitHubUpstreamError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
 components:
   parameters:
     GitHubUsername:
@@ -192,6 +262,37 @@ components:
         maxLength: 39
         pattern: "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?!-)){0,37}[A-Za-z0-9]$|^[A-Za-z0-9]$"
       example: tensho1026
+    GitHubOwner:
+      name: owner
+      in: path
+      required: true
+      description: Public GitHub user or organization login.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 39
+        pattern: "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?!-)){0,37}[A-Za-z0-9]$|^[A-Za-z0-9]$"
+      example: openai
+    GitHubRepository:
+      name: repository
+      in: path
+      required: true
+      description: Public repository name.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 100
+        pattern: "^(?!\\.{1,2}$)[A-Za-z0-9._-]+$"
+      example: openai-go
+    GitHubIssueNumber:
+      name: issueNumber
+      in: path
+      required: true
+      description: Positive repository-local issue number.
+      schema:
+        type: integer
+        minimum: 1
+      example: 42
   responses:
     InvalidRequest:
       description: A path or request value failed validation.
@@ -219,6 +320,12 @@ components:
             $ref: "#/components/schemas/ErrorEnvelope"
     GitHubUpstreamError:
       description: Required public data could not be retrieved from GitHub.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    GitHubIssueNotFound:
+      description: The public repository or issue does not exist or is not visible.
       content:
         application/json:
           schema:
@@ -529,7 +636,7 @@ components:
           $ref: "#/components/schemas/SearchSummary"
         warnings:
           type: array
-          maxItems: 1
+          maxItems: 2
           items:
             $ref: "#/components/schemas/SearchWarning"
     IssueSearchItem:
@@ -537,12 +644,15 @@ components:
       additionalProperties: false
       required:
         - issue
+        - recommendation
         - repository
       properties:
         repository:
           $ref: "#/components/schemas/IssueSearchRepository"
         issue:
           $ref: "#/components/schemas/IssueSearchIssue"
+        recommendation:
+          $ref: "#/components/schemas/Recommendation"
     IssueSearchRepository:
       type: object
       additionalProperties: false
@@ -615,7 +725,7 @@ components:
           type: integer
           minimum: 1
           maximum: 5
-          description: Preliminary label-derived difficulty.
+          description: Full rule-derived difficulty.
         createdAt:
           type: string
           format: date-time
@@ -654,6 +764,8 @@ components:
       additionalProperties: false
       required:
         - candidatesChecked
+        - enrichmentAttempted
+        - enrichmentFailed
         - excludedByReason
         - upstreamTotal
       properties:
@@ -668,6 +780,21 @@ components:
           description: |
             GitHub's reported total before the 50-candidate window and local
             eligibility filters. This is not the pagination total.
+        enrichmentAttempted:
+          type: integer
+          minimum: 0
+          maximum: 20
+          description: |
+            Distinct repository leaders selected from the at-most-20-candidate
+            analysis window. Sibling issues reuse normalized repository
+            evidence without reusing issue-comment claim evidence.
+        enrichmentFailed:
+          type: integer
+          minimum: 0
+          maximum: 20
+          description: |
+            Distinct repository inspections that fell back to candidate
+            metadata.
         excludedByReason:
           type: array
           uniqueItems: true
@@ -710,10 +837,817 @@ components:
       properties:
         code:
           type: string
-          const: github_search_incomplete
+          enum:
+            - github_search_incomplete
+            - issue_enrichment_incomplete
         message:
           type: string
           minLength: 1
+    Recommendation:
+      type: object
+      additionalProperties: false
+      required:
+        - breakdown
+        - claim
+        - reasons
+        - score
+        - skillMatch
+        - warnings
+      properties:
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        breakdown:
+          type: array
+          minItems: 6
+          maxItems: 6
+          items:
+            $ref: "#/components/schemas/ScoreComponent"
+        skillMatch:
+          $ref: "#/components/schemas/SkillMatch"
+        reasons:
+          type: array
+          maxItems: 30
+          items:
+            type: string
+            minLength: 1
+        warnings:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/RecommendationWarning"
+        claim:
+          $ref: "#/components/schemas/ClaimEvidence"
+    ScoreComponent:
+      type: object
+      additionalProperties: false
+      required:
+        - maximum
+        - name
+        - reasons
+        - score
+      properties:
+        name:
+          type: string
+          enum:
+            - activity
+            - availability
+            - issue_quality
+            - maintainer_responsiveness
+            - repository_quality
+            - skill_match
+        score:
+          type: integer
+          minimum: 0
+          maximum: 30
+        maximum:
+          type: integer
+          enum:
+            - 10
+            - 15
+            - 20
+            - 30
+        reasons:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            minLength: 1
+    SkillMatch:
+      type: object
+      additionalProperties: false
+      required:
+        - denominator
+        - matched
+        - percentage
+        - skills
+      properties:
+        percentage:
+          type: integer
+          minimum: 0
+          maximum: 100
+        matched:
+          type: integer
+          minimum: 0
+        denominator:
+          type: integer
+          minimum: 0
+        skills:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/SkillMatchItem"
+    SkillMatchItem:
+      type: object
+      additionalProperties: false
+      required:
+        - evidence
+        - status
+        - technology
+      properties:
+        technology:
+          type: string
+          minLength: 1
+        status:
+          type: string
+          enum:
+            - matched
+            - unmatched
+            - unknown
+        evidence:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/Evidence"
+    RecommendationWarning:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - evidence
+        - message
+        - severity
+      properties:
+        code:
+          type: string
+          minLength: 1
+        severity:
+          type: string
+          enum:
+            - info
+            - warning
+            - critical
+        message:
+          type: string
+          minLength: 1
+        evidence:
+          type: array
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/Evidence"
+    ClaimEvidence:
+      type: object
+      additionalProperties: false
+      required:
+        - claimed
+        - confidence
+        - evidence
+      properties:
+        claimed:
+          type: boolean
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+        evidence:
+          type: array
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/Evidence"
+    Evidence:
+      type: object
+      additionalProperties: false
+      required:
+        - description
+        - ruleId
+        - source
+      properties:
+        ruleId:
+          type: string
+          minLength: 1
+        source:
+          type: string
+          enum:
+            - body
+            - dependency
+            - derived
+            - issue_metadata
+            - label
+            - repository_language
+            - title
+        description:
+          type: string
+          minLength: 1
+    Confidence:
+      type: string
+      enum:
+        - low
+        - medium
+        - high
+    SignalState:
+      type: string
+      enum:
+        - present
+        - absent
+        - not_applicable
+        - unknown
+    IssueDetailEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/IssueDetail"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    IssueDetail:
+      type: object
+      additionalProperties: false
+      required:
+        - activity
+        - analysis
+        - inspection
+        - issue
+        - recommendation
+        - repository
+        - repositoryHealth
+      properties:
+        repository:
+          $ref: "#/components/schemas/IssueDetailRepository"
+        issue:
+          $ref: "#/components/schemas/IssueDetailIssue"
+        analysis:
+          $ref: "#/components/schemas/IssueAnalysis"
+        recommendation:
+          $ref: "#/components/schemas/Recommendation"
+        repositoryHealth:
+          type: array
+          minItems: 5
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/RepositorySignal"
+        activity:
+          $ref: "#/components/schemas/ActivityMetrics"
+        inspection:
+          type: object
+          additionalProperties: false
+          required:
+            - incomplete
+          properties:
+            incomplete:
+              type: boolean
+              description: |
+                True when optional upstream fields were partial. Unknown
+                signals and truncated samples preserve that uncertainty.
+    IssueDetailRepository:
+      type: object
+      additionalProperties: false
+      required:
+        - defaultBranch
+        - description
+        - forks
+        - fullName
+        - id
+        - isArchived
+        - isFork
+        - mainLanguage
+        - name
+        - openIssues
+        - owner
+        - pushedAt
+        - stars
+        - updatedAt
+        - url
+      properties:
+        id:
+          type: integer
+          minimum: 0
+        owner:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        fullName:
+          type: string
+          minLength: 3
+        description:
+          type: string
+        url:
+          type: string
+          format: uri
+        mainLanguage:
+          type: string
+        stars:
+          type: integer
+          minimum: 0
+        forks:
+          type: integer
+          minimum: 0
+        openIssues:
+          type: integer
+          minimum: 0
+        isFork:
+          type: boolean
+        isArchived:
+          type: boolean
+        defaultBranch:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        pushedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+    IssueDetailIssue:
+      type: object
+      additionalProperties: false
+      required:
+        - assignees
+        - author
+        - body
+        - comments
+        - createdAt
+        - labels
+        - locked
+        - number
+        - state
+        - title
+        - updatedAt
+        - url
+      properties:
+        number:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+          minLength: 1
+        body:
+          type: string
+          maxLength: 65536
+        url:
+          type: string
+          format: uri
+        state:
+          type: string
+          enum:
+            - open
+            - closed
+        labels:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            minLength: 1
+        assignees:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            minLength: 1
+        author:
+          $ref: "#/components/schemas/GitHubActor"
+        comments:
+          type: integer
+          minimum: 0
+        locked:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    GitHubActor:
+      type: object
+      additionalProperties: false
+      required:
+        - login
+        - type
+      properties:
+        login:
+          type: string
+        type:
+          type: string
+    IssueAnalysis:
+      type: object
+      additionalProperties: false
+      required:
+        - category
+        - confidence
+        - difficulty
+        - effort
+        - quality
+        - requiredTechnologies
+        - scope
+      properties:
+        quality:
+          $ref: "#/components/schemas/QualityAssessment"
+        requiredTechnologies:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/RequiredTechnology"
+        category:
+          $ref: "#/components/schemas/CategoryAssessment"
+        difficulty:
+          $ref: "#/components/schemas/DifficultyAssessment"
+        scope:
+          $ref: "#/components/schemas/ChangeScope"
+        effort:
+          $ref: "#/components/schemas/EffortEstimate"
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+    QualityAssessment:
+      type: object
+      additionalProperties: false
+      required:
+        - confidence
+        - score
+        - signals
+      properties:
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+        signals:
+          type: array
+          minItems: 9
+          maxItems: 9
+          items:
+            $ref: "#/components/schemas/QualitySignal"
+    QualitySignal:
+      type: object
+      additionalProperties: false
+      required:
+        - evidence
+        - key
+        - state
+      properties:
+        key:
+          type: string
+          enum:
+            - acceptance_criteria
+            - current_behavior
+            - expected_behavior
+            - implementation_guidance
+            - problem_description
+            - related_files
+            - reproduction_steps
+            - screenshot
+            - test_method
+        state:
+          $ref: "#/components/schemas/SignalState"
+        evidence:
+          type: array
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/Evidence"
+    RequiredTechnology:
+      type: object
+      additionalProperties: false
+      required:
+        - confidence
+        - evidence
+        - kind
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+        kind:
+          type: string
+          enum:
+            - capability
+            - database
+            - framework
+            - language
+            - platform
+            - practice
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+        evidence:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/Evidence"
+    CategoryAssessment:
+      type: object
+      additionalProperties: false
+      required:
+        - confidence
+        - evidence
+        - matches
+        - primary
+      properties:
+        primary:
+          $ref: "#/components/schemas/IssueCategory"
+        matches:
+          type: array
+          minItems: 1
+          maxItems: 11
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/IssueCategory"
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+        evidence:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/Evidence"
+    IssueCategory:
+      type: string
+      enum:
+        - accessibility
+        - backend
+        - bug
+        - devops
+        - documentation
+        - feature
+        - localization
+        - performance
+        - refactoring
+        - testing
+        - ui
+    DifficultyAssessment:
+      type: object
+      additionalProperties: false
+      required:
+        - confidence
+        - evidence
+        - label
+        - level
+      properties:
+        level:
+          type: integer
+          minimum: 1
+          maximum: 5
+        label:
+          type: string
+          minLength: 1
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+        evidence:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/Evidence"
+    ChangeScope:
+      type: object
+      additionalProperties: false
+      required:
+        - areas
+        - confidence
+        - databaseChange
+        - evidence
+        - fileCount
+      properties:
+        areas:
+          type: array
+          minItems: 1
+          maxItems: 6
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - backend
+              - documentation
+              - frontend
+              - infrastructure
+              - migration
+              - tests
+        fileCount:
+          type: object
+          additionalProperties: false
+          required:
+            - label
+            - maximum
+            - minimum
+          properties:
+            minimum:
+              type: integer
+              minimum: 1
+            maximum:
+              type:
+                - integer
+                - "null"
+              minimum: 1
+              description: Null for the open-ended 9+ band.
+            label:
+              type: string
+              minLength: 1
+        databaseChange:
+          $ref: "#/components/schemas/SignalState"
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+        evidence:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/Evidence"
+    EffortEstimate:
+      type: object
+      additionalProperties: false
+      required:
+        - band
+        - confidence
+        - evidence
+        - label
+      properties:
+        band:
+          type: string
+          enum:
+            - thirty_minutes
+            - two_hours
+            - half_day
+            - one_day
+            - three_days
+        label:
+          type: string
+          minLength: 1
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+        evidence:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/Evidence"
+    RepositorySignal:
+      type: object
+      additionalProperties: false
+      required:
+        - evidence
+        - key
+        - state
+      properties:
+        key:
+          type: string
+          enum:
+            - ci
+            - code_of_conduct
+            - contributing
+            - readme
+            - tests
+        state:
+          $ref: "#/components/schemas/SignalState"
+        evidence:
+          type: array
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/Evidence"
+    ActivityMetrics:
+      type: object
+      additionalProperties: false
+      required:
+        - ci
+        - contributors
+        - issueResponse
+        - lastMeaningfulUpdate
+        - pullRequestMerge
+        - pullRequestMergeTime
+        - pullRequestReview
+        - pullRequestsOpened
+        - staleOpenPullRequests
+        - unansweredIssues
+      properties:
+        lastMeaningfulUpdate:
+          type:
+            - string
+            - "null"
+          format: date-time
+        ci:
+          type: string
+          enum:
+            - success
+            - failure
+            - pending
+            - unknown
+        contributors:
+          $ref: "#/components/schemas/CountAggregate"
+        pullRequestsOpened:
+          $ref: "#/components/schemas/CountAggregate"
+        staleOpenPullRequests:
+          $ref: "#/components/schemas/CountAggregate"
+        unansweredIssues:
+          $ref: "#/components/schemas/CountAggregate"
+        pullRequestMerge:
+          $ref: "#/components/schemas/RatioAggregate"
+        issueResponse:
+          $ref: "#/components/schemas/DurationAggregate"
+        pullRequestReview:
+          $ref: "#/components/schemas/DurationAggregate"
+        pullRequestMergeTime:
+          $ref: "#/components/schemas/DurationAggregate"
+    CountAggregate:
+      type: object
+      additionalProperties: false
+      required:
+        - confidence
+        - sampleSize
+        - status
+        - truncated
+        - value
+        - windowDays
+      properties:
+        status:
+          $ref: "#/components/schemas/AggregateStatus"
+        value:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        sampleSize:
+          type: integer
+          minimum: 0
+          maximum: 100
+        windowDays:
+          type: integer
+          minimum: 0
+          maximum: 180
+        truncated:
+          type: boolean
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+    RatioAggregate:
+      type: object
+      additionalProperties: false
+      required:
+        - confidence
+        - denominator
+        - numerator
+        - percentage
+        - sampleSize
+        - status
+        - truncated
+        - windowDays
+      properties:
+        status:
+          $ref: "#/components/schemas/AggregateStatus"
+        numerator:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        denominator:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        percentage:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+          maximum: 100
+        sampleSize:
+          type: integer
+          minimum: 0
+          maximum: 100
+        windowDays:
+          type: integer
+          minimum: 0
+          maximum: 180
+        truncated:
+          type: boolean
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+    DurationAggregate:
+      type: object
+      additionalProperties: false
+      required:
+        - confidence
+        - medianSeconds
+        - percentile90Seconds
+        - sampleSize
+        - status
+        - truncated
+        - windowDays
+      properties:
+        status:
+          $ref: "#/components/schemas/AggregateStatus"
+        medianSeconds:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        percentile90Seconds:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        sampleSize:
+          type: integer
+          minimum: 0
+          maximum: 100
+        windowDays:
+          type: integer
+          minimum: 0
+          maximum: 180
+        truncated:
+          type: boolean
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+    AggregateStatus:
+      type: string
+      enum:
+        - available
+        - unavailable
     LanguageShare:
       type: object
       additionalProperties: false

@@ -21,25 +21,41 @@ func TestIssueSearchHandlerReturnsNormalizedSearchResponse(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	now := time.Date(2026, time.July, 30, 10, 0, 0, 0, time.UTC)
 	search := &searchIssuesStub{output: usecase.SearchIssuesOutput{
-		Items: []issue.Candidate{{
-			Repository: repository.Summary{
-				Owner:        "example",
-				Name:         "api",
-				FullName:     "example/api",
-				Description:  "A Gin API",
-				URL:          "https://github.com/example/api",
-				Stars:        120,
-				MainLanguage: "Go",
-				UpdatedAt:    now,
+		Items: []issue.RankedIssue{{
+			Candidate: issue.Candidate{
+				Repository: repository.Summary{
+					Owner:        "example",
+					Name:         "api",
+					FullName:     "example/api",
+					Description:  "A Gin API",
+					URL:          "https://github.com/example/api",
+					Stars:        120,
+					MainLanguage: "Go",
+					UpdatedAt:    now,
+				},
+				Issue: issue.Summary{
+					Number:    123,
+					Title:     "Add validation",
+					URL:       "https://github.com/example/api/issues/123",
+					Labels:    []string{"good first issue"},
+					Comments:  2,
+					CreatedAt: now.Add(-time.Hour),
+					UpdatedAt: now,
+				},
 			},
-			Issue: issue.Summary{
-				Number:    123,
-				Title:     "Add validation",
-				URL:       "https://github.com/example/api/issues/123",
-				Labels:    []string{"good first issue"},
-				Comments:  2,
-				CreatedAt: now.Add(-time.Hour),
-				UpdatedAt: now,
+			Analysis: issue.Analysis{
+				Difficulty: issue.DifficultyAssessment{
+					Level: 1,
+					Label: "Very easy",
+				},
+			},
+			Recommendation: issue.Recommendation{
+				Score: 88,
+				SkillMatch: issue.SkillMatchAssessment{
+					Percentage:  100,
+					Matched:     1,
+					Denominator: 1,
+				},
 			},
 		}},
 		Pagination: usecase.SearchIssuesPagination{
@@ -53,11 +69,14 @@ func TestIssueSearchHandlerReturnsNormalizedSearchResponse(t *testing.T) {
 			issue.ExclusionAlreadyAssigned: 1,
 			issue.ExclusionBotGenerated:    2,
 		},
-		CandidatesChecked: 8,
-		UpstreamTotal:     150,
-		IncompleteResults: true,
-		RateLimit:         port.RateLimit{Known: true, Remaining: 29},
-		CacheHit:          true,
+		CandidatesChecked:    8,
+		UpstreamTotal:        150,
+		EnrichmentAttempted:  2,
+		EnrichmentFailed:     1,
+		GitHubIncomplete:     true,
+		EnrichmentIncomplete: true,
+		RateLimit:            port.RateLimit{Known: true, Remaining: 29},
+		CacheHit:             true,
 	}}
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
@@ -90,14 +109,19 @@ func TestIssueSearchHandlerReturnsNormalizedSearchResponse(t *testing.T) {
 	for _, fragment := range []string{
 		`"fullName":"example/api"`,
 		`"estimatedDifficulty":1`,
+		`"score":88`,
+		`"percentage":100`,
 		`"page":2`,
 		`"totalPages":2`,
 		`"candidatesChecked":8`,
 		`"upstreamTotal":150`,
+		`"enrichmentAttempted":2`,
+		`"enrichmentFailed":1`,
 		`"reason":"already_assigned","count":1`,
 		`"reason":"bot_generated","count":2`,
 		`"reason":"stale","count":3`,
 		`"code":"github_search_incomplete"`,
+		`"code":"issue_enrichment_incomplete"`,
 		`"rateLimitRemaining":29`,
 	} {
 		if !strings.Contains(recorder.Body.String(), fragment) {

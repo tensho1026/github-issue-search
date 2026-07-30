@@ -70,6 +70,20 @@ type GitHubIssueSearchResult struct {
 	RateLimit         RateLimit
 }
 
+// GitHubIssueDetailResult is one bounded, normalized repository and issue
+// inspection. Incomplete indicates that optional GraphQL fields were omitted
+// by GitHub and are represented as unknown rather than absent.
+type GitHubIssueDetailResult struct {
+	Candidate         issue.Candidate
+	Dependencies      []string
+	RepositorySignals []issue.RepositorySignal
+	Activity          issue.ActivityMetrics
+	Comments          []issue.CommentObservation
+	CommentsTruncated bool
+	RateLimit         RateLimit
+	Incomplete        bool
+}
+
 // GitHubUserReader is the application-facing port for user profile reads.
 type GitHubUserReader interface {
 	GetUser(ctx context.Context, username user.Username) (GitHubUserResult, error)
@@ -114,6 +128,17 @@ type GitHubIssueSearcher interface {
 	) (GitHubIssueSearchResult, error)
 }
 
+// GitHubIssueDetailReader retrieves one bounded public inspection without
+// exposing GitHub response objects to the application layer.
+type GitHubIssueDetailReader interface {
+	GetIssueDetail(
+		ctx context.Context,
+		owner string,
+		repositoryName string,
+		issueNumber int,
+	) (GitHubIssueDetailResult, error)
+}
+
 type ProfileAnalysisCacheEntry struct {
 	Analysis  profile.Analysis
 	RateLimit RateLimit
@@ -149,5 +174,19 @@ type IssueSearchCache interface {
 		ctx context.Context,
 		key string,
 		entry IssueSearchCacheEntry,
+	) error
+}
+
+// IssueDetailCache stores normalized public GitHub snapshots by canonical
+// owner, repository, and issue number.
+type IssueDetailCache interface {
+	Get(
+		ctx context.Context,
+		key string,
+	) (GitHubIssueDetailResult, bool, error)
+	Set(
+		ctx context.Context,
+		key string,
+		entry GitHubIssueDetailResult,
 	) error
 }

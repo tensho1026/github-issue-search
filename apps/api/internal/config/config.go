@@ -26,6 +26,8 @@ const (
 	defaultIssueSearchCacheTTL          = 5 * time.Minute
 	defaultIssueSearchCacheCapacity     = 1000
 	defaultIssueDetailAnalysisLimit     = 20
+	defaultIssueDetailCacheTTL          = 5 * time.Minute
+	defaultIssueDetailCacheCapacity     = 500
 	defaultManifestFileLimit            = 3
 )
 
@@ -47,6 +49,8 @@ type Config struct {
 	IssueSearchCacheTTL          time.Duration
 	IssueSearchCacheCapacity     int
 	IssueDetailAnalysisLimit     int
+	IssueDetailCacheTTL          time.Duration
+	IssueDetailCacheCapacity     int
 	ManifestFileLimit            int
 	UseGitHubAPIMock             bool
 	ReadHeaderTimeout            time.Duration
@@ -57,6 +61,7 @@ type Config struct {
 	NormalRequestTimeout         time.Duration
 	ProfileRequestTimeout        time.Duration
 	IssueSearchRequestTimeout    time.Duration
+	IssueDetailRequestTimeout    time.Duration
 }
 
 // Load reads and validates all process configuration once. Optional values
@@ -168,6 +173,25 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	issueDetailCacheTTL, err := parseDuration(
+		"ISSUE_DETAIL_CACHE_TTL",
+		defaultIssueDetailCacheTTL,
+		24*time.Hour,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+
+	issueDetailCacheCapacity, err := parseInt(
+		"ISSUE_DETAIL_CACHE_CAPACITY",
+		defaultIssueDetailCacheCapacity,
+		1,
+		10_000,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+
 	manifestFileLimit, err := parseInt(
 		"MANIFEST_FILE_LIMIT",
 		defaultManifestFileLimit,
@@ -197,6 +221,8 @@ func Load() (Config, error) {
 		IssueSearchCacheTTL:          issueSearchCacheTTL,
 		IssueSearchCacheCapacity:     issueSearchCacheCapacity,
 		IssueDetailAnalysisLimit:     issueDetailAnalysisLimit,
+		IssueDetailCacheTTL:          issueDetailCacheTTL,
+		IssueDetailCacheCapacity:     issueDetailCacheCapacity,
 		ManifestFileLimit:            manifestFileLimit,
 		UseGitHubAPIMock:             useGitHubAPIMock,
 		ReadHeaderTimeout:            5 * time.Second,
@@ -207,6 +233,7 @@ func Load() (Config, error) {
 		NormalRequestTimeout:         5 * time.Second,
 		ProfileRequestTimeout:        15 * time.Second,
 		IssueSearchRequestTimeout:    15 * time.Second,
+		IssueDetailRequestTimeout:    15 * time.Second,
 	}, nil
 }
 

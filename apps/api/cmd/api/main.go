@@ -66,10 +66,34 @@ func main() {
 		logger.Error("compose issue search cache", "error", err)
 		os.Exit(1)
 	}
+	issueDetailCache, err := memory.NewIssueDetail(
+		cfg.IssueDetailCacheCapacity,
+		cfg.IssueDetailCacheTTL,
+	)
+	if err != nil {
+		logger.Error("compose issue detail cache", "error", err)
+		os.Exit(1)
+	}
+	recommendIssue, err := usecase.NewRecommendIssue(
+		gitHubClient,
+		issueDetailCache,
+	)
+	if err != nil {
+		logger.Error("compose issue recommendation usecase", "error", err)
+		os.Exit(1)
+	}
 	searchIssues, err := usecase.NewSearchIssues(
 		gitHubClient,
 		issueSearchCache,
 		cfg.IssueSearchResultLimit,
+		usecase.WithIssueRecommendationEnrichment(
+			recommendIssue,
+			cfg.IssueDetailAnalysisLimit,
+			min(
+				cfg.GitHubMaxConcurrency,
+				cfg.IssueDetailAnalysisLimit,
+			),
+		),
 	)
 	if err != nil {
 		logger.Error("compose issue search usecase", "error", err)
@@ -82,6 +106,7 @@ func main() {
 		GetGitHubUser:        getGitHubUser,
 		AnalyzeGitHubProfile: analyzeGitHubProfile,
 		SearchIssues:         searchIssues,
+		RecommendIssue:       recommendIssue,
 	})
 	if err != nil {
 		logger.Error("compose API router", "error", err)

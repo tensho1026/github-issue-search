@@ -7,8 +7,10 @@ IssueScout helps developers find open-source issues they can realistically
 complete. It compares a GitHub user's public technology profile with issue
 requirements, estimated effort, and repository health.
 
-The MVP is intentionally stateless: the API reads public GitHub data on demand
-and may cache it in memory, but it does not require a database or GitHub OAuth.
+The anonymous core is intentionally stateless: the API reads public GitHub data
+on demand and may cache it in memory, but it does not require a database or
+GitHub OAuth. Optional account features are isolated behind later
+authentication and persistence boundaries.
 
 ## Repository layout
 
@@ -28,15 +30,15 @@ See [the architecture guide](docs/architecture.md) for dependency rules and
 future extension seams, [the CI guide](docs/ci.md) for quality gates,
 [secure delivery](docs/delivery.md) for Docker-free releases, and
 [security engineering](docs/security.md) for trust boundaries and incident
-response.
+response. The [issue recommendation guide](docs/issue-recommendations.md)
+documents the score, sampling, warnings, cache, and deterministic ranking.
 
 ## Prerequisites
 
 - Node.js 22.22 or newer (Node 24 LTS is recommended)
 - pnpm 10
 - Go 1.25
-- A GitHub personal access token is optional for the foundation and will be
-  documented with the profile/search APIs
+- A server-only GitHub personal access token for GitHub-powered API routes
 
 The repository pins the pnpm release in `package.json`. Corepack can provision
 that version:
@@ -84,6 +86,14 @@ uses GitHub's authenticated GraphQL API, so the API process requires a
 server-only `GITHUB_TOKEN` for this route. Browser callers remain anonymous and
 the token is never returned to them.
 
+Inspect the same recommendation with complete evidence and bounded activity
+samples:
+
+```sh
+curl --fail-with-body \
+  'http://127.0.0.1:8080/api/issues/golang/go/1?skills=Go'
+```
+
 ## Quality commands
 
 ```sh
@@ -106,7 +116,7 @@ retention, and branch protection.
 Performance-sensitive code is developed against explicit limits: at most 20
 repositories per profile, 50 search candidates, 20 detailed candidates, three
 manifest reads per repository, and five concurrent GitHub requests by default.
-See the architecture guide for the staged analysis and caching model.
+See the issue recommendation guide for the staged analysis and caching model.
 
 ## Current status
 
