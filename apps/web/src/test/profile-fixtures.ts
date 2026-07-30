@@ -53,7 +53,7 @@ export const profileAnalysisFixture: ProfileAnalysisEnvelope = {
       issuesOpened: { status: "exact", value: 3 },
       pullRequestReviews: { status: "sampled", value: 4 },
       pullRequestsOpened: { status: "exact", value: 7 },
-      repositoriesTouched: { status: "exact", value: 1 },
+      repositoriesTouched: { status: "sampled", value: 1 },
       windowDays: 365,
     },
     frameworks: ["React", "Gin"],

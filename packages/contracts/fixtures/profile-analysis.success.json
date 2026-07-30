@@ -24,7 +24,7 @@
         "value": 7
       },
       "repositoriesTouched": {
-        "status": "exact",
+        "status": "sampled",
         "value": 1
       },
       "windowDays": 365

@@ -127,8 +127,9 @@ export type ContributionAnalysis = {
    */
   pullRequestReviews: EvidenceCount;
   /**
-   * Exact total of public `repositoriesContributedTo` for the GitHub
-   * connection's documented contribution types.
+   * Observed unique public repositories across at most 20 commit,
+   * issue, pull-request, and review contribution groups. This metric
+   * is sampled.
    *
    */
   repositoriesTouched: EvidenceCount;
