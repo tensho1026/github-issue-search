@@ -28,7 +28,8 @@ authentication and persistence boundaries.
 
 See [the architecture guide](docs/architecture.md) for dependency rules and
 future extension seams, [the frontend guide](docs/frontend.md) for the
-accessible profile journey and state ownership, [the CI guide](docs/ci.md) for quality gates,
+accessible profile journey and state ownership, [the test strategy](docs/testing.md)
+for deterministic validation, [the CI guide](docs/ci.md) for quality gates,
 [secure delivery](docs/delivery.md) for Docker-free releases, and
 [security engineering](docs/security.md) for trust boundaries and incident
 response. The [issue recommendation guide](docs/issue-recommendations.md)
@@ -109,9 +110,10 @@ make build
 `make check` runs the complete local gate in the same order expected by CI.
 Generated output is ignored and can be removed with `make clean`.
 
-The strict pull request pipelines additionally enforce coverage, bundle,
-OpenAPI drift, architecture, workflow security, dependency and secret scans,
-contribution metadata, and built-stack E2E checks. See
+The strict pull request pipelines additionally enforce coverage, fuzz smoke
+runs, Go performance and web bundle budgets, OpenAPI fixture and route drift,
+architecture, workflow security, dependency and secret scans, contribution
+metadata, and built-stack E2E checks. See
 [the CI guide](docs/ci.md) for local equivalents, quality budgets, artifact
 retention, and branch protection.
 

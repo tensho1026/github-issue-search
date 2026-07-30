@@ -1,0 +1,23 @@
+{
+  "data": {
+    "frameworks": ["React"],
+    "languages": [
+      {
+        "name": "TypeScript",
+        "percentage": 65
+      },
+      {
+        "name": "Go",
+        "percentage": 35
+      }
+    ],
+    "repositoriesAnalyzed": 1,
+    "username": "octocat",
+    "warnings": []
+  },
+  "meta": {
+    "rateLimitRemaining": 4992,
+    "requestId": "fixture_profile_analysis",
+    "timestamp": "2026-07-30T00:00:00Z"
+  }
+}

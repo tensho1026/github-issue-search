@@ -1,0 +1,28 @@
+{
+  "fixtures": [
+    {
+      "file": "health.success.json",
+      "schema": "HealthEnvelope"
+    },
+    {
+      "file": "github-user.success.json",
+      "schema": "GitHubUserEnvelope"
+    },
+    {
+      "file": "profile-analysis.success.json",
+      "schema": "ProfileAnalysisEnvelope"
+    },
+    {
+      "file": "issue-search.empty.json",
+      "schema": "IssueSearchEnvelope"
+    },
+    {
+      "file": "issue-detail.success.json",
+      "schema": "IssueDetailEnvelope"
+    },
+    {
+      "file": "rate-limit.error.json",
+      "schema": "ErrorEnvelope"
+    }
+  ]
+}

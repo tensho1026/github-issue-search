@@ -10,8 +10,8 @@ import (
 	"syscall"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/bootstrap"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/cache/memory"
-	githubclient "github.com/tensho1026/github-issue-search/apps/api/internal/client/github"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/config"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/router"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/server"
@@ -33,12 +33,7 @@ func main() {
 	}
 
 	gin.SetMode(gin.ReleaseMode)
-	gitHubClient := githubclient.NewClient(
-		cfg.GitHubAPIBaseURL,
-		cfg.GitHubToken,
-		cfg.GitHubRequestTimeout,
-		logger,
-	)
+	gitHubClient := bootstrap.NewGitHubReader(cfg, logger)
 	getGitHubUser := usecase.NewGetGitHubUser(
 		gitHubClient,
 		cfg.ProfileRepositoryLimit,

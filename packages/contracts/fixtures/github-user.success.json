@@ -1,0 +1,34 @@
+{
+  "data": {
+    "avatarUrl": "https://avatars.githubusercontent.com/u/1?v=4",
+    "bio": "Builds accessible, typed developer tools.",
+    "followers": 1250,
+    "following": 42,
+    "login": "octocat",
+    "name": "The Octocat",
+    "publicRepos": 1,
+    "repositories": [
+      {
+        "defaultBranch": "main",
+        "description": "A typed service with accessible contributor workflows.",
+        "forks": 32,
+        "fullName": "octocat/typed-service",
+        "isArchived": false,
+        "isFork": false,
+        "mainLanguage": "TypeScript",
+        "name": "typed-service",
+        "openIssues": 4,
+        "owner": "octocat",
+        "pushedAt": "2026-07-29T10:00:00Z",
+        "stars": 1250,
+        "updatedAt": "2026-07-29T12:00:00Z",
+        "url": "https://github.com/octocat/typed-service"
+      }
+    ]
+  },
+  "meta": {
+    "rateLimitRemaining": 4992,
+    "requestId": "fixture_github_user",
+    "timestamp": "2026-07-30T00:00:00Z"
+  }
+}

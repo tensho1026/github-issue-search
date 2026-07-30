@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": "GITHUB_RATE_LIMIT_EXCEEDED",
+    "message": "GitHub API rate limit was exceeded"
+  },
+  "meta": {
+    "requestId": "fixture_rate_limit",
+    "timestamp": "2026-07-30T00:00:00Z"
+  }
+}

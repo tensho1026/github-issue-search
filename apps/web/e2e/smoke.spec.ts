@@ -4,56 +4,10 @@ import {
   issueDetailFixture,
   issueSearchFixture,
 } from "../src/test/issue-fixtures";
+import gitHubUserFixture from "../../../packages/contracts/fixtures/github-user.success.json" with { type: "json" };
+import profileAnalysisFixture from "../../../packages/contracts/fixtures/profile-analysis.success.json" with { type: "json" };
 
 const apiBaseURL = "http://127.0.0.1:18080";
-const responseMeta = {
-  rateLimitRemaining: 4_992,
-  requestId: "req_profile_e2e",
-  timestamp: "2026-07-30T00:00:00Z",
-};
-const gitHubUserFixture = {
-  data: {
-    avatarUrl: "https://avatars.githubusercontent.com/u/1?v=4",
-    bio: "Builds useful developer tools.",
-    followers: 1_250,
-    following: 42,
-    login: "octocat",
-    name: "The Octocat",
-    publicRepos: 8,
-    repositories: [
-      {
-        defaultBranch: "main",
-        description: "A typed service",
-        forks: 3,
-        fullName: "octocat/typed-service",
-        isArchived: false,
-        isFork: false,
-        mainLanguage: "TypeScript",
-        name: "typed-service",
-        openIssues: 4,
-        owner: "octocat",
-        pushedAt: "2026-07-29T00:00:00Z",
-        stars: 120,
-        updatedAt: "2026-07-29T00:00:00Z",
-        url: "https://github.com/octocat/typed-service",
-      },
-    ],
-  },
-  meta: responseMeta,
-};
-const profileAnalysisFixture = {
-  data: {
-    frameworks: ["React", "Gin"],
-    languages: [
-      { name: "TypeScript", percentage: 65 },
-      { name: "Go", percentage: 35 },
-    ],
-    repositoriesAnalyzed: 8,
-    username: "octocat",
-    warnings: [],
-  },
-  meta: responseMeta,
-};
 
 test("serves the production application shell with keyboard navigation", async ({
   page,
@@ -105,6 +59,74 @@ test("analyzes a valid username through the production profile route", async ({
   await languageOrder.press("ArrowDown");
   await page.getByRole("option", { name: "A–Z" }).click();
   await expect(languageOrder).toContainText("A–Z");
+});
+
+test("completes profile, search, and detail through the built API", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await page.getByRole("textbox", { name: "GitHub username" }).fill("octocat");
+  await page.getByRole("button", { name: "Analyze profile" }).click();
+
+  await expect(page).toHaveURL("/profiles/octocat");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "The Octocat" }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Find matching issues" }).click();
+  await expect(page).toHaveURL(/\/search\?username=octocat/);
+
+  await page.getByRole("button", { name: "Find ranked issues" }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Improve keyboard navigation in the command palette",
+    }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "View recommendation details" }).click();
+
+  const detailHeading = page.getByRole("heading", {
+    level: 1,
+    name: "Improve keyboard navigation in the command palette",
+  });
+  await expect(detailHeading).toBeVisible();
+  await expect(detailHeading).toBeFocused();
+  await expect(
+    page.getByRole("heading", { name: "Contributor readiness" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Open original GitHub issue" }),
+  ).toHaveAttribute(
+    "href",
+    "https://github.com/octocat/typed-service/issues/42",
+  );
+});
+
+test("renders built API not-found and rate-limit states", async ({ page }) => {
+  await page.goto("/profiles/missing-user");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Profile not found" }),
+  ).toBeVisible();
+
+  await page.goto("/profiles/rate-limited");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "GitHub needs a breather" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Retry analysis" }),
+  ).toBeVisible();
+});
+
+test("renders an explicit empty search from the built API", async ({
+  page,
+}) => {
+  await page.goto("/search?username=no-results&search=1");
+
+  await expect(
+    page.getByRole("heading", { name: "No eligible issues found" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Broaden the filters" }),
+  ).toBeVisible();
 });
 
 test("rejects malformed usernames without making an API request", async ({
