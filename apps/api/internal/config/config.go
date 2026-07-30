@@ -14,6 +14,7 @@ import (
 )
 
 const (
+	defaultAppEnvironment               = "development"
 	defaultPort                         = "8080"
 	defaultAllowedOrigins               = "http://127.0.0.1:5173"
 	defaultGitHubAPIBaseURL             = "https://api.github.com"
@@ -36,6 +37,7 @@ var errInvalidConfig = errors.New("invalid configuration")
 // Config is the immutable process-level configuration assembled at startup.
 // Secrets remain server-side and callers must never serialize this type.
 type Config struct {
+	AppEnvironment               string
 	Port                         string
 	AllowedOrigins               []string
 	GitHubToken                  string
@@ -67,6 +69,13 @@ type Config struct {
 // Load reads and validates all process configuration once. Optional values
 // receive production-safe defaults; malformed values fail startup.
 func Load() (Config, error) {
+	appEnvironment, err := parseAppEnvironment(
+		valueOrDefault("APP_ENV", defaultAppEnvironment),
+	)
+	if err != nil {
+		return Config{}, err
+	}
+
 	port, err := parsePort(valueOrDefault("PORT", defaultPort))
 	if err != nil {
 		return Config{}, err
@@ -206,8 +215,15 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	if useGitHubAPIMock && appEnvironment != "test" {
+		return Config{}, configError(
+			"USE_GITHUB_API_MOCK",
+			"can be enabled only when APP_ENV=test",
+		)
+	}
 
 	return Config{
+		AppEnvironment:               appEnvironment,
 		Port:                         port,
 		AllowedOrigins:               allowedOrigins,
 		GitHubToken:                  os.Getenv("GITHUB_TOKEN"),
@@ -235,6 +251,18 @@ func Load() (Config, error) {
 		IssueSearchRequestTimeout:    15 * time.Second,
 		IssueDetailRequestTimeout:    15 * time.Second,
 	}, nil
+}
+
+func parseAppEnvironment(raw string) (string, error) {
+	switch raw {
+	case "development", "test", "staging", "production":
+		return raw, nil
+	default:
+		return "", configError(
+			"APP_ENV",
+			"must be development, test, staging, or production",
+		)
+	}
 }
 
 func parsePort(raw string) (string, error) {

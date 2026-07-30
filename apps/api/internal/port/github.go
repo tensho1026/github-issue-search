@@ -139,6 +139,15 @@ type GitHubIssueDetailReader interface {
 	) (GitHubIssueDetailResult, error)
 }
 
+// GitHubReader is the complete public-data boundary required by the current
+// application. Production and deterministic test adapters implement the same
+// port so usecases never branch on runtime infrastructure.
+type GitHubReader interface {
+	GitHubProfileAnalysisReader
+	GitHubIssueSearcher
+	GitHubIssueDetailReader
+}
+
 type ProfileAnalysisCacheEntry struct {
 	Analysis  profile.Analysis
 	RateLimit RateLimit

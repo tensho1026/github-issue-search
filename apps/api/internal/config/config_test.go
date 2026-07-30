@@ -9,6 +9,7 @@ import (
 )
 
 var configurationKeys = []string{
+	"APP_ENV",
 	"PORT",
 	"ALLOWED_ORIGINS",
 	"GITHUB_API_BASE_URL",
@@ -39,6 +40,13 @@ func TestLoadUsesSafeDefaults(t *testing.T) {
 	if cfg.Port != defaultPort {
 		t.Fatalf("Load().Port = %q, want %q", cfg.Port, defaultPort)
 	}
+	if cfg.AppEnvironment != defaultAppEnvironment {
+		t.Fatalf(
+			"Load().AppEnvironment = %q, want %q",
+			cfg.AppEnvironment,
+			defaultAppEnvironment,
+		)
+	}
 	if !reflect.DeepEqual(cfg.AllowedOrigins, []string{defaultAllowedOrigins}) {
 		t.Fatalf("Load().AllowedOrigins = %v", cfg.AllowedOrigins)
 	}
@@ -67,6 +75,7 @@ func TestLoadUsesSafeDefaults(t *testing.T) {
 
 func TestLoadReadsConfiguredValues(t *testing.T) {
 	clearConfiguration(t)
+	t.Setenv("APP_ENV", "test")
 	t.Setenv("PORT", "9090")
 	t.Setenv(
 		"ALLOWED_ORIGINS",
@@ -93,7 +102,9 @@ func TestLoadReadsConfiguredValues(t *testing.T) {
 		t.Fatalf("Load() error = %v", err)
 	}
 
-	if cfg.Port != "9090" || cfg.GitHubToken != "server-only-token" {
+	if cfg.AppEnvironment != "test" ||
+		cfg.Port != "9090" ||
+		cfg.GitHubToken != "server-only-token" {
 		t.Fatalf("Load() did not preserve configured scalar values")
 	}
 	if cfg.GitHubRequestTimeout != 7*time.Second ||
@@ -130,6 +141,12 @@ func TestLoadRejectsInvalidConfiguration(t *testing.T) {
 		preValue string
 	}{
 		{name: "port text", key: "PORT", value: "api", message: "PORT"},
+		{
+			name:    "application environment",
+			key:     "APP_ENV",
+			value:   "preview",
+			message: "APP_ENV",
+		},
 		{name: "port range", key: "PORT", value: "70000", message: "PORT"},
 		{
 			name:    "insecure public origin",
@@ -228,6 +245,14 @@ func TestLoadRejectsInvalidConfiguration(t *testing.T) {
 			key:     "USE_GITHUB_API_MOCK",
 			value:   "sometimes",
 			message: "USE_GITHUB_API_MOCK",
+		},
+		{
+			name:     "mock outside test environment",
+			key:      "USE_GITHUB_API_MOCK",
+			value:    "true",
+			message:  "USE_GITHUB_API_MOCK",
+			preKey:   "APP_ENV",
+			preValue: "production",
 		},
 	}
 
