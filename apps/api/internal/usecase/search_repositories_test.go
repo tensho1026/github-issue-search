@@ -36,15 +36,17 @@ func TestSearchRepositoriesFiltersEnrichesSortsPaginatesAndCaches(
 		result: port.GitHubRepositoryEnrichmentResult{
 			Items: map[string]repository.DiscoveryEnrichment{
 				"alpha/ready": {
-					Available:             true,
-					READMEAvailable:       true,
-					READMEText:            "React " + strings.Repeat("日本語の説明", 30),
-					ContributingAvailable: true,
+					Available:              true,
+					READMEAvailable:        true,
+					READMEContentAvailable: true,
+					READMEText:             "React " + strings.Repeat("日本語の説明", 30),
+					ContributingAvailable:  true,
 				},
 				"beta/english": {
-					Available:       true,
-					READMEAvailable: true,
-					READMEText:      "React documentation in English",
+					Available:              true,
+					READMEAvailable:        true,
+					READMEContentAvailable: true,
+					READMEText:             "React documentation in English",
 				},
 			},
 			RateLimit: port.RateLimit{Known: true, Remaining: 88},

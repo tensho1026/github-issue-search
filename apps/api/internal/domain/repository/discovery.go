@@ -66,11 +66,12 @@ type DiscoveryCandidate struct {
 // DiscoveryEnrichment is optional public documentation evidence for one
 // shortlist repository.
 type DiscoveryEnrichment struct {
-	Available             bool
-	READMEAvailable       bool
-	READMEText            string
-	READMEContentSampled  bool
-	ContributingAvailable bool
+	Available              bool
+	READMEAvailable        bool
+	READMEContentAvailable bool
+	READMEText             string
+	READMEContentSampled   bool
+	ContributingAvailable  bool
 }
 
 type JapaneseREADMEEvidence struct {
@@ -133,6 +134,11 @@ func AnalyzeDiscovery(
 	requestedTechnologies []FilterValue,
 	now time.Time,
 ) DiscoveryResult {
+	enrichment.READMEText, enrichment.READMEContentSampled =
+		boundREADMEContent(
+			enrichment.READMEText,
+			enrichment.READMEContentSampled,
+		)
 	documentation := analyzeDocumentation(candidate, enrichment)
 	category := classifyCategory(candidate)
 	technologies := detectRequestedTechnologies(
@@ -218,6 +224,12 @@ func detectJapaneseREADME(
 		return JapaneseREADMEEvidence{
 			Status:     status,
 			Confidence: ConfidenceHigh,
+		}
+	}
+	if !enrichment.READMEContentAvailable {
+		return JapaneseREADMEEvidence{
+			Status:     EvidenceUnavailable,
+			Confidence: ConfidenceUnavailable,
 		}
 	}
 
@@ -495,9 +507,9 @@ func isTermRune(character rune) bool {
 		character == '.'
 }
 
-func truncateREADME(content string) (string, bool) {
+func boundREADMEContent(content string, alreadySampled bool) (string, bool) {
 	if len(content) <= MaximumREADMEAnalysisBytes {
-		return content, false
+		return content, alreadySampled
 	}
 	content = content[:MaximumREADMEAnalysisBytes]
 	for !utf8.ValidString(content) {

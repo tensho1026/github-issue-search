@@ -22,10 +22,11 @@ func TestAnalyzeDiscoveryExplainsReadyJapaneseRepository(t *testing.T) {
 	result := AnalyzeDiscovery(
 		candidate,
 		DiscoveryEnrichment{
-			Available:             true,
-			READMEAvailable:       true,
-			READMEText:            "React\n" + japanese,
-			ContributingAvailable: true,
+			Available:              true,
+			READMEAvailable:        true,
+			READMEContentAvailable: true,
+			READMEText:             "React\n" + japanese,
+			ContributingAvailable:  true,
 		},
 		[]FilterValue{"React"},
 		now,
@@ -79,10 +80,11 @@ func TestAnalyzeDiscoveryMarksUnavailableAndSampledEvidence(t *testing.T) {
 	sampled := AnalyzeDiscovery(
 		candidate,
 		DiscoveryEnrichment{
-			Available:            true,
-			READMEAvailable:      true,
-			READMEText:           strings.Repeat("日本語", 20),
-			READMEContentSampled: true,
+			Available:              true,
+			READMEAvailable:        true,
+			READMEContentAvailable: true,
+			READMEText:             strings.Repeat("日本語", 20),
+			READMEContentSampled:   true,
 		},
 		nil,
 		now,
