@@ -12,9 +12,7 @@ export const queryKeys = Object.freeze({
         owner.toLowerCase(),
         repository.toLowerCase(),
         issueNumber,
-        [...skills].sort((left, right) =>
-          left.localeCompare(right, "en", { sensitivity: "base" }),
-        ),
+        [...skills],
       ] as const;
     },
     root: ["issues"] as const,

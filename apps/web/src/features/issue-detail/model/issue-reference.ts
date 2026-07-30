@@ -145,6 +145,7 @@ function readSkills(parameters: URLSearchParams): string[] | undefined {
     if (
       value.length < 1 ||
       [...value].length > maximumSkillCharacters ||
+      new TextEncoder().encode(value).byteLength > maximumSkillCharacters ||
       value.trim() !== value ||
       [...value].some((character) => {
         const codePoint = character.codePointAt(0) ?? 0;

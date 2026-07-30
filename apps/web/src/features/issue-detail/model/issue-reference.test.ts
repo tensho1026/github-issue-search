@@ -75,4 +75,14 @@ describe("issue detail search context", () => {
 
     expect(decodeIssueDetailContext(parameters).valid).toBe(false);
   });
+
+  it("rejects a skill that exceeds the backend UTF-8 byte limit", () => {
+    const from = `/search?username=octocat&language=${encodeURIComponent(
+      "あ".repeat(22),
+    )}&search=1`;
+
+    expect(decodeIssueDetailContext(new URLSearchParams({ from })).valid).toBe(
+      false,
+    );
+  });
 });
