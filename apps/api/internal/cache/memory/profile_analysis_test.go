@@ -24,6 +24,12 @@ func TestProfileAnalysisCacheReturnsIndependentCopies(t *testing.T) {
 	}
 	first.Analysis.Languages[0].Name = "mutated"
 	first.Analysis.Frameworks[0] = "mutated"
+	first.Analysis.RecentTechnologies[0].RepositorySources[0] = "mutated"
+	first.Analysis.OSSExperience.Evidence[0].Kind = "mutated"
+	first.Analysis.RepositoryEvidence.Owned.PrimaryTechnologies[0].Name =
+		"mutated"
+	*first.Analysis.RepositoryEvidence.Owned.Total = 999
+	first.Analysis.Proficiency[0].Evidence[0].Kind = "mutated"
 	first.Analysis.Warnings[0].Code = "mutated"
 
 	second, found, err := cache.Get(context.Background(), "OCTOCAT")
@@ -32,6 +38,15 @@ func TestProfileAnalysisCacheReturnsIndependentCopies(t *testing.T) {
 	}
 	if second.Analysis.Languages[0].Name != "Go" ||
 		second.Analysis.Frameworks[0] != "Gin" ||
+		second.Analysis.RecentTechnologies[0].RepositorySources[0] !=
+			profile.RepositoryOwned ||
+		second.Analysis.OSSExperience.Evidence[0].Kind !=
+			"authored_pull_requests" ||
+		second.Analysis.RepositoryEvidence.Owned.
+			PrimaryTechnologies[0].Name != "Go" ||
+		*second.Analysis.RepositoryEvidence.Owned.Total != 1 ||
+		second.Analysis.Proficiency[0].Evidence[0].Kind !=
+			"owned_repositories" ||
 		second.Analysis.Warnings[0].Code != "partial_data" {
 		t.Fatalf("cached entry was mutated = %+v", second)
 	}
@@ -145,7 +160,46 @@ func testProfileAnalysisEntry(
 				Name:       language,
 				Percentage: 100,
 			}},
-			Frameworks:           []string{"Gin"},
+			Frameworks: []string{"Gin"},
+			RecentTechnologies: []profile.RecentTechnology{{
+				Name:              language,
+				Kind:              profile.TechnologyLanguage,
+				RepositorySources: []profile.RepositorySource{profile.RepositoryOwned},
+			}},
+			OSSExperience: profile.OSSExperience{
+				Level:      "active",
+				Confidence: profile.ConfidenceHigh,
+				PublicOnly: true,
+				Evidence: []profile.TechnologyEvidence{{
+					Kind:   "authored_pull_requests",
+					Value:  4,
+					Status: profile.EvidenceExact,
+				}},
+			},
+			RepositoryEvidence: profile.RepositoryEvidence{
+				Owned: profile.RepositorySample{
+					Status:   profile.EvidenceExact,
+					Observed: 1,
+					Total:    intPointer(1),
+					PrimaryTechnologies: []profile.LanguageShare{{
+						Name:       language,
+						Percentage: 100,
+					}},
+				},
+			},
+			Proficiency: []profile.TechnologyProficiency{{
+				Name:       language,
+				Kind:       profile.TechnologyLanguage,
+				Level:      3,
+				Label:      "intermediate",
+				Score:      50,
+				Confidence: profile.ConfidenceHigh,
+				Evidence: []profile.TechnologyEvidence{{
+					Kind:   "owned_repositories",
+					Value:  1,
+					Status: profile.EvidenceExact,
+				}},
+			}},
 			RepositoriesAnalyzed: 1,
 			Warnings: []profile.Warning{{
 				Code:    "partial_data",
@@ -154,4 +208,8 @@ func testProfileAnalysisEntry(
 		},
 		RateLimit: port.RateLimit{Known: true, Remaining: 50},
 	}
+}
+
+func intPointer(value int) *int {
+	return &value
 }

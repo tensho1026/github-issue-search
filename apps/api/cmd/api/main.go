@@ -51,7 +51,6 @@ func main() {
 		profileAnalysisCache,
 		cfg.ProfileRepositoryLimit,
 		cfg.ManifestFileLimit,
-		cfg.GitHubMaxConcurrency,
 	)
 	issueSearchCache, err := memory.NewIssueSearch(
 		cfg.IssueSearchCacheCapacity,

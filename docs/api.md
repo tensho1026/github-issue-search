@@ -54,17 +54,22 @@ or `MISS`.
 
 ## Endpoints
 
-| Method and path                                      | Purpose                                                       | Bounds                                                      |
-| ---------------------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------- |
-| GET `/api/health`                                    | Liveness/readiness and request-correlation check              | No upstream or database access                              |
-| GET `/api/github/users/{username}`                   | Normalized public user and repository summaries               | At most 20 repositories                                     |
-| GET `/api/github/users/{username}/profile-analysis`  | Languages, frameworks, analyzed count, warnings               | 20 repositories, 3 manifests each, concurrency 5 by default |
-| POST `/api/issues/search`                            | Eligible, ranked, paginated public issues                     | 50 candidates, 20 detail enrichments, page size at most 50  |
-| GET `/api/issues/{owner}/{repository}/{issueNumber}` | Complete issue recommendation and bounded repository evidence | One canonical issue; every activity collection is bounded   |
+| Method and path                                      | Purpose                                                         | Bounds                                                     |
+| ---------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------- |
+| GET `/api/health`                                    | Liveness/readiness and request-correlation check                | No upstream or database access                             |
+| GET `/api/github/users/{username}`                   | Normalized public user and repository summaries                 | At most 20 repositories                                    |
+| GET `/api/github/users/{username}/profile-analysis`  | Public technology, OSS activity, samples, proficiency, warnings | One GraphQL snapshot; 20 repositories per collection       |
+| POST `/api/issues/search`                            | Eligible, ranked, paginated public issues                       | 50 candidates, 20 detail enrichments, page size at most 50 |
+| GET `/api/issues/{owner}/{repository}/{issueNumber}` | Complete issue recommendation and bounded repository evidence   | One canonical issue; every activity collection is bounded  |
 
 Unknown JSON fields, malformed path values, unsupported query keys, control
 characters, excessive collection sizes, and out-of-range pagination are
 rejected before upstream I/O.
+
+Profile evidence distinguishes `exact`, `sampled`, and `unavailable` values.
+Its 365-day contribution window, repository caps, privacy behavior, and
+deterministic five-level rules are defined in
+[Public profile and OSS analysis](profile-analysis.md).
 
 ## Statuses
 

@@ -53,6 +53,10 @@ protected environments are never entered from pull request events.
 - The runtime GitHub token required for GraphQL issue search is accepted only
   by the backend process and must never be sent to browser code, logs, errors,
   analytics, cache keys, or fixtures.
+- Public profile GraphQL queries filter owned, forked, and contributed
+  repositories to `PUBLIC`; remove non-public star/contribution nodes; and
+  never request restricted-contribution totals. Anonymous profile analysis is
+  database-free and stores only a bounded in-memory cache entry.
 - Logs use request IDs and bounded metadata; authorization headers and upstream
   response bodies are not logged.
 - Release archives reject `.env`, source-map, and private-key files plus

@@ -58,9 +58,168 @@ export type ProfileAnalysisEnvelope = {
 export type ProfileAnalysis = {
   username: string;
   languages: Array<LanguageShare>;
+  /**
+   * Completeness of the aggregate language percentages. `sampled`
+   * indicates that at least one repository had languages outside its
+   * ten-edge GraphQL sample or the owned repository collection was
+   * capped.
+   *
+   */
+  languageStatus: EvidenceStatus;
   frameworks: Array<string>;
+  recentTechnologies: Array<RecentTechnology>;
+  contributions: ContributionAnalysis;
+  ossExperience: OssExperience;
+  repositoryEvidence: ProfileRepositoryEvidence;
+  proficiency: Array<TechnologyProficiency>;
+  analysisWindow: ProfileAnalysisWindow;
   repositoriesAnalyzed: number;
   warnings: Array<AnalysisWarning>;
+};
+
+/**
+ * `exact` is a complete public count for the documented scope. `sampled`
+ * is a bounded observation and must not be presented as a total.
+ * `unavailable` means GitHub did not provide the segment; its value is
+ * not evidence of zero activity.
+ *
+ */
+export type EvidenceStatus = "exact" | "sampled" | "unavailable";
+
+export type EvidenceConfidence = "high" | "medium" | "low" | "unavailable";
+
+export type TechnologyKind = "language" | "framework";
+
+export type RepositoryEvidenceSource =
+  "contributed" | "forked" | "owned" | "starred";
+
+export type ProfileAnalysisWindow = {
+  from: string;
+  to: string;
+  days: 365;
+  publicOnly: true;
+};
+
+export type EvidenceCount = {
+  /**
+   * Complete count when status is `exact`, bounded observed count when
+   * status is `sampled`, and zero placeholder when status is
+   * `unavailable`. Always interpret this together with `status`.
+   *
+   */
+  value: number;
+  status: EvidenceStatus;
+};
+
+export type ContributionAnalysis = {
+  windowDays: 365;
+  /**
+   * Observed commits across at most 20 public repository contribution
+   * groups. This metric is sampled.
+   *
+   */
+  commits: EvidenceCount;
+  /**
+   * Exact public authored issue search count in the window.
+   */
+  issuesOpened: EvidenceCount;
+  /**
+   * Exact public authored pull-request search count in the window.
+   *
+   */
+  pullRequestsOpened: EvidenceCount;
+  /**
+   * Observed reviews across at most 20 public repository contribution
+   * groups. This metric is sampled.
+   *
+   */
+  pullRequestReviews: EvidenceCount;
+  /**
+   * Observed unique public repositories across at most 20 commit,
+   * issue, pull-request, and review contribution groups. This metric
+   * is sampled.
+   *
+   */
+  repositoriesTouched: EvidenceCount;
+};
+
+export type TechnologyEvidence = {
+  kind:
+    | "authored_pull_requests"
+    | "contributed_repositories"
+    | "forked_repositories"
+    | "framework_manifests"
+    | "language_share_percentage"
+    | "owned_repositories"
+    | "pull_request_reviews"
+    | "recent_repositories";
+  value: number;
+  status: EvidenceStatus;
+};
+
+export type OssExperience = {
+  /**
+   * Rule-based summary of public authored pull requests, public
+   * contributed repositories, and sampled public review activity.
+   *
+   */
+  level:
+    | "no_public_evidence"
+    | "emerging"
+    | "contributing"
+    | "active"
+    | "sustained"
+    | "unavailable";
+  confidence: EvidenceConfidence;
+  publicOnly: true;
+  evidence: Array<TechnologyEvidence>;
+};
+
+export type RecentTechnology = {
+  name: string;
+  kind: TechnologyKind;
+  lastUsedAt: string;
+  repositoryCount: number;
+  repositorySources: Array<RepositoryEvidenceSource>;
+  confidence: EvidenceConfidence;
+};
+
+export type ProfileRepositorySample = {
+  status: EvidenceStatus;
+  observed: number;
+  /**
+   * Exact public collection total when GitHub supports a public filter.
+   * Null for starred evidence because the upstream total can be
+   * privacy-ambiguous for the authenticated API viewer.
+   *
+   */
+  total: number | null;
+  limit: number;
+  activeInWindow: number;
+  primaryTechnologies: Array<LanguageShare>;
+};
+
+export type ProfileRepositoryEvidence = {
+  owned: ProfileRepositorySample;
+  contributed: ProfileRepositorySample;
+  starred: ProfileRepositorySample;
+  forked: ProfileRepositorySample;
+};
+
+export type TechnologyProficiency = {
+  name: string;
+  kind: TechnologyKind;
+  level: number;
+  label: "exploring" | "developing" | "intermediate" | "advanced" | "expert";
+  /**
+   * Deterministic evidence score used only to select the five-level
+   * diagnostic. It is not a certification or comprehensive skill
+   * measurement.
+   *
+   */
+  score: number;
+  confidence: EvidenceConfidence;
+  evidence: Array<TechnologyEvidence>;
 };
 
 export type IssueSearchRequest = {

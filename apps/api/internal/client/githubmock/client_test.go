@@ -40,23 +40,21 @@ func TestClientSupportsCompleteSuccessJourney(t *testing.T) {
 		t.Fatalf("ListRepositories() = %+v", repositories)
 	}
 
-	languages, err := client.GetRepositoryLanguages(
+	analysis, err := client.GetProfileAnalysis(
 		context.Background(),
-		fixtureOwner,
-		fixtureRepository,
+		username,
+		20,
+		3,
 	)
-	if err != nil || languages.Languages["TypeScript"] != 650 {
-		t.Fatalf("GetRepositoryLanguages() = %+v, %v", languages, err)
+	if err != nil {
+		t.Fatalf("GetProfileAnalysis() error = %v", err)
 	}
-
-	manifest, err := client.GetRepositoryFile(
-		context.Background(),
-		fixtureOwner,
-		fixtureRepository,
-		"package.json",
-	)
-	if err != nil || !manifest.Exists || len(manifest.Content) == 0 {
-		t.Fatalf("GetRepositoryFile() = %+v, %v", manifest, err)
+	if len(analysis.Snapshot.Owned.Repositories) != 1 ||
+		len(analysis.Snapshot.Contributed.Repositories) != 1 ||
+		len(analysis.Snapshot.Starred.Repositories) != 1 ||
+		len(analysis.Snapshot.Forked.Repositories) != 1 ||
+		analysis.Snapshot.Contributions.PullRequestsOpened.Value != 7 {
+		t.Fatalf("GetProfileAnalysis() = %+v", analysis)
 	}
 
 	criteria := mustCriteria(t, successUsername)

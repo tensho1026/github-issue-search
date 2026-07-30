@@ -58,10 +58,13 @@ flowchart LR
 
 ### Profile journey
 
-The user supplies a validated GitHub username. IssueScout normalizes public
-profile and repository information, then reports technology percentages and
-partial-data warnings. A missing user, exhausted GitHub rate limit, timeout,
-and upstream failure are different recoverable states.
+The user supplies a validated GitHub user or organization login. IssueScout
+normalizes bounded public repository and contribution evidence, then reports
+technology percentages, recent technologies, OSS activity, sampled
+star/fork/contribution views, explainable five-level diagnostics, and
+partial-data warnings. A missing owner, exhausted GitHub rate limit, timeout,
+and upstream failure are different recoverable states. See
+[Public profile and OSS analysis](profile-analysis.md).
 
 ### Discovery journey
 
@@ -89,6 +92,8 @@ not silently converted to zero.
 | Unknown                 | Evidence was not available or sufficient; it is not equivalent to `absent`                 |
 | Warning                 | A stable conservative risk code with fixed safe text                                       |
 | Snapshot                | Normalized public upstream data stored only in a bounded in-memory cache                   |
+| Evidence status         | `exact`, `sampled`, or `unavailable`; unavailable never means measured zero                |
+| Proficiency diagnostic  | Five-level rule output backed by public repository evidence, not a certification           |
 | Candidate cache         | Five-minute canonical search window cache, independent of pagination and effort            |
 | Detail cache            | Five-minute canonical issue/repository snapshot cache                                      |
 | Anonymous core          | Public profile, search, and recommendation behavior that never requires OAuth or DB access |

@@ -118,9 +118,15 @@ reuse the same eligible candidate window. The in-memory adapter owns deep
 copies, is concurrency-safe, has a fixed capacity, and uses LRU eviction. Equal
 concurrent cache misses are coalesced into one upstream request.
 
-Profile analysis inspects at most 20 repositories and three supported manifest
-files per repository. The limits and concurrency are configuration values that
-are validated once at startup.
+Profile analysis uses one GraphQL request rather than per-repository REST
+fan-out. It independently caps active owned repositories, active forks, public
+contributed repositories, and visible starred repositories at 20; caps owned
+language edges at 10; and analyzes at most three language-relevant manifests
+from eight conventional object aliases. Private contribution/star nodes are
+removed in the adapter. Organizations receive repository evidence while
+individual-only activity is explicitly unavailable. The complete selection,
+status, proficiency, and OSS rules are documented in
+[Public profile and OSS analysis](profile-analysis.md).
 
 External calls carry the inbound context and use a ten-second client timeout.
 Only transient network failures and HTTP 502/503/504 responses are retried, at

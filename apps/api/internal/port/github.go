@@ -52,14 +52,8 @@ type GitHubUserResult struct {
 	RateLimit RateLimit
 }
 
-type GitHubLanguagesResult struct {
-	Languages map[string]int64
-	RateLimit RateLimit
-}
-
-type GitHubRepositoryFileResult struct {
-	Content   []byte
-	Exists    bool
+type GitHubProfileAnalysisResult struct {
+	Snapshot  profile.ProfileSnapshot
 	RateLimit RateLimit
 }
 
@@ -103,18 +97,12 @@ type GitHubProfileReader interface {
 }
 
 type GitHubProfileAnalysisReader interface {
-	GitHubProfileReader
-	GetRepositoryLanguages(
+	GetProfileAnalysis(
 		ctx context.Context,
-		owner string,
-		name string,
-	) (GitHubLanguagesResult, error)
-	GetRepositoryFile(
-		ctx context.Context,
-		owner string,
-		name string,
-		filePath string,
-	) (GitHubRepositoryFileResult, error)
+		username user.Username,
+		repositoryLimit int,
+		manifestLimit int,
+	) (GitHubProfileAnalysisResult, error)
 }
 
 // GitHubIssueSearcher finds one bounded candidate window. Pagination of
@@ -143,6 +131,7 @@ type GitHubIssueDetailReader interface {
 // application. Production and deterministic test adapters implement the same
 // port so usecases never branch on runtime infrastructure.
 type GitHubReader interface {
+	GitHubProfileReader
 	GitHubProfileAnalysisReader
 	GitHubIssueSearcher
 	GitHubIssueDetailReader
