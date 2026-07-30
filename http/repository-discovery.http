@@ -1,0 +1,77 @@
+@apiBaseUrl = http://127.0.0.1:8080
+
+### Discover public repositories with documented defaults
+# @name discoverRepositoriesDefault
+POST {{apiBaseUrl}}/api/repositories/search
+Content-Type: application/json
+
+{}
+
+### Combine cheap GitHub qualifiers with analyzed OSS evidence
+# @name discoverRepositoriesAdvanced
+POST {{apiBaseUrl}}/api/repositories/search?page=1&perPage=20
+Content-Type: application/json
+
+{
+  "languages": ["Go", "TypeScript"],
+  "technologies": ["Gin", "React"],
+  "licenses": ["Apache-2.0", "MIT"],
+  "categories": ["framework", "tooling"],
+  "minimumStars": 100,
+  "minimumForks": 5,
+  "minimumOpenIssues": 1,
+  "maximumOpenIssues": 500,
+  "updatedWithinDays": 180,
+  "maximumDifficulty": 3,
+  "minimumReadiness": "promising",
+  "forkPolicy": "exclude",
+  "excludeArchived": true
+}
+
+### Require bounded Japanese README evidence
+# @name discoverRepositoriesJapaneseReadme
+POST {{apiBaseUrl}}/api/repositories/search?page=1&perPage=10
+Content-Type: application/json
+
+{
+  "languages": ["Go"],
+  "hasJapaneseReadme": true
+}
+
+### Inspect fork-only discovery
+# @name discoverForkRepositories
+POST {{apiBaseUrl}}/api/repositories/search
+Content-Type: application/json
+
+{
+  "forkPolicy": "only",
+  "minimumStars": 0
+}
+
+### Exercise a valid empty-result threshold
+# @name discoverRepositoriesNoResults
+POST {{apiBaseUrl}}/api/repositories/search
+Content-Type: application/json
+
+{
+  "minimumStars": 10000000
+}
+
+### Reject an unsupported SPDX identifier before GitHub I/O
+# @name discoverRepositoriesInvalidLicense
+POST {{apiBaseUrl}}/api/repositories/search
+Content-Type: application/json
+
+{
+  "licenses": ["Not-A-License"]
+}
+
+### Reject an inverted open-issue range before GitHub I/O
+# @name discoverRepositoriesInvalidIssueRange
+POST {{apiBaseUrl}}/api/repositories/search
+Content-Type: application/json
+
+{
+  "minimumOpenIssues": 100,
+  "maximumOpenIssues": 10
+}

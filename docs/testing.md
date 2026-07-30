@@ -109,6 +109,7 @@ Coverage includes:
 - exactly one attempt for non-retryable responses;
 - at most three attempts for 502, 503, 504, and transport failures;
 - response-body closure, bounded pagination, and bounded GraphQL windows.
+- one repository search plus at most one batched repository enrichment request.
 
 Run these tests with the race detector through `pnpm run coverage:api`.
 Cancellation tests must finish from context signals rather than arbitrary

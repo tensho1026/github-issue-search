@@ -128,6 +128,13 @@ individual-only activity is explicitly unavailable. The complete selection,
 status, proficiency, and OSS rules are documented in
 [Public profile and OSS analysis](profile-analysis.md).
 
+Repository discovery independently performs one search request for at most 50
+public candidates and one batched enrichment request for at most 20
+repositories. It never clones code or fans out one request per repository.
+README and contribution-file evidence is normalized before it reaches the
+usecase. See [Repository discovery](repository-discovery.md) for filter,
+classification, and confidence rules.
+
 External calls carry the inbound context and use a ten-second client timeout.
 Only transient network failures and HTTP 502/503/504 responses are retried, at
 most twice, with jittered exponential backoff. Authentication, validation,
@@ -141,12 +148,17 @@ part of cache keys, application responses, logs, or browser configuration.
 The bounded in-memory caches implement ports so future adapters can replace
 them. Initial TTLs are deliberately different by data volatility:
 
-| Data             |        TTL |
-| ---------------- | ---------: |
-| Profile analysis | 30 minutes |
-| Issue search     |  5 minutes |
-| Issue details    |  5 minutes |
+| Data                 |        TTL |
+| -------------------- | ---------: |
+| Profile analysis     | 30 minutes |
+| Repository discovery |  5 minutes |
+| Issue search         |  5 minutes |
+| Issue details        |  5 minutes |
 
+Repository discovery uses `REPOSITORY_DISCOVERY_RESULT_LIMIT` (maximum 50),
+`REPOSITORY_DISCOVERY_ENRICHMENT_LIMIT` (maximum 20),
+`REPOSITORY_DISCOVERY_CACHE_TTL` (five minutes by default), and
+`REPOSITORY_DISCOVERY_CACHE_CAPACITY` (1000 entries by default).
 Issue search uses `ISSUE_SEARCH_RESULT_LIMIT` (maximum 50),
 `ISSUE_SEARCH_CACHE_TTL` (five minutes by default), and
 `ISSUE_SEARCH_CACHE_CAPACITY` (1000 entries by default). Invalid or excessive
