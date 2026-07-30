@@ -318,18 +318,20 @@ func buildRepositorySearchQuery(
 			Format(time.DateOnly),
 	)
 	if languages := criteria.Languages(); len(languages) > 0 {
-		qualifiers := make([]string, len(languages))
-		for index, language := range languages {
-			qualifiers[index] = `language:"` + language.String() + `"`
+		for _, language := range languages {
+			parts = append(
+				parts,
+				`language:"`+language.String()+`"`,
+			)
 		}
-		parts = append(parts, "("+strings.Join(qualifiers, " OR ")+")")
 	}
 	if licenses := criteria.Licenses(); len(licenses) > 0 {
-		qualifiers := make([]string, len(licenses))
-		for index, license := range licenses {
-			qualifiers[index] = "license:" + strings.ToLower(license.String())
+		for _, license := range licenses {
+			parts = append(
+				parts,
+				"license:"+strings.ToLower(license.String()),
+			)
 		}
-		parts = append(parts, "("+strings.Join(qualifiers, " OR ")+")")
 	}
 	parts = append(parts, "sort:updated-desc")
 

@@ -71,10 +71,13 @@ func TestBuildRepositorySearchQueryUsesBoundedQualifiers(t *testing.T) {
 	}
 	want := `is:public archived:false fork:true stars:>=100 forks:>=2 ` +
 		`pushed:>=2026-06-30 ` +
-		`(language:"Go" OR language:"TypeScript") ` +
-		`(license:apache-2.0 OR license:mit) sort:updated-desc`
+		`language:"Go" language:"TypeScript" ` +
+		`license:apache-2.0 license:mit sort:updated-desc`
 	if query != want {
 		t.Fatalf("query =\n%s\nwant\n%s", query, want)
+	}
+	if strings.Contains(query, " OR ") {
+		t.Fatalf("query contains unsupported qualifier OR syntax: %q", query)
 	}
 }
 
