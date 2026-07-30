@@ -144,6 +144,10 @@ technology output. Dedicated interaction tests verify:
   restoration;
 - search submission request shape plus back/forward restoration of server
   pagination.
+- repository filter validation, URL restoration, cancellation, partial
+  evidence, and server-order preservation;
+- profile evidence states that distinguish exact, sampled, and unavailable
+  observations.
 
 Reduced-motion preferences disable nonessential animation.
 
@@ -151,7 +155,8 @@ Reduced-motion preferences disable nonessential animation.
 
 Route components are loaded with `React.lazy`. The profile dashboard and form
 dependencies are split from the application shell so visitors do not download
-every feature before choosing a profile.
+every feature before choosing a profile. The repository filter codec is shared
+by the profile handoff and repository route as a separate lazy chunk.
 
 Vite keeps the route chunks independent while grouping the always-shared UI,
 query, and search-presentation modules into `app-shared`. React Hook Form and
@@ -167,7 +172,8 @@ Measured gzip sizes on 2026-07-30:
 | Landing and complete profile journey            |     160.84 KiB | 117.62 KiB |
 | Profile plus ranked issue search journey        |     175.35 KiB | 118.32 KiB |
 | Search plus complete issue recommendation       |     179.49 KiB |  68.80 KiB |
-| Enforced maximum                                |     180.00 KiB | 140.00 KiB |
+| Extended profile plus repository discovery      |     192.48 KiB |  69.65 KiB |
+| Enforced maximum                                |     200.00 KiB | 140.00 KiB |
 
 Run `pnpm run build:web && pnpm run bundle:check` after frontend dependency or
 route changes. The CI budget reads `config/quality-budgets.json`; changing the

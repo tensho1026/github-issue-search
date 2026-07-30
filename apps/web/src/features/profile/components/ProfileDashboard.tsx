@@ -32,6 +32,10 @@ import {
   encodeSearchParams,
 } from "../../issue-search/model/search-filters";
 import {
+  createDefaultRepositoryFilters,
+  encodeRepositorySearchParams,
+} from "../../repository-discovery/model/repository-filters";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -52,6 +56,7 @@ import {
   type LanguageOrder,
 } from "../model/profile-view";
 import { ProfileSearchForm } from "./ProfileSearchForm";
+import { ProfileExtendedAnalytics } from "./ProfileExtendedAnalytics";
 
 type ProfileDashboardProps = {
   snapshot: ProfileSnapshot;
@@ -91,6 +96,17 @@ export function ProfileDashboard({ snapshot }: ProfileDashboardProps) {
       search: encodeSearchParams(filters, false).toString(),
     };
   }, [analysis.frameworks, analysis.languages, user.login]);
+  const repositoryDiscoveryTarget = useMemo(() => {
+    const filters = createDefaultRepositoryFilters();
+    filters.languages = analysis.languages
+      .map((language) => language.name)
+      .slice(0, 10);
+    filters.technologies = analysis.frameworks.slice(0, 10);
+    return {
+      pathname: appRoutes.repositories,
+      search: encodeRepositorySearchParams(filters, false).toString(),
+    };
+  }, [analysis.frameworks, analysis.languages]);
   const rateLimitRemaining = [
     userMeta.rateLimitRemaining,
     analysisMeta.rateLimitRemaining,
@@ -243,12 +259,20 @@ export function ProfileDashboard({ snapshot }: ProfileDashboardProps) {
               filter before GitHub search begins.
             </CardDescription>
           </div>
-          <Button asChild className="mt-3 shrink-0 sm:mt-0">
-            <Link to={issueSearchTarget}>
-              Find matching issues
-              <Icon icon={ArrowUpRight} />
-            </Link>
-          </Button>
+          <div className="mt-3 flex flex-wrap gap-3 sm:mt-0">
+            <Button asChild className="shrink-0">
+              <Link to={issueSearchTarget}>
+                Find matching issues
+                <Icon icon={ArrowUpRight} />
+              </Link>
+            </Button>
+            <Button asChild className="shrink-0" variant="outline">
+              <Link to={repositoryDiscoveryTarget}>
+                Discover repositories
+                <Icon icon={ArrowUpRight} />
+              </Link>
+            </Button>
+          </div>
         </CardHeader>
       </Card>
 
@@ -355,6 +379,8 @@ export function ProfileDashboard({ snapshot }: ProfileDashboardProps) {
           </CardContent>
         </Card>
       </section>
+
+      <ProfileExtendedAnalytics analysis={analysis} />
 
       <section aria-labelledby="repositories-heading" className="mt-5">
         <Card>
