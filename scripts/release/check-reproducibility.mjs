@@ -27,11 +27,7 @@ try {
   build(secondDirectory);
   execFileSync(
     process.execPath,
-    [
-      "scripts/release/compare-artifacts.mjs",
-      firstDirectory,
-      secondDirectory,
-    ],
+    ["scripts/release/compare-artifacts.mjs", firstDirectory, secondDirectory],
     { cwd: repositoryRoot, stdio: "inherit" },
   );
   if (!referenceDirectoryArgument) {
