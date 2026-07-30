@@ -83,7 +83,10 @@ func TestRecommendIssueDeduplicatesConcurrentMisses(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRecommendIssue() error = %v", err)
 	}
-	reference, _ := issue.NewReference("acme", "rocket", 42)
+	reference, err := issue.NewReference("acme", "rocket", 42)
+	if err != nil {
+		t.Fatalf("NewReference() error = %v", err)
+	}
 
 	errs := make(chan error, 2)
 	for range 2 {
@@ -164,9 +167,15 @@ func TestRecommendIssueUsesManifestDependencyEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRecommendIssue() error = %v", err)
 	}
-	implementation := contract.(*recommendIssue)
+	implementation, valid := contract.(*recommendIssue)
+	if !valid {
+		t.Fatal("NewRecommendIssue() returned an unexpected implementation")
+	}
 	implementation.now = func() time.Time { return now }
-	reference, _ := issue.NewReference("acme", "rocket", 42)
+	reference, err := issue.NewReference("acme", "rocket", 42)
+	if err != nil {
+		t.Fatalf("NewReference() error = %v", err)
+	}
 	output, err := contract.Execute(
 		context.Background(),
 		RecommendIssueInput{
