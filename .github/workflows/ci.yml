@@ -96,6 +96,9 @@ jobs:
       - name: Check architecture boundaries
         run: pnpm run architecture:check
 
+      - name: Enforce Docker-free repository policy
+        run: pnpm run lint:docker-free
+
       - name: Lint workflows and workflow policy
         run: pnpm run lint:workflows
 
@@ -399,6 +402,11 @@ jobs:
 
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
+
+      - name: Verify native process lifecycle
+        run: |
+          pnpm run test:dev
+          pnpm run dev:smoke
 
       - name: Run built-stack smoke tests
         run: pnpm run e2e

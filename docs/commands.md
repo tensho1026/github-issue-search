@@ -49,6 +49,7 @@ surface; pnpm scripts expose every CI building block.
 | `pnpm run fuzz:api`                                  | Run bounded Go fuzz smoke targets                    |
 | `pnpm run lint`                                      | Run web, API, and architecture lint                  |
 | `pnpm run lint:api`                                  | Run golangci-lint                                    |
+| `pnpm run lint:docker-free`                          | Reject container files, workflows, and dependencies  |
 | `pnpm run lint:docs`                                 | Lint Markdown and run the documentation contract     |
 | `pnpm run lint:web`                                  | Run ESLint with zero warnings                        |
 | `pnpm run lint:workflow-policy`                      | Enforce GitHub Actions safety policy                 |

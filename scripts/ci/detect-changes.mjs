@@ -51,7 +51,12 @@ const outputs = {
     /^LICENSE$/,
     ...shared,
   ]),
-  e2e: matches([/^apps\/(?:api|web)\//, /^e2e\//, ...shared]),
+  e2e: matches([
+    /^apps\/(?:api|web)\//,
+    /^e2e\//,
+    /^scripts\/(?:dev|test)\//,
+    ...shared,
+  ]),
   frontend: matches([/^apps\/web\//, ...shared]),
 };
 
