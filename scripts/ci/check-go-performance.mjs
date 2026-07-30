@@ -22,6 +22,7 @@ const result = spawnSync(
     "-count=3",
     "./internal/domain/issue",
     "./internal/domain/profile",
+    "./internal/domain/repository",
   ],
   {
     encoding: "utf8",

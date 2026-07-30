@@ -17,3 +17,6 @@ run_fuzz_target() {
 run_fuzz_target ./internal/domain/user FuzzParseUsername
 run_fuzz_target ./internal/domain/issue FuzzParseFilterValue
 run_fuzz_target ./internal/domain/issue FuzzNewReference
+run_fuzz_target \
+  ./internal/domain/repository \
+  FuzzParseDiscoveryFilterValue

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -148,3 +149,73 @@ func discoveryCandidateFixture(now time.Time) DiscoveryCandidate {
 		HasIssuesEnabled: true,
 	}
 }
+
+func BenchmarkAnalyzeRepositoryDiscoveryBounded(b *testing.B) {
+	now := time.Date(2026, 7, 30, 0, 0, 0, 0, time.UTC)
+	candidates := make([]DiscoveryCandidate, MaximumDiscoveryEnrichmentResults)
+	enrichments := make(
+		[]DiscoveryEnrichment,
+		MaximumDiscoveryEnrichmentResults,
+	)
+	technologies := make(
+		[]FilterValue,
+		MaximumDiscoveryFilterValues,
+	)
+	for index := range technologies {
+		technologies[index] = FilterValue(
+			"technology-" + strconv.Itoa(index),
+		)
+	}
+	for index := range candidates {
+		candidate := discoveryCandidateFixture(now)
+		candidate.Repository.ID = int64(index + 1)
+		candidate.Repository.Name = "repository-" + strconv.Itoa(index)
+		candidate.Repository.FullName = "benchmark/" + candidate.Repository.Name
+		candidate.Topics = []string{
+			"developer-tools",
+			"documentation",
+			"technology-0",
+			"technology-9",
+		}
+		candidate.GoodFirstIssues = 10
+		candidate.HelpWantedIssues = 10
+		candidate.HasDiscussions = true
+		candidate.HasCodeOfConduct = true
+		candidate.HasSecurityPolicy = true
+		candidates[index] = candidate
+		enrichments[index] = DiscoveryEnrichment{
+			Available:              true,
+			READMEAvailable:        true,
+			READMEContentAvailable: true,
+			READMEText: strings.Repeat(
+				"日本語 documentation technology-5 ",
+				2048,
+			),
+			ContributingAvailable: true,
+		}
+	}
+
+	b.ReportAllocs()
+	for b.Loop() {
+		results := make(
+			[]DiscoveryResult,
+			0,
+			MaximumDiscoveryEnrichmentResults,
+		)
+		for index := range candidates {
+			results = append(
+				results,
+				AnalyzeDiscovery(
+					candidates[index],
+					enrichments[index],
+					technologies,
+					now,
+				),
+			)
+		}
+		SortDiscoveryResults(results)
+		repositoryDiscoveryBenchmarkSink = results
+	}
+}
+
+var repositoryDiscoveryBenchmarkSink []DiscoveryResult

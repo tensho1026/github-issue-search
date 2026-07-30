@@ -19,6 +19,11 @@
       "maximumBytesPerOperation": 524288,
       "maximumNanosecondsPerOperation": 2000000
     },
+    "BenchmarkAnalyzeRepositoryDiscoveryBounded": {
+      "maximumAllocationsPerOperation": 1000,
+      "maximumBytesPerOperation": 131072,
+      "maximumNanosecondsPerOperation": 50000000
+    },
     "BenchmarkRecommendBounded": {
       "maximumAllocationsPerOperation": 1000,
       "maximumBytesPerOperation": 131072,
