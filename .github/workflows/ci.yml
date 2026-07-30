@@ -102,7 +102,7 @@ jobs:
       - name: Lint shell scripts
         run: find scripts -type f -name '*.sh' -print0 | xargs -0 shellcheck
 
-      - name: Lint Markdown
+      - name: Lint and contract-check documentation
         run: pnpm run lint:docs
 
       - name: Validate commit subjects

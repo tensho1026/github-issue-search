@@ -11,6 +11,7 @@ server; the browser receives only normalized API responses.
 | CodeQL                     | Go and JavaScript/TypeScript with extended security queries            | Any analysis failure blocks     |
 | Dependency review          | New pull request dependencies and licenses                             | HIGH or CRITICAL blocks         |
 | Trivy repository scan      | Go/pnpm dependencies, secrets, workflows, and configuration            | Fixed HIGH or CRITICAL blocks   |
+| Release secret surface     | Expanded archives, browser assets, binaries, environment/key patterns  | Any match blocks                |
 | Trivy release scan         | Packaged release directory and embedded content                        | Fixed HIGH or CRITICAL blocks   |
 | zizmor                     | GitHub Actions attack surface with the pedantic persona                | Medium+ / medium-confidence     |
 | actionlint and policy      | Workflow syntax, immutable action SHAs, permissions, timeout, triggers | Any violation blocks            |
@@ -54,6 +55,8 @@ protected environments are never entered from pull request events.
   analytics, cache keys, or fixtures.
 - Logs use request IDs and bounded metadata; authorization headers and upstream
   response bodies are not logged.
+- Release archives reject `.env`, source-map, and private-key files plus
+  credential-shaped GitHub, PostgreSQL/Neon, and AWS content.
 
 ## Incident response
 

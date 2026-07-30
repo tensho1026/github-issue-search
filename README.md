@@ -26,7 +26,8 @@ authentication and persistence boundaries.
 └── pnpm-workspace.yaml   # JavaScript workspace
 ```
 
-See [the architecture guide](docs/architecture.md) for dependency rules and
+Start with the [engineering handbook](docs/README.md). See
+[the architecture guide](docs/architecture.md) for dependency rules and
 future extension seams, [the frontend guide](docs/frontend.md) for the
 accessible profile journey and state ownership, [the test strategy](docs/testing.md)
 for deterministic validation, [the CI guide](docs/ci.md) for quality gates,
@@ -58,12 +59,19 @@ cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env
 ```
 
-The Makefile loads `apps/api/.env` for the local API process. Vite loads the
-web environment file. Start the applications in separate terminals:
+Run a deterministic no-credential startup, health, request-correlation, profile,
+and shutdown journey:
 
 ```sh
-make dev-api
-make dev-web
+make dev-smoke
+```
+
+For normal development, the native supervisor loads the application environment
+files, starts both services, waits for readiness, and cleans up both process
+trees on Ctrl-C:
+
+```sh
+make dev
 ```
 
 - Web: `http://127.0.0.1:5173`
