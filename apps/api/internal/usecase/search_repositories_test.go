@@ -257,6 +257,198 @@ func TestNewSearchRepositoriesValidatesDependenciesAndBounds(t *testing.T) {
 	}
 }
 
+func TestPrefilterDiscoveryCandidatesAppliesCheapFilters(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 7, 30, 0, 0, 0, 0, time.UTC)
+	minimumStars := 501
+	minimumForks := 21
+	minimumOpenIssues := 11
+	maximumOpenIssues := 9
+	updatedWithinDays := 1
+	forkOnly := "only"
+	cases := []struct {
+		name    string
+		options repository.DiscoveryCriteriaOptions
+		mutate  func(*repository.DiscoveryCandidate)
+	}{
+		{
+			name: "minimum stars",
+			options: repository.DiscoveryCriteriaOptions{
+				MinimumStars: &minimumStars,
+			},
+		},
+		{
+			name: "minimum forks",
+			options: repository.DiscoveryCriteriaOptions{
+				MinimumForks: &minimumForks,
+			},
+		},
+		{
+			name: "minimum open issues",
+			options: repository.DiscoveryCriteriaOptions{
+				MinimumOpenIssues: &minimumOpenIssues,
+			},
+		},
+		{
+			name: "maximum open issues",
+			options: repository.DiscoveryCriteriaOptions{
+				MaximumOpenIssues: &maximumOpenIssues,
+			},
+		},
+		{
+			name: "activity cutoff",
+			options: repository.DiscoveryCriteriaOptions{
+				UpdatedWithinDays: &updatedWithinDays,
+			},
+			mutate: func(candidate *repository.DiscoveryCandidate) {
+				candidate.Repository.PushedAt = now.Add(-48 * time.Hour)
+			},
+		},
+		{
+			name: "language",
+			options: repository.DiscoveryCriteriaOptions{
+				Languages: []string{"Go"},
+			},
+		},
+		{
+			name: "license",
+			options: repository.DiscoveryCriteriaOptions{
+				Licenses: []string{"Apache-2.0"},
+			},
+		},
+		{
+			name: "fork policy",
+			options: repository.DiscoveryCriteriaOptions{
+				ForkPolicy: &forkOnly,
+			},
+		},
+		{
+			name: "archive policy",
+			mutate: func(candidate *repository.DiscoveryCandidate) {
+				candidate.Repository.IsArchived = true
+			},
+		},
+		{
+			name: "category before enrichment",
+			options: repository.DiscoveryCriteriaOptions{
+				Categories: []string{"security"},
+			},
+		},
+	}
+
+	for _, testCase := range cases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			candidate := repositoryDiscoveryCandidate("example/repo", 500, now)
+			if testCase.mutate != nil {
+				testCase.mutate(&candidate)
+			}
+			criteria, err := repository.NewDiscoveryCriteria(testCase.options)
+			if err != nil {
+				t.Fatalf("NewDiscoveryCriteria() error = %v", err)
+			}
+			if got := prefilterDiscoveryCandidates(
+				[]repository.DiscoveryCandidate{candidate},
+				criteria,
+				now,
+			); len(got) != 0 {
+				t.Fatalf("prefilterDiscoveryCandidates() = %#v, want empty", got)
+			}
+		})
+	}
+}
+
+func TestMatchesAnalyzedDiscoveryAppliesEnrichedFilters(t *testing.T) {
+	t.Parallel()
+
+	maximumDifficulty := 3
+	minimumReadiness := 60
+	hasJapaneseREADME := true
+	matchingOptions := repository.DiscoveryCriteriaOptions{
+		Technologies:      []string{"React"},
+		Categories:        []string{"tooling"},
+		MaximumDifficulty: &maximumDifficulty,
+		MinimumReadiness:  &minimumReadiness,
+		HasJapaneseREADME: &hasJapaneseREADME,
+	}
+	result := repository.DiscoveryResult{
+		Category:     repository.CategoryTooling,
+		Technologies: []string{"React"},
+		Difficulty:   repository.PreliminaryDifficulty{Level: 3},
+		Readiness:    repository.ContributionReadiness{Score: 60},
+		Documentation: repository.DocumentationSignals{
+			JapaneseREADME: repository.JapaneseREADMEEvidence{
+				Detected: true,
+				Status:   repository.EvidenceExact,
+			},
+		},
+	}
+	criteria, err := repository.NewDiscoveryCriteria(matchingOptions)
+	if err != nil {
+		t.Fatalf("NewDiscoveryCriteria() error = %v", err)
+	}
+	if !matchesAnalyzedDiscovery(result, criteria) {
+		t.Fatal("matchesAnalyzedDiscovery() = false for matching evidence")
+	}
+
+	cases := []struct {
+		name   string
+		mutate func(*repository.DiscoveryResult)
+	}{
+		{
+			name: "technology",
+			mutate: func(value *repository.DiscoveryResult) {
+				value.Technologies = []string{}
+			},
+		},
+		{
+			name: "category",
+			mutate: func(value *repository.DiscoveryResult) {
+				value.Category = repository.CategoryLibrary
+			},
+		},
+		{
+			name: "difficulty",
+			mutate: func(value *repository.DiscoveryResult) {
+				value.Difficulty.Level = 4
+			},
+		},
+		{
+			name: "readiness",
+			mutate: func(value *repository.DiscoveryResult) {
+				value.Readiness.Score = 59
+			},
+		},
+		{
+			name: "Japanese README",
+			mutate: func(value *repository.DiscoveryResult) {
+				value.Documentation.JapaneseREADME.Detected = false
+			},
+		},
+		{
+			name: "unavailable Japanese README",
+			mutate: func(value *repository.DiscoveryResult) {
+				value.Documentation.JapaneseREADME.Status =
+					repository.EvidenceUnavailable
+			},
+		},
+	}
+	for _, testCase := range cases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			changed := result
+			changed.Technologies = append([]string(nil), result.Technologies...)
+			testCase.mutate(&changed)
+			if matchesAnalyzedDiscovery(changed, criteria) {
+				t.Fatal("matchesAnalyzedDiscovery() = true, want false")
+			}
+		})
+	}
+}
+
 type repositoryDiscoverySearcherStub struct {
 	mu     sync.Mutex
 	result port.GitHubRepositoryDiscoveryResult

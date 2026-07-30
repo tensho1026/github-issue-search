@@ -140,7 +140,7 @@ func AnalyzeDiscovery(
 			enrichment.READMEContentSampled,
 		)
 	documentation := analyzeDocumentation(candidate, enrichment)
-	category := classifyCategory(candidate)
+	category := ClassifyDiscoveryCategory(candidate)
 	technologies := detectRequestedTechnologies(
 		candidate.Topics,
 		enrichment.READMEText,
@@ -274,7 +274,9 @@ func detectJapaneseREADME(
 	}
 }
 
-func classifyCategory(candidate DiscoveryCandidate) Category {
+// ClassifyDiscoveryCategory maps bounded topics and description evidence to
+// one deterministic preliminary OSS category.
+func ClassifyDiscoveryCategory(candidate DiscoveryCandidate) Category {
 	corpus := strings.ToLower(strings.Join(append(
 		slices.Clone(candidate.Topics),
 		candidate.Repository.Description,

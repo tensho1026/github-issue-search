@@ -282,7 +282,11 @@ func prefilterDiscoveryCandidates(
 			continue
 		}
 		if !matchesLanguage(summary.MainLanguage, criteria.Languages()) ||
-			!matchesLicense(candidate, criteria.Licenses()) {
+			!matchesLicense(candidate, criteria.Licenses()) ||
+			!containsCategory(
+				criteria.Categories(),
+				repository.ClassifyDiscoveryCategory(candidate),
+			) {
 			continue
 		}
 		candidates = append(candidates, candidate)

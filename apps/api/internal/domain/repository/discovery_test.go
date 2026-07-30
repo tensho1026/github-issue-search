@@ -128,6 +128,60 @@ func TestSortDiscoveryResultsIsDeterministic(t *testing.T) {
 	}
 }
 
+func TestClassifyDiscoveryCategoryUsesDocumentedPriority(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		description string
+		topics      []string
+		want        Category
+	}{
+		{
+			name:   "security has highest priority",
+			topics: []string{"security", "database", "documentation"},
+			want:   CategorySecurity,
+		},
+		{name: "data", topics: []string{"machine-learning"}, want: CategoryData},
+		{
+			name:   "infrastructure",
+			topics: []string{"kubernetes"},
+			want:   CategoryInfrastructure,
+		},
+		{
+			name:   "documentation",
+			topics: []string{"documentation"},
+			want:   CategoryDocumentation,
+		},
+		{
+			name:        "education",
+			description: "An education course",
+			want:        CategoryEducation,
+		},
+		{name: "framework", topics: []string{"web-framework"}, want: CategoryFramework},
+		{name: "library", topics: []string{"sdk"}, want: CategoryLibrary},
+		{name: "tooling", topics: []string{"linter"}, want: CategoryTooling},
+		{name: "application fallback", want: CategoryApplication},
+	}
+	for _, testCase := range cases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			candidate := DiscoveryCandidate{
+				Repository: Summary{Description: testCase.description},
+				Topics:     testCase.topics,
+			}
+			if got := ClassifyDiscoveryCategory(candidate); got != testCase.want {
+				t.Fatalf(
+					"ClassifyDiscoveryCategory() = %q, want %q",
+					got,
+					testCase.want,
+				)
+			}
+		})
+	}
+}
+
 func discoveryCandidateFixture(now time.Time) DiscoveryCandidate {
 	return DiscoveryCandidate{
 		Repository: Summary{
