@@ -98,8 +98,12 @@ func TestAccountRepositoryDeleteUsesOwnedParameterizedPredicate(t *testing.T) {
 	if err := repository.Delete(context.Background(), accountID); err != nil {
 		t.Fatalf("Delete() error = %v", err)
 	}
-	if executor.query != "DELETE FROM accounts WHERE id = $1" ||
-		len(executor.arguments) != 1 ||
+	if !strings.Contains(
+		executor.query,
+		"DELETE FROM accounts WHERE id = $1",
+	) ||
+		!strings.Contains(executor.query, "'account_deleted'") ||
+		len(executor.arguments) != 2 ||
 		executor.arguments[0] != accountID.String() {
 		t.Fatalf(
 			"Delete() query = %q, arguments = %v",
@@ -149,6 +153,16 @@ func (executor *recordingAccountExecutor) QueryRow(
 	executor.query = query
 	executor.arguments = arguments
 	return executor.row
+}
+
+func (executor *recordingAccountExecutor) Query(
+	_ context.Context,
+	query string,
+	arguments ...any,
+) (accountRows, error) {
+	executor.query = query
+	executor.arguments = arguments
+	return nil, executor.err
 }
 
 type recordingRow struct {

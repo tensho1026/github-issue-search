@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/account"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
 )
@@ -32,6 +33,46 @@ type accountExecutor interface {
 		arguments ...any,
 	) (pgconn.CommandTag, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(
+		ctx context.Context,
+		sql string,
+		args ...any,
+	) (accountRows, error)
+}
+
+type accountRows interface {
+	Close()
+	Err() error
+	Next() bool
+	Scan(destinations ...any) error
+}
+
+type poolAccountExecutor struct {
+	pool *pgxpool.Pool
+}
+
+func (executor poolAccountExecutor) Exec(
+	ctx context.Context,
+	sql string,
+	arguments ...any,
+) (pgconn.CommandTag, error) {
+	return executor.pool.Exec(ctx, sql, arguments...)
+}
+
+func (executor poolAccountExecutor) QueryRow(
+	ctx context.Context,
+	sql string,
+	arguments ...any,
+) pgx.Row {
+	return executor.pool.QueryRow(ctx, sql, arguments...)
+}
+
+func (executor poolAccountExecutor) Query(
+	ctx context.Context,
+	sql string,
+	arguments ...any,
+) (accountRows, error) {
+	return executor.pool.Query(ctx, sql, arguments...)
 }
 
 // NewAccountRepository binds account operations to the configured pool.
@@ -41,7 +82,7 @@ func NewAccountRepository(pool *Pool) (*AccountRepository, error) {
 	}
 
 	return &AccountRepository{
-		executor:     pool.client,
+		executor:     poolAccountExecutor{pool: pool.client},
 		queryTimeout: pool.queryTimeout,
 	}, nil
 }
@@ -82,12 +123,21 @@ func (repository *AccountRepository) Delete(
 	ctx context.Context,
 	accountID account.ID,
 ) error {
+	auditID, err := account.NewResourceID()
+	if err != nil {
+		return ErrQueryFailed
+	}
 	queryContext, cancel := context.WithTimeout(ctx, repository.queryTimeout)
 	defer cancel()
 	command, err := repository.executor.Exec(
 		queryContext,
-		"DELETE FROM accounts WHERE id = $1",
+		`WITH deleted AS (
+		    DELETE FROM accounts WHERE id = $1 RETURNING id
+		)
+		INSERT INTO privacy_audit_events (id, account_id, event_type)
+		SELECT $2, NULL, 'account_deleted' FROM deleted`,
 		accountID.String(),
+		auditID.String(),
 	)
 	if err != nil {
 		return ErrQueryFailed
