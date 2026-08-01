@@ -124,6 +124,53 @@ func TestAuthenticatedCSRFMiddlewareRejectsMissingCookiesWithoutServiceCall(
 	}
 }
 
+func TestAuthenticatedReadMiddlewareAttachesPrincipalWithoutCSRFHeader(
+	t *testing.T,
+) {
+	gin.SetMode(gin.TestMode)
+	csrf := middlewareCredential(2)
+	principal := auth.Principal{CSRFToken: csrf}
+	service := &middlewareAuthenticationStub{principal: principal}
+	policy := authhttp.NewPolicy(false)
+	engine := gin.New()
+	engine.Use(RequireAuthenticated(
+		service,
+		policy,
+		response.NewResponder(),
+	))
+	engine.GET("/", func(ctx *gin.Context) {
+		got, ok := requestcontext.Principal(ctx.Request.Context())
+		if !ok || got.CSRFToken.Value() != csrf.Value() {
+			ctx.Status(http.StatusInternalServerError)
+			return
+		}
+		ctx.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.AddCookie(middlewareRequestCookie(
+		policy.Names().Session,
+		middlewareCredential(1).Value(),
+	))
+	request.AddCookie(middlewareRequestCookie(
+		policy.Names().CSRF,
+		csrf.Value(),
+	))
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNoContent ||
+		service.authenticateCalls != 1 ||
+		service.validatedHeader.Value() != "" {
+		t.Fatalf(
+			"response = %d authenticate calls = %d header = %s",
+			recorder.Code,
+			service.authenticateCalls,
+			service.validatedHeader,
+		)
+	}
+}
+
 func TestAuthenticatedCSRFMiddlewareAttachesValidatedPrincipal(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	csrf := middlewareCredential(2)

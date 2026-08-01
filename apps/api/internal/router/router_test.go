@@ -175,6 +175,37 @@ func TestDisabledAuthenticationIsReportedWithoutBlockingPublicApp(
 	}
 }
 
+func TestAccountOnlyRouteRequiresConfiguredAuthenticationWithoutDatabaseCall(
+	t *testing.T,
+) {
+	health := &routerDatabaseHealthStub{
+		err: errors.New("simulated database outage"),
+	}
+	router := newTestRouterWithDatabase(t, health, true)
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(
+		recorder,
+		httptest.NewRequest(
+			http.MethodGet,
+			"/api/account/bookmarks",
+			nil,
+		),
+	)
+
+	if recorder.Code != http.StatusServiceUnavailable ||
+		!strings.Contains(recorder.Body.String(), "AUTH_UNAVAILABLE") {
+		t.Fatalf(
+			"account response = %d %s",
+			recorder.Code,
+			recorder.Body.String(),
+		)
+	}
+	if health.calls.Load() != 0 {
+		t.Fatalf("account middleware probed health %d times", health.calls.Load())
+	}
+}
+
 func TestUnknownRouteUsesSafeErrorEnvelope(t *testing.T) {
 	router := newTestRouter(t)
 	recorder := httptest.NewRecorder()

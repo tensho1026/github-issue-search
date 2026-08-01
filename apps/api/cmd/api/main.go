@@ -49,6 +49,11 @@ func main() {
 		logger.Error("compose optional authentication")
 		os.Exit(1)
 	}
+	accountWorkspace, err := bootstrap.NewAccountWorkspace(databasePool)
+	if err != nil {
+		logger.Error("compose optional account workspace")
+		os.Exit(1)
+	}
 	gitHubClient := bootstrap.NewGitHubReader(cfg, logger)
 	getGitHubUser := usecase.NewGetGitHubUser(
 		gitHubClient,
@@ -141,6 +146,7 @@ func main() {
 		DatabaseConfigured:   databaseConfigured,
 		Authentication:       authentication.Service,
 		AuthFlowCodec:        authentication.FlowCodec,
+		AccountWorkspace:     accountWorkspace,
 	})
 	if err != nil {
 		logger.Error("compose API router", "error", err)

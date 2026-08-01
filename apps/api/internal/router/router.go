@@ -29,6 +29,7 @@ type Dependencies struct {
 	DatabaseConfigured   bool
 	Authentication       usecase.Authentication
 	AuthFlowCodec        *authcrypto.FlowCodec
+	AccountWorkspace     usecase.AccountWorkspace
 }
 
 // New composes concrete HTTP dependencies. Feature handlers are constructed by
@@ -65,7 +66,8 @@ func New(dependencies Dependencies) (http.Handler, error) {
 	}
 	if dependencies.Config.AuthEnabled &&
 		(dependencies.Authentication == nil ||
-			dependencies.AuthFlowCodec == nil) {
+			dependencies.AuthFlowCodec == nil ||
+			dependencies.AccountWorkspace == nil) {
 		return nil, fmt.Errorf(
 			"compose router: enabled authentication dependencies are required",
 		)
@@ -126,6 +128,11 @@ func New(dependencies Dependencies) (http.Handler, error) {
 	if err != nil {
 		return nil, fmt.Errorf("compose authentication handler: %w", err)
 	}
+	accountHandler := handler.NewAccountHandler(
+		dependencies.AccountWorkspace,
+		authCookies,
+		dependencies.Responder,
+	)
 	api := engine.Group("/api")
 	api.GET(
 		"/health",
@@ -212,6 +219,11 @@ func New(dependencies Dependencies) (http.Handler, error) {
 		authCookies,
 		dependencies.Responder,
 	)
+	authenticatedRead := middleware.RequireAuthenticated(
+		dependencies.Authentication,
+		authCookies,
+		dependencies.Responder,
+	)
 	api.POST(
 		"/auth/session/refresh",
 		middleware.Timeout(
@@ -229,6 +241,105 @@ func New(dependencies Dependencies) (http.Handler, error) {
 		),
 		authenticatedMutation,
 		authHandler.Logout,
+	)
+	api.GET(
+		"/account/bookmarks",
+		middleware.Timeout(
+			dependencies.Config.NormalRequestTimeout,
+			dependencies.Responder,
+		),
+		authenticatedRead,
+		accountHandler.ListBookmarks,
+	)
+	api.PUT(
+		"/account/bookmarks",
+		middleware.Timeout(
+			dependencies.Config.NormalRequestTimeout,
+			dependencies.Responder,
+		),
+		authenticatedMutation,
+		accountHandler.UpsertBookmark,
+	)
+	api.DELETE(
+		"/account/bookmarks/:bookmarkID",
+		middleware.Timeout(
+			dependencies.Config.NormalRequestTimeout,
+			dependencies.Responder,
+		),
+		authenticatedMutation,
+		accountHandler.DeleteBookmark,
+	)
+	api.GET(
+		"/account/saved-searches",
+		middleware.Timeout(
+			dependencies.Config.NormalRequestTimeout,
+			dependencies.Responder,
+		),
+		authenticatedRead,
+		accountHandler.ListSavedSearches,
+	)
+	api.POST(
+		"/account/saved-searches",
+		middleware.Timeout(
+			dependencies.Config.NormalRequestTimeout,
+			dependencies.Responder,
+		),
+		authenticatedMutation,
+		accountHandler.CreateSavedSearch,
+	)
+	api.PUT(
+		"/account/saved-searches/:savedSearchID",
+		middleware.Timeout(
+			dependencies.Config.NormalRequestTimeout,
+			dependencies.Responder,
+		),
+		authenticatedMutation,
+		accountHandler.UpdateSavedSearch,
+	)
+	api.DELETE(
+		"/account/saved-searches/:savedSearchID",
+		middleware.Timeout(
+			dependencies.Config.NormalRequestTimeout,
+			dependencies.Responder,
+		),
+		authenticatedMutation,
+		accountHandler.DeleteSavedSearch,
+	)
+	api.GET(
+		"/account/preferences",
+		middleware.Timeout(
+			dependencies.Config.NormalRequestTimeout,
+			dependencies.Responder,
+		),
+		authenticatedRead,
+		accountHandler.GetPreferences,
+	)
+	api.PUT(
+		"/account/preferences",
+		middleware.Timeout(
+			dependencies.Config.NormalRequestTimeout,
+			dependencies.Responder,
+		),
+		authenticatedMutation,
+		accountHandler.UpdatePreferences,
+	)
+	api.GET(
+		"/account/export",
+		middleware.Timeout(
+			dependencies.Config.NormalRequestTimeout,
+			dependencies.Responder,
+		),
+		authenticatedRead,
+		accountHandler.Export,
+	)
+	api.DELETE(
+		"/account",
+		middleware.Timeout(
+			dependencies.Config.NormalRequestTimeout,
+			dependencies.Responder,
+		),
+		authenticatedMutation,
+		accountHandler.DeleteAccount,
 	)
 
 	engine.NoRoute(dependencies.Responder.NotFound)
