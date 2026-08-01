@@ -247,7 +247,6 @@ const server = http.createServer((request, response) => {
   request.resume();
   response.writeHead(200, {
     "Content-Type": "application/json",
-    "Set-Cookie": "issuescout_ci_placeholder=1; Path=/; HttpOnly",
   });
   response.end('{"data":{"ok":true},"meta":{"requestId":"httpyac-ci"}}');
 });
