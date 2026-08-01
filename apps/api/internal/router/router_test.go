@@ -127,6 +127,54 @@ func TestAnonymousCoreRoutesNeverProbeDatabase(t *testing.T) {
 	}
 }
 
+func TestDisabledAuthenticationIsReportedWithoutBlockingPublicApp(
+	t *testing.T,
+) {
+	router := newTestRouter(t)
+	sessionRecorder := httptest.NewRecorder()
+	router.ServeHTTP(
+		sessionRecorder,
+		httptest.NewRequest(
+			http.MethodGet,
+			"/api/auth/session",
+			nil,
+		),
+	)
+	if sessionRecorder.Code != http.StatusOK ||
+		!strings.Contains(
+			sessionRecorder.Body.String(),
+			`"configured":false`,
+		) ||
+		!strings.Contains(
+			sessionRecorder.Body.String(),
+			`"authenticated":false`,
+		) {
+		t.Fatalf(
+			"session response = %d %s",
+			sessionRecorder.Code,
+			sessionRecorder.Body.String(),
+		)
+	}
+
+	startRecorder := httptest.NewRecorder()
+	router.ServeHTTP(
+		startRecorder,
+		httptest.NewRequest(
+			http.MethodGet,
+			"/api/auth/github/start",
+			nil,
+		),
+	)
+	if startRecorder.Code != http.StatusServiceUnavailable ||
+		!strings.Contains(startRecorder.Body.String(), "AUTH_UNAVAILABLE") {
+		t.Fatalf(
+			"start response = %d %s",
+			startRecorder.Code,
+			startRecorder.Body.String(),
+		)
+	}
+}
+
 func TestUnknownRouteUsesSafeErrorEnvelope(t *testing.T) {
 	router := newTestRouter(t)
 	recorder := httptest.NewRecorder()

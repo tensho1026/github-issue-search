@@ -44,6 +44,11 @@ func main() {
 	if databasePool != nil {
 		defer databasePool.Close()
 	}
+	authentication, err := bootstrap.NewAuthentication(cfg, databasePool)
+	if err != nil {
+		logger.Error("compose optional authentication")
+		os.Exit(1)
+	}
 	gitHubClient := bootstrap.NewGitHubReader(cfg, logger)
 	getGitHubUser := usecase.NewGetGitHubUser(
 		gitHubClient,
@@ -134,6 +139,8 @@ func main() {
 		RecommendIssue:       recommendIssue,
 		DatabaseHealth:       databasePool,
 		DatabaseConfigured:   databaseConfigured,
+		Authentication:       authentication.Service,
+		AuthFlowCodec:        authentication.FlowCodec,
 	})
 	if err != nil {
 		logger.Error("compose API router", "error", err)

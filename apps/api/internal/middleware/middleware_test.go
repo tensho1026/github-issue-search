@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"bytes"
+	"context"
+	"encoding/base64"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -11,8 +13,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/auth"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/platform/apperror"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/platform/authhttp"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/platform/requestcontext"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/transport/response"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/usecase"
 )
 
 func TestRequestIDPreservesValidAndReplacesInvalidValues(t *testing.T) {
@@ -70,8 +76,8 @@ func TestCORSAllowsConfiguredOriginAndRejectsOtherOrigins(t *testing.T) {
 	if got := allowedRecorder.Header().Get("Access-Control-Allow-Origin"); got != allowed.Header.Get("Origin") {
 		t.Fatalf("allow origin = %q", got)
 	}
-	if got := allowedRecorder.Header().Get("Access-Control-Allow-Credentials"); got != "" {
-		t.Fatalf("allow credentials = %q, want omitted", got)
+	if got := allowedRecorder.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
+		t.Fatalf("allow credentials = %q, want true", got)
 	}
 
 	denied := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -84,6 +90,124 @@ func TestCORSAllowsConfiguredOriginAndRejectsOtherOrigins(t *testing.T) {
 	if !strings.Contains(deniedRecorder.Body.String(), "FORBIDDEN_ORIGIN") ||
 		!strings.Contains(deniedRecorder.Body.String(), "req_cors") {
 		t.Fatalf("denied response = %s", deniedRecorder.Body.String())
+	}
+}
+
+func TestAuthenticatedCSRFMiddlewareRejectsMissingCookiesWithoutServiceCall(
+	t *testing.T,
+) {
+	gin.SetMode(gin.TestMode)
+	service := &middlewareAuthenticationStub{}
+	engine := gin.New()
+	engine.Use(RequireAuthenticatedCSRF(
+		service,
+		authhttp.NewPolicy(false),
+		response.NewResponder(),
+	))
+	engine.POST("/", func(ctx *gin.Context) {
+		ctx.Status(http.StatusNoContent)
+	})
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(
+		recorder,
+		httptest.NewRequest(http.MethodPost, "/", nil),
+	)
+
+	if recorder.Code != http.StatusUnauthorized ||
+		service.authenticateCalls != 0 {
+		t.Fatalf(
+			"response = %d calls = %d",
+			recorder.Code,
+			service.authenticateCalls,
+		)
+	}
+}
+
+func TestAuthenticatedCSRFMiddlewareAttachesValidatedPrincipal(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	csrf := middlewareCredential(2)
+	principal := auth.Principal{CSRFToken: csrf}
+	service := &middlewareAuthenticationStub{principal: principal}
+	policy := authhttp.NewPolicy(false)
+	engine := gin.New()
+	engine.Use(RequireAuthenticatedCSRF(
+		service,
+		policy,
+		response.NewResponder(),
+	))
+	engine.POST("/", func(ctx *gin.Context) {
+		got, ok := requestcontext.Principal(ctx.Request.Context())
+		if !ok || got.CSRFToken.Value() != csrf.Value() {
+			ctx.Status(http.StatusInternalServerError)
+			return
+		}
+		ctx.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(http.MethodPost, "/", nil)
+	request.AddCookie(middlewareRequestCookie(
+		policy.Names().Session,
+		middlewareCredential(1).Value(),
+	))
+	request.AddCookie(middlewareRequestCookie(
+		policy.Names().CSRF,
+		csrf.Value(),
+	))
+	request.Header.Set(csrfHeader, csrf.Value())
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNoContent ||
+		service.authenticateCalls != 1 ||
+		service.validatedHeader.Value() != csrf.Value() {
+		t.Fatalf(
+			"response = %d authenticate calls = %d header = %s",
+			recorder.Code,
+			service.authenticateCalls,
+			service.validatedHeader,
+		)
+	}
+}
+
+func TestAuthenticatedCSRFMiddlewareStopsRejectedHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	csrf := middlewareCredential(2)
+	service := &middlewareAuthenticationStub{
+		principal: auth.Principal{CSRFToken: csrf},
+		validateErr: apperror.New(
+			apperror.CodeCSRFRejected,
+			"CSRF validation failed",
+			http.StatusForbidden,
+		),
+	}
+	policy := authhttp.NewPolicy(false)
+	engine := gin.New()
+	engine.Use(RequireAuthenticatedCSRF(
+		service,
+		policy,
+		response.NewResponder(),
+	))
+	engine.POST("/", func(ctx *gin.Context) {
+		ctx.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(http.MethodPost, "/", nil)
+	request.AddCookie(middlewareRequestCookie(
+		policy.Names().Session,
+		middlewareCredential(1).Value(),
+	))
+	request.AddCookie(middlewareRequestCookie(
+		policy.Names().CSRF,
+		csrf.Value(),
+	))
+	request.Header.Set(csrfHeader, middlewareCredential(9).Value())
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusForbidden ||
+		!strings.Contains(recorder.Body.String(), "CSRF_REJECTED") {
+		t.Fatalf("response = %d %s", recorder.Code, recorder.Body.String())
 	}
 }
 
@@ -189,5 +313,83 @@ func TestRequestLoggerUsesStructuredSafeFields(t *testing.T) {
 	}
 	if strings.Contains(logs.String(), "must-not-appear") {
 		t.Fatalf("authorization value was logged")
+	}
+}
+
+type middlewareAuthenticationStub struct {
+	principal         auth.Principal
+	authenticateErr   error
+	authenticateCalls int
+	validateErr       error
+	validatedHeader   auth.Secret
+}
+
+func (stub *middlewareAuthenticationStub) Start(
+	context.Context,
+	string,
+) (usecase.OAuthStartOutput, error) {
+	return usecase.OAuthStartOutput{}, nil
+}
+
+func (stub *middlewareAuthenticationStub) Complete(
+	context.Context,
+	usecase.CompleteOAuthInput,
+) (usecase.AuthSessionOutput, error) {
+	return usecase.AuthSessionOutput{}, nil
+}
+
+func (stub *middlewareAuthenticationStub) Deny(
+	context.Context,
+	auth.Secret,
+	string,
+) (string, error) {
+	return "", nil
+}
+
+func (stub *middlewareAuthenticationStub) Authenticate(
+	context.Context,
+	auth.Secret,
+	auth.Secret,
+) (auth.Principal, error) {
+	stub.authenticateCalls++
+	return stub.principal, stub.authenticateErr
+}
+
+func (stub *middlewareAuthenticationStub) ValidateCSRF(
+	_ auth.Principal,
+	header auth.Secret,
+) error {
+	stub.validatedHeader = header
+	return stub.validateErr
+}
+
+func (stub *middlewareAuthenticationStub) Refresh(
+	context.Context,
+	auth.Principal,
+) (usecase.AuthSessionOutput, error) {
+	return usecase.AuthSessionOutput{}, nil
+}
+
+func (stub *middlewareAuthenticationStub) Logout(
+	context.Context,
+	auth.Principal,
+) error {
+	return nil
+}
+
+func middlewareCredential(fill byte) auth.Secret {
+	return auth.NewSecret(base64.RawURLEncoding.EncodeToString(
+		bytes.Repeat([]byte{fill}, 32),
+	))
+}
+
+func middlewareRequestCookie(name, value string) *http.Cookie {
+	return &http.Cookie{
+		Name:     name,
+		Value:    value,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
 	}
 }

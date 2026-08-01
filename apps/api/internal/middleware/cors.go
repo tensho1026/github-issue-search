@@ -30,9 +30,10 @@ func CORS(allowedOrigins []string, responder response.Responder) gin.HandlerFunc
 		}
 
 		ctx.Header("Access-Control-Allow-Origin", origin)
+		ctx.Header("Access-Control-Allow-Credentials", "true")
 		ctx.Header(
 			"Access-Control-Allow-Headers",
-			"Accept, Authorization, Content-Type, X-Request-ID",
+			"Accept, Authorization, Content-Type, X-CSRF-Token, X-Request-ID",
 		)
 		ctx.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		ctx.Header("Access-Control-Expose-Headers", "X-Request-ID")
