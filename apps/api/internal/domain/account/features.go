@@ -441,7 +441,7 @@ type repositoryFilterDocument struct {
 	UpdatedWithinDays *int     `json:"updatedWithinDays,omitempty"`
 	MaximumDifficulty *int     `json:"maximumDifficulty,omitempty"`
 	MinimumReadiness  *int     `json:"minimumReadiness,omitempty"`
-	HasJapaneseREADME *bool    `json:"hasJapaneseREADME,omitempty"`
+	HasJapaneseREADME *bool    `json:"hasJapaneseReadme,omitempty"`
 	ForkPolicy        *string  `json:"forkPolicy,omitempty"`
 	ExcludeArchived   *bool    `json:"excludeArchived,omitempty"`
 }
@@ -458,7 +458,7 @@ type canonicalRepositoryFilterDocument struct {
 	UpdatedWithinDays int      `json:"updatedWithinDays"`
 	MaximumDifficulty int      `json:"maximumDifficulty"`
 	MinimumReadiness  int      `json:"minimumReadiness"`
-	HasJapaneseREADME *bool    `json:"hasJapaneseREADME,omitempty"`
+	HasJapaneseREADME *bool    `json:"hasJapaneseReadme,omitempty"`
 	ForkPolicy        string   `json:"forkPolicy"`
 	ExcludeArchived   bool     `json:"excludeArchived"`
 }

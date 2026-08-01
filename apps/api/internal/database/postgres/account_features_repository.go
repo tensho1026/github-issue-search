@@ -582,7 +582,7 @@ ORDER BY created_at DESC, id DESC
 LIMIT $2 OFFSET $3`
 
 const upsertBookmarkSQL = `WITH account_lock AS (
-    SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))
+    SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))
 ),
 allowed AS (
     SELECT 1
@@ -590,14 +590,14 @@ allowed AS (
     WHERE EXISTS (
         SELECT 1
         FROM bookmarks
-        WHERE account_id = $1
+        WHERE account_id = $1::uuid
           AND target_type = $3
           AND repository_owner = $4
           AND lower(repository_name) = lower($5)
           AND issue_number IS NOT DISTINCT FROM $6
     )
     OR (
-        SELECT count(*) FROM bookmarks WHERE account_id = $1
+        SELECT count(*) FROM bookmarks WHERE account_id = $1::uuid
     ) < $7
 ),
 inserted AS (
@@ -609,7 +609,7 @@ inserted AS (
         repository_name,
         issue_number
     )
-    SELECT $2, $1, $3, $4, $5, $6
+    SELECT $2::uuid, $1::uuid, $3, $4, $5, $6
     FROM allowed
     ON CONFLICT DO NOTHING
     RETURNING id, target_type, repository_owner, repository_name,
@@ -619,7 +619,7 @@ existing AS (
     SELECT id, target_type, repository_owner, repository_name,
            issue_number, version, created_at, updated_at
     FROM bookmarks
-    WHERE account_id = $1
+    WHERE account_id = $1::uuid
       AND target_type = $3
       AND repository_owner = $4
       AND lower(repository_name) = lower($5)
@@ -645,13 +645,13 @@ ORDER BY updated_at DESC, id DESC
 LIMIT $2 OFFSET $3`
 
 const createSavedSearchSQL = `WITH account_lock AS (
-    SELECT pg_advisory_xact_lock(hashtextextended($1::text, 1))
+    SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 1))
 ),
 allowed AS (
     SELECT 1
     FROM account_lock
     WHERE (
-        SELECT count(*) FROM saved_searches WHERE account_id = $1
+        SELECT count(*) FROM saved_searches WHERE account_id = $1::uuid
     ) < $6
 )
 INSERT INTO saved_searches (
@@ -661,7 +661,7 @@ INSERT INTO saved_searches (
     name,
     filters
 )
-SELECT $2, $1, $3, $4, $5
+SELECT $2::uuid, $1::uuid, $3, $4, $5
 FROM allowed
 ON CONFLICT DO NOTHING
 RETURNING id, search_type, name, filters, version, created_at, updated_at`
