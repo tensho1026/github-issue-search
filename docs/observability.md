@@ -15,18 +15,27 @@ Request completion records include:
 - method and HTTP status;
 - latency in milliseconds;
 - request ID;
-- safe user-agent and client address metadata;
+- nonnegative response bytes;
+- `HIT` or `MISS` for cache-aware success responses;
 - stable application error code when present.
 
 The request logger uses Gin's normalized route and never includes the query
-string. OAuth callback codes, state, provider descriptions, Cookie headers,
-CSRF headers, authorization headers, and database parameters are therefore
-excluded. Authentication dependencies return fixed safe errors rather than
-driver or upstream response details.
+string. It deliberately omits user agent and client address as unnecessary
+identifying metadata. OAuth callback codes, state, provider descriptions,
+Cookie headers, CSRF headers, authorization headers, and database parameters
+are therefore excluded. Authentication dependencies return fixed safe errors
+rather than driver or upstream response details.
 
 Startup records include listener address and build version/commit. Shutdown
-records indicate graceful termination. Upstream retry logs describe attempt and
-status without response bodies or credentials.
+records indicate graceful termination. One GitHub completion event records
+only the fixed service and operation names, fixed outcome, attempts, latency,
+optional request ID, and status. It excludes URLs, usernames, repositories,
+issue numbers, tokens, bodies, and query values.
+
+Fixed GitHub operations are `user.get`, `profile.analyze`, `repository.list`,
+`repository.search`, `repository.enrich`, `issue.search`, and `issue.detail`.
+Fixed outcomes are success, not found, rate limited, unauthorized, cancelled,
+deadline exceeded, transport error, and response error.
 
 ## Trace a request
 
@@ -70,8 +79,9 @@ evidence, not service telemetry. Each bounded metric includes sample size,
 window, truncation, availability, and confidence. Never aggregate it into
 hidden user tracking.
 
-Future service metrics should use low-cardinality route names and status/error
-codes. Usernames, repositories, issue numbers, request IDs, tokens, and raw
+Platform-derived service metrics should use low-cardinality route templates,
+status/error codes, cache status, fixed GitHub operation, and fixed outcome.
+Usernames, repositories, issue numbers, request IDs, tokens, URLs, and raw
 query values must not become metric labels.
 
 ## Incident evidence

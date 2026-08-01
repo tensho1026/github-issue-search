@@ -184,6 +184,14 @@ the same file.
 | Largest JavaScript asset                             |  75 KiB gzip |
 | All JavaScript and CSS                               | 205 KiB gzip |
 
+Production-oriented orchestration tests additionally prove a 50-candidate
+window, exactly 20 unique detail leaders, no more than five active detail
+operations, prompt cancellation, and fixed cache capacity under concurrent
+churn. The built deterministic API enforces the original 3-second normal-route
+and 10-second profile-analysis targets. These latency gates exclude internet
+variance; live conditions are defined in
+[Production readiness](production-readiness.md).
+
 ## Contract fixtures
 
 `packages/contracts/fixtures/manifest.json` maps each JSON document to one

@@ -74,6 +74,10 @@ The [interactive API reference guide](docs/api-reference.md) explains Swagger
 try-outs, machine-contract downloads, generated examples, and the CDN-free
 security boundary. The [HTTPYAC guide](docs/httpyac.md) maps executable
 requests for every API capability and explains secret-safe local overrides.
+The [MVP compliance matrix](docs/mvp-compliance.md) traces every original
+completion condition, while [production readiness](docs/production-readiness.md),
+the [operations runbook](docs/operations.md), and the
+[handover walkthrough](docs/handover.md) cover release ownership.
 
 ## Prerequisites
 
@@ -250,8 +254,13 @@ See the issue recommendation guide for the staged analysis and caching model.
 
 ## Current status
 
-The repository is being delivered through the scoped GitHub issues in the
-[MVP implementation backlog](https://github.com/tensho1026/github-issue-search/issues).
-Features, recommendation logic, and production UI continue to land through
-their own issue-linked branches. CI, security, and Docker-free release
-automation are maintained as executable repository policy.
+The original anonymous MVP completion conditions are implemented and traced in
+the [compliance matrix](docs/mvp-compliance.md). Optional OAuth, Neon-compatible
+PostgreSQL account persistence, bookmarks, saved searches, preferences, export,
+and deletion are isolated extensions. AI analysis, notifications, automatic
+GitHub mutation, distributed caches, and a concrete hosting-provider adapter
+remain explicit [known limitations](docs/limitations.md).
+
+Every change continues through an English scoped issue, issue branch, small
+Conventional Commits, a closing PR, self-review, and the stable `CI required`
+and `Security required` gates.
