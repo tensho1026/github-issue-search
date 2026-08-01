@@ -1,12 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  AlertCircle,
-  CircleUserRound,
-  ExternalLink,
-  LayoutDashboard,
-  LogOut,
-  UserRoundCheck,
-} from "lucide-react";
+import { CircleUserRound } from "lucide-react";
 import { useEffect } from "react";
 import { Link } from "react-router";
 
@@ -83,7 +76,6 @@ export function AccountControl() {
         className="inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-medium text-muted-foreground"
         title="Public features remain available."
       >
-        <Icon icon={AlertCircle} />
         <span className="hidden lg:inline">Sign-in unavailable</span>
       </span>
     );
@@ -98,7 +90,6 @@ export function AccountControl() {
         size="small"
         variant="outline"
       >
-        <Icon icon={UserRoundCheck} />
         Sign in
       </Button>
     );
@@ -136,14 +127,10 @@ export function AccountControl() {
         </div>
         <div className="grid gap-1 border-y border-border py-2">
           <Button asChild className="justify-start" variant="ghost">
-            <Link to={appRoutes.workspace}>
-              <Icon icon={LayoutDashboard} />
-              Account workspace
-            </Link>
+            <Link to={appRoutes.workspace}>Account workspace</Link>
           </Button>
           <Button asChild className="justify-start" variant="ghost">
             <a href={user.profileUrl} rel="noreferrer" target="_blank">
-              <Icon icon={ExternalLink} />
               View GitHub profile
             </a>
           </Button>
@@ -163,7 +150,6 @@ export function AccountControl() {
           }}
           variant="ghost"
         >
-          <Icon icon={LogOut} />
           {logout.isPending ? "Signing out…" : "Sign out"}
         </Button>
       </PopoverContent>
