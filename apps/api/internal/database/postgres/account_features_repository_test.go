@@ -219,6 +219,100 @@ func TestAccountRepositoryCreatesAndClassifiesSavedSearchFailures(
 	}
 }
 
+func TestAccountRepositoryListsSavedSearchesWithOwnedStableQuery(
+	t *testing.T,
+) {
+	accountID := mustAccountID(t)
+	now := time.Date(2026, 8, 1, 1, 2, 3, 0, time.UTC)
+	executor := &scriptedAccountExecutor{
+		queryRows: &valueRows{rows: []valueRow{
+			{values: []any{
+				featureResourceID,
+				"issue",
+				"Go issues",
+				[]byte(`{"username":"octocat"}`),
+				int64(2),
+				now,
+				now,
+				1,
+			}},
+		}},
+	}
+	repository := AccountRepository{
+		executor:     executor,
+		queryTimeout: time.Second,
+	}
+	page, _ := account.NewPage(1, 20)
+	result, err := repository.ListSavedSearches(
+		context.Background(),
+		accountID,
+		page,
+	)
+	if err != nil {
+		t.Fatalf("ListSavedSearches() error = %v", err)
+	}
+	if len(result.Items) != 1 ||
+		result.Total != 1 ||
+		result.Items[0].Name != "Go issues" ||
+		string(result.Items[0].Filters) != `{"username":"octocat"}` {
+		t.Fatalf("result = %+v", result)
+	}
+	call := executor.calls[0]
+	if !strings.Contains(call.query, "WHERE account_id = $1") ||
+		!strings.Contains(call.query, "ORDER BY updated_at DESC, id DESC") ||
+		call.arguments[0] != accountID.String() {
+		t.Fatalf("query call = %+v", call)
+	}
+}
+
+func TestAccountRepositoryDeletesSavedSearchWithOwnershipAndVersion(
+	t *testing.T,
+) {
+	accountID := mustAccountID(t)
+	resourceID := mustResourceID(t)
+	successExecutor := &scriptedAccountExecutor{
+		commandTags: []pgconn.CommandTag{
+			pgconn.NewCommandTag("DELETE 1"),
+		},
+	}
+	successRepository := AccountRepository{
+		executor:     successExecutor,
+		queryTimeout: time.Second,
+	}
+	if err := successRepository.DeleteSavedSearch(
+		context.Background(),
+		accountID,
+		resourceID,
+		2,
+	); err != nil {
+		t.Fatalf("DeleteSavedSearch() error = %v", err)
+	}
+	if !strings.Contains(
+		successExecutor.calls[0].query,
+		"account_id = $1 AND id = $2 AND version = $3",
+	) {
+		t.Fatalf("delete query = %q", successExecutor.calls[0].query)
+	}
+
+	missingRepository := AccountRepository{
+		executor: &scriptedAccountExecutor{
+			commandTags: []pgconn.CommandTag{
+				pgconn.NewCommandTag("DELETE 0"),
+			},
+			rowQueue: []pgx.Row{valueRow{err: pgx.ErrNoRows}},
+		},
+		queryTimeout: time.Second,
+	}
+	if err := missingRepository.DeleteSavedSearch(
+		context.Background(),
+		accountID,
+		resourceID,
+		2,
+	); !errors.Is(err, account.ErrNotFound) {
+		t.Fatalf("missing DeleteSavedSearch() error = %v", err)
+	}
+}
+
 func TestAccountRepositorySavedSearchVersionAndDuplicateHandling(
 	t *testing.T,
 ) {
@@ -263,6 +357,7 @@ func TestAccountRepositoryPreferencesDefaultsAndOptimisticUpsert(
 	t *testing.T,
 ) {
 	accountID := mustAccountID(t)
+	now := time.Date(2026, 8, 1, 1, 2, 3, 0, time.UTC)
 	defaultRepository := AccountRepository{
 		executor: &scriptedAccountExecutor{
 			rowQueue: []pgx.Row{valueRow{err: pgx.ErrNoRows}},
@@ -280,7 +375,30 @@ func TestAccountRepositoryPreferencesDefaultsAndOptimisticUpsert(
 		t.Fatalf("GetPreferences() = %+v, %v", defaults, err)
 	}
 
-	now := time.Date(2026, 8, 1, 1, 2, 3, 0, time.UTC)
+	storedRepository := AccountRepository{
+		executor: &scriptedAccountExecutor{rowQueue: []pgx.Row{
+			valueRow{values: []any{
+				"dark",
+				"reduce",
+				50,
+				int64(2),
+				now,
+				now,
+			}},
+		}},
+		queryTimeout: time.Second,
+	}
+	stored, err := storedRepository.GetPreferences(
+		context.Background(),
+		accountID,
+	)
+	if err != nil ||
+		stored.Version != 2 ||
+		stored.Theme != account.ThemeDark ||
+		!stored.CreatedAt.Equal(now) {
+		t.Fatalf("stored GetPreferences() = %+v, %v", stored, err)
+	}
+
 	input, _ := account.NewPreferences(
 		account.ThemeDark,
 		account.ReducedMotionReduce,

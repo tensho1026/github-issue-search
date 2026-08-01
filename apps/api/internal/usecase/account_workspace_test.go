@@ -187,11 +187,101 @@ func TestAccountWorkspaceDeleteReturnsContentFreeSummary(t *testing.T) {
 	}
 }
 
+func TestAccountWorkspaceDelegatesOwnedCollectionsAndVersionedSearches(
+	t *testing.T,
+) {
+	accountID := workspaceAccountID(t)
+	resourceID := workspaceResourceID(t)
+	repository := &accountRepositoryStub{
+		listBookmarkResults: []account.PageResult[account.Bookmark]{
+			{Items: []account.Bookmark{{AccountID: accountID}}, Total: 1},
+		},
+		listSavedSearchResult: account.PageResult[account.SavedSearch]{
+			Items: []account.SavedSearch{{AccountID: accountID}},
+			Total: 1,
+		},
+		preferences: account.Preferences{
+			AccountID: accountID,
+			Theme:     account.ThemeSystem,
+		},
+	}
+	service := concreteAccountWorkspace(t, repository)
+	service.newID = func() (account.ResourceID, error) {
+		return resourceID, nil
+	}
+	page, _ := account.NewPage(1, 20)
+	bookmarks, err := service.ListBookmarks(
+		context.Background(),
+		accountID,
+		page,
+	)
+	if err != nil || bookmarks.Total != 1 {
+		t.Fatalf("ListBookmarks() = %+v, %v", bookmarks, err)
+	}
+	searches, err := service.ListSavedSearches(
+		context.Background(),
+		accountID,
+		page,
+	)
+	if err != nil || searches.Total != 1 {
+		t.Fatalf("ListSavedSearches() = %+v, %v", searches, err)
+	}
+	preferences, err := service.GetPreferences(
+		context.Background(),
+		accountID,
+	)
+	if err != nil || preferences.Theme != account.ThemeSystem {
+		t.Fatalf("GetPreferences() = %+v, %v", preferences, err)
+	}
+	updated, err := service.UpdateSavedSearch(
+		context.Background(),
+		accountID,
+		resourceID,
+		1,
+		WriteSavedSearchInput{
+			SearchType: account.SearchTypeIssue,
+			Name:       "Go",
+			Filters:    []byte(`{"username":"octocat"}`),
+		},
+	)
+	if err != nil || updated.Version != 2 || updated.ID != resourceID {
+		t.Fatalf("UpdateSavedSearch() = %+v, %v", updated, err)
+	}
+	if err := service.DeleteSavedSearch(
+		context.Background(),
+		accountID,
+		resourceID,
+		2,
+	); err != nil {
+		t.Fatalf("DeleteSavedSearch() error = %v", err)
+	}
+}
+
+func TestAccountWorkspaceRejectsMissingRepositoryAndStorageListFailure(
+	t *testing.T,
+) {
+	if service := NewAccountWorkspace(nil); service != nil {
+		t.Fatalf("NewAccountWorkspace(nil) = %v", service)
+	}
+	repository := &accountRepositoryStub{
+		listBookmarkError: errors.New("driver unavailable"),
+	}
+	service := NewAccountWorkspace(repository)
+	page, _ := account.NewPage(1, 20)
+	_, err := service.ListBookmarks(
+		context.Background(),
+		workspaceAccountID(t),
+		page,
+	)
+	assertApplicationError(t, err, apperror.CodeDatabaseUnavailable)
+}
+
 type accountRepositoryStub struct {
 	upsertBookmarkCalls    int
 	deleteBookmarkError    error
 	listBookmarkCalls      int
 	listBookmarkResults    []account.PageResult[account.Bookmark]
+	listBookmarkError      error
 	createSavedSearchCalls int
 	listSavedSearchResult  account.PageResult[account.SavedSearch]
 	preferences            account.Preferences
@@ -210,6 +300,10 @@ func (repository *accountRepositoryStub) ListBookmarks(
 		result := repository.listBookmarkResults[index]
 		result.Page = page
 		return result, nil
+	}
+	if repository.listBookmarkError != nil {
+		return account.PageResult[account.Bookmark]{},
+			repository.listBookmarkError
 	}
 	return account.PageResult[account.Bookmark]{Page: page}, nil
 }

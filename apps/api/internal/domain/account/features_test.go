@@ -191,10 +191,18 @@ func TestResourceIDRoundTripAndRejectsAccountBoundaryMistakes(t *testing.T) {
 	if id.String() != "8bbfd7ed-a424-4ec3-a1b8-647006da1816" {
 		t.Fatalf("ResourceID.String() = %q", id.String())
 	}
-	if _, err := ParseResourceID("not-a-resource"); !errors.Is(
-		err,
+	if _, parseErr := ParseResourceID("not-a-resource"); !errors.Is(
+		parseErr,
 		ErrInvalidFeatureInput,
 	) {
-		t.Fatalf("ParseResourceID() error = %v", err)
+		t.Fatalf("ParseResourceID() error = %v", parseErr)
+	}
+	generated, err := NewResourceID()
+	if err != nil || generated == (ResourceID{}) {
+		t.Fatalf("NewResourceID() = %v, %v", generated, err)
+	}
+	page, err := NewPage(3, 20)
+	if err != nil || page.Offset() != 40 {
+		t.Fatalf("Page.Offset() = %d, %v", page.Offset(), err)
 	}
 }

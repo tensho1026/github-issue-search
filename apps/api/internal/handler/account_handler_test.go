@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -57,6 +58,7 @@ func TestAccountHandlerBookmarkCollectionUsesPrincipalOwnership(t *testing.T) {
 	engine := accountTestEngine(accountID)
 	engine.GET("/bookmarks", handler.ListBookmarks)
 	engine.PUT("/bookmarks", handler.UpsertBookmark)
+	engine.DELETE("/bookmarks/:bookmarkID", handler.DeleteBookmark)
 
 	listRecorder := httptest.NewRecorder()
 	engine.ServeHTTP(
@@ -107,6 +109,25 @@ func TestAccountHandlerBookmarkCollectionUsesPrincipalOwnership(t *testing.T) {
 			workspace,
 		)
 	}
+
+	deleteRecorder := httptest.NewRecorder()
+	engine.ServeHTTP(
+		deleteRecorder,
+		httptest.NewRequest(
+			http.MethodDelete,
+			"/bookmarks/"+resourceID.String()+"?version=2",
+			nil,
+		),
+	)
+	if deleteRecorder.Code != http.StatusOK ||
+		workspace.lastResourceID != resourceID ||
+		workspace.lastVersion != 2 {
+		t.Fatalf(
+			"delete response = %d %s",
+			deleteRecorder.Code,
+			deleteRecorder.Body.String(),
+		)
+	}
 }
 
 func TestAccountHandlerSavedSearchMutationsAreStrictAndVersioned(
@@ -125,15 +146,39 @@ func TestAccountHandlerSavedSearchMutationsAreStrictAndVersioned(
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}}
+	workspace.savedSearchPage = account.PageResult[account.SavedSearch]{
+		Items: []account.SavedSearch{workspace.savedSearch},
+		Total: 1,
+	}
 	handler := NewAccountHandler(
 		workspace,
 		authhttp.NewPolicy(false),
 		response.NewResponder(),
 	)
 	engine := accountTestEngine(accountID)
+	engine.GET("/saved", handler.ListSavedSearches)
 	engine.POST("/saved", handler.CreateSavedSearch)
 	engine.PUT("/saved/:savedSearchID", handler.UpdateSavedSearch)
 	engine.DELETE("/saved/:savedSearchID", handler.DeleteSavedSearch)
+
+	listRecorder := httptest.NewRecorder()
+	engine.ServeHTTP(
+		listRecorder,
+		httptest.NewRequest(
+			http.MethodGet,
+			"/saved?page=1&perPage=20",
+			nil,
+		),
+	)
+	if listRecorder.Code != http.StatusOK ||
+		!strings.Contains(listRecorder.Body.String(), `"total":1`) ||
+		!strings.Contains(listRecorder.Body.String(), `"name":"Go"`) {
+		t.Fatalf(
+			"list response = %d %s",
+			listRecorder.Code,
+			listRecorder.Body.String(),
+		)
+	}
 
 	createRequest := httptest.NewRequest(
 		http.MethodPost,
@@ -229,7 +274,27 @@ func TestAccountHandlerPreferencesExportAndDeletion(t *testing.T) {
 			CreatedAt:      now,
 			UpdatedAt:      now,
 		},
-		export: account.Export{GeneratedAt: now},
+		export: account.Export{
+			GeneratedAt: now,
+			Bookmarks: []account.Bookmark{{
+				ID:        handlerResourceID(t),
+				AccountID: accountID,
+				Reference: mustHandlerBookmarkReference(t),
+				Version:   1,
+				CreatedAt: now,
+				UpdatedAt: now,
+			}},
+			SavedSearches: []account.SavedSearch{{
+				ID:         handlerResourceID(t),
+				AccountID:  accountID,
+				SearchType: account.SearchTypeIssue,
+				Name:       "Go",
+				Filters:    []byte(`{"username":"octocat"}`),
+				Version:    1,
+				CreatedAt:  now,
+				UpdatedAt:  now,
+			}},
+		},
 		summary: account.OwnedDataSummary{
 			Bookmarks: 2,
 			Sessions:  1,
@@ -246,6 +311,20 @@ func TestAccountHandlerPreferencesExportAndDeletion(t *testing.T) {
 	engine.PUT("/preferences", handler.UpdatePreferences)
 	engine.GET("/export", handler.Export)
 	engine.DELETE("/account", handler.DeleteAccount)
+
+	getPreferenceRecorder := httptest.NewRecorder()
+	engine.ServeHTTP(
+		getPreferenceRecorder,
+		httptest.NewRequest(http.MethodGet, "/preferences", nil),
+	)
+	if getPreferenceRecorder.Code != http.StatusOK ||
+		!strings.Contains(getPreferenceRecorder.Body.String(), `"version":2`) {
+		t.Fatalf(
+			"get preferences response = %d %s",
+			getPreferenceRecorder.Code,
+			getPreferenceRecorder.Body.String(),
+		)
+	}
 
 	preferenceRequest := httptest.NewRequest(
 		http.MethodPut,
@@ -349,6 +428,44 @@ func TestAccountHandlerRejectsMissingPrincipalAndInvalidTarget(t *testing.T) {
 	}
 }
 
+func TestAccountHandlerConvertsWorkspaceFailuresToSafeEnvelopes(t *testing.T) {
+	workspace := &accountWorkspaceStub{
+		err: errors.New("sensitive database detail"),
+	}
+	handler := NewAccountHandler(
+		workspace,
+		authhttp.NewPolicy(false),
+		response.NewResponder(),
+	)
+	engine := accountTestEngine(handlerAccountID(t))
+	engine.GET("/bookmarks", handler.ListBookmarks)
+	engine.GET("/saved", handler.ListSavedSearches)
+	engine.GET("/preferences", handler.GetPreferences)
+	engine.GET("/export", handler.Export)
+
+	for _, path := range []string{
+		"/bookmarks",
+		"/saved",
+		"/preferences",
+		"/export",
+	} {
+		recorder := httptest.NewRecorder()
+		engine.ServeHTTP(
+			recorder,
+			httptest.NewRequest(http.MethodGet, path, nil),
+		)
+		if recorder.Code != http.StatusInternalServerError ||
+			strings.Contains(recorder.Body.String(), "sensitive database") {
+			t.Fatalf(
+				"%s response = %d %s",
+				path,
+				recorder.Code,
+				recorder.Body.String(),
+			)
+		}
+	}
+}
+
 func accountTestEngine(accountID account.ID) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
@@ -378,6 +495,7 @@ type accountWorkspaceStub struct {
 	preferences          account.Preferences
 	export               account.Export
 	summary              account.OwnedDataSummary
+	err                  error
 }
 
 func (workspace *accountWorkspaceStub) ListBookmarks(
@@ -388,7 +506,7 @@ func (workspace *accountWorkspaceStub) ListBookmarks(
 	workspace.lastAccountID = accountID
 	result := workspace.bookmarkPage
 	result.Page = page
-	return result, nil
+	return result, workspace.err
 }
 
 func (workspace *accountWorkspaceStub) UpsertBookmark(
@@ -419,7 +537,7 @@ func (workspace *accountWorkspaceStub) ListSavedSearches(
 	workspace.lastAccountID = accountID
 	result := workspace.savedSearchPage
 	result.Page = page
-	return result, nil
+	return result, workspace.err
 }
 
 func (workspace *accountWorkspaceStub) CreateSavedSearch(
@@ -459,7 +577,7 @@ func (workspace *accountWorkspaceStub) GetPreferences(
 	accountID account.ID,
 ) (account.Preferences, error) {
 	workspace.lastAccountID = accountID
-	return workspace.preferences, nil
+	return workspace.preferences, workspace.err
 }
 
 func (workspace *accountWorkspaceStub) UpdatePreferences(
@@ -479,7 +597,7 @@ func (workspace *accountWorkspaceStub) Export(
 	accountID account.ID,
 ) (account.Export, error) {
 	workspace.lastAccountID = accountID
-	return workspace.export, nil
+	return workspace.export, workspace.err
 }
 
 func (workspace *accountWorkspaceStub) DeleteAccount(
@@ -518,4 +636,18 @@ func handlerResourceID(t *testing.T) account.ResourceID {
 		t.Fatalf("account.ParseResourceID() error = %v", err)
 	}
 	return id
+}
+
+func mustHandlerBookmarkReference(t *testing.T) account.BookmarkReference {
+	t.Helper()
+	reference, err := account.NewBookmarkReference(
+		account.BookmarkTargetRepository,
+		"openai",
+		"openai-go",
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("account.NewBookmarkReference() error = %v", err)
+	}
+	return reference
 }
