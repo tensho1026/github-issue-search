@@ -60,18 +60,16 @@ func (pool *Pool) Migrate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	migrationContext, cancel := context.WithTimeout(ctx, pool.queryTimeout)
-	defer cancel()
-	connection, err := pool.client.Acquire(migrationContext)
+	connection, err := pool.client.Acquire(ctx)
 	if err != nil {
 		return ErrMigrationFailed
 	}
 	defer connection.Release()
-	if _, err := connection.Exec(migrationContext, migrationTableSQL); err != nil {
+	if _, err := connection.Exec(ctx, migrationTableSQL); err != nil {
 		return ErrMigrationFailed
 	}
 	if _, err := connection.Exec(
-		migrationContext,
+		ctx,
 		"SELECT pg_advisory_lock($1)",
 		migrationAdvisoryLock,
 	); err != nil {
@@ -90,7 +88,7 @@ func (pool *Pool) Migrate(ctx context.Context) error {
 		)
 	}()
 
-	applied, err := readAppliedMigrations(migrationContext, connection)
+	applied, err := readAppliedMigrations(ctx, connection)
 	if err != nil {
 		return err
 	}
@@ -101,7 +99,7 @@ func (pool *Pool) Migrate(ctx context.Context) error {
 		if _, exists := applied[migration.Version]; exists {
 			continue
 		}
-		if err := applyMigration(migrationContext, connection, migration); err != nil {
+		if err := applyMigration(ctx, connection, migration); err != nil {
 			return err
 		}
 	}
