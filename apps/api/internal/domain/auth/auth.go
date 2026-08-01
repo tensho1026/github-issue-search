@@ -138,13 +138,15 @@ type AuthorizationState struct {
 // SessionDraft contains only hashes and public identity material for an
 // atomic account/session write.
 type SessionDraft struct {
-	ID        string
-	TokenHash Digest
-	CSRFHash  Digest
-	ExpiresAt time.Time
-	CreatedAt time.Time
-	Identity  GitHubIdentity
-	MaxActive int
+	ID         string
+	IdentityID string
+	AccountID  account.ID
+	TokenHash  Digest
+	CSRFHash   Digest
+	ExpiresAt  time.Time
+	CreatedAt  time.Time
+	Identity   GitHubIdentity
+	MaxActive  int
 }
 
 // Session is an active server-side authentication session.
