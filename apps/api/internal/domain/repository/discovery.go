@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 )
 
+// MaximumREADMEAnalysisBytes bounds text inspected by repository discovery.
 const MaximumREADMEAnalysisBytes = 64 << 10
 
 // EvidenceStatus communicates whether a discovery signal is complete,
@@ -16,14 +17,18 @@ const MaximumREADMEAnalysisBytes = 64 << 10
 // unavailable.
 type EvidenceStatus string
 
+// EvidenceStatus values preserve bounded or missing README observations.
 const (
 	EvidenceExact       EvidenceStatus = "exact"
 	EvidenceSampled     EvidenceStatus = "sampled"
 	EvidenceUnavailable EvidenceStatus = "unavailable"
 )
 
+// Confidence communicates how strongly public documentation evidence supports
+// a repository inference.
 type Confidence string
 
+// Confidence values form the closed discovery confidence vocabulary.
 const (
 	ConfidenceHigh        Confidence = "high"
 	ConfidenceMedium      Confidence = "medium"
@@ -31,16 +36,20 @@ const (
 	ConfidenceUnavailable Confidence = "unavailable"
 )
 
+// ReadinessBand groups the zero-to-100 contribution-readiness score.
 type ReadinessBand string
 
+// ReadinessBand values are ordered from additional setup needed to ready.
 const (
 	ReadinessNeedsWork ReadinessBand = "needs_work"
 	ReadinessPromising ReadinessBand = "promising"
 	ReadinessReady     ReadinessBand = "ready"
 )
 
+// DiscoveryWarning identifies non-fatal limitations in repository analysis.
 type DiscoveryWarning string
 
+// DiscoveryWarning values are stable client-facing partial-result signals.
 const (
 	WarningEnrichmentUnavailable DiscoveryWarning = "enrichment_unavailable"
 	WarningREADMEContentSampled  DiscoveryWarning = "readme_content_sampled"
@@ -78,6 +87,8 @@ type DiscoveryEnrichment struct {
 	HasSecurityPolicy      bool
 }
 
+// JapaneseREADMEEvidence explains the conservative README language heuristic
+// and whether the analyzed text was complete.
 type JapaneseREADMEEvidence struct {
 	Detected      bool
 	Status        EvidenceStatus
@@ -87,6 +98,8 @@ type JapaneseREADMEEvidence struct {
 	SampledBytes  int
 }
 
+// DocumentationSignals summarizes public contribution documents and their
+// evidence completeness.
 type DocumentationSignals struct {
 	READMEAvailable       bool
 	ContributingAvailable bool
@@ -96,12 +109,14 @@ type DocumentationSignals struct {
 	Status                EvidenceStatus
 }
 
+// PreliminaryDifficulty is a conservative five-level onboarding estimate.
 type PreliminaryDifficulty struct {
 	Level   int
 	Label   string
 	Reasons []string
 }
 
+// ContributionReadiness is a bounded score, band, and explainable rule list.
 type ContributionReadiness struct {
 	Score   int
 	Band    ReadinessBand

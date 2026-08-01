@@ -10,22 +10,30 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/user"
 )
 
+// Public-analysis bounds constrain time windows and response cardinality.
 const (
 	AnalysisWindowDays       = 365
 	MaximumTechnologyResults = 20
 	maximumLanguageResults   = 10
 )
 
+// EvidenceStatus distinguishes complete facts, bounded samples, and missing
+// upstream evidence.
 type EvidenceStatus string
 
+// EvidenceStatus values preserve incomplete data instead of treating it as
+// negative evidence.
 const (
 	EvidenceExact       EvidenceStatus = "exact"
 	EvidenceSampled     EvidenceStatus = "sampled"
 	EvidenceUnavailable EvidenceStatus = "unavailable"
 )
 
+// Confidence communicates how strongly the observed public sample supports a
+// derived profile result.
 type Confidence string
 
+// Confidence values form the closed vocabulary exposed by profile analysis.
 const (
 	ConfidenceHigh        Confidence = "high"
 	ConfidenceMedium      Confidence = "medium"
@@ -33,15 +41,19 @@ const (
 	ConfidenceUnavailable Confidence = "unavailable"
 )
 
+// TechnologyKind separates programming languages from inferred frameworks.
 type TechnologyKind string
 
+// TechnologyKind values classify recent and proficient technologies.
 const (
 	TechnologyLanguage  TechnologyKind = "language"
 	TechnologyFramework TechnologyKind = "framework"
 )
 
+// RepositorySource identifies how a repository relates to the analyzed user.
 type RepositorySource string
 
+// RepositorySource values describe mutually non-exclusive public collections.
 const (
 	RepositoryOwned       RepositorySource = "owned"
 	RepositoryContributed RepositorySource = "contributed"
@@ -49,6 +61,8 @@ const (
 	RepositoryForked      RepositorySource = "forked"
 )
 
+// AnalysisWindow records the inclusive UTC evidence period and its
+// public-data-only invariant.
 type AnalysisWindow struct {
 	From       time.Time
 	To         time.Time
@@ -56,17 +70,22 @@ type AnalysisWindow struct {
 	PublicOnly bool
 }
 
+// CountEvidence is a raw count and the completeness metadata required to
+// interpret zero safely.
 type CountEvidence struct {
 	Available bool
 	Value     int
 	Complete  bool
 }
 
+// CountMetric is a normalized count paired with a stable evidence status.
 type CountMetric struct {
 	Value  int
 	Status EvidenceStatus
 }
 
+// RepositoryObservation contains bounded public evidence collected for one
+// normalized repository.
 type RepositoryObservation struct {
 	Repository        repository.Summary
 	Languages         map[string]int64
@@ -74,6 +93,8 @@ type RepositoryObservation struct {
 	Manifests         []Manifest
 }
 
+// RepositoryCollection is one bounded upstream collection and its sampling
+// metadata.
 type RepositoryCollection struct {
 	Available    bool
 	Repositories []RepositoryObservation
@@ -83,6 +104,8 @@ type RepositoryCollection struct {
 	HasMore      bool
 }
 
+// ProfileSnapshot is the complete transport-independent input to
+// AnalyzeSnapshot. It contains public GitHub evidence only.
 type ProfileSnapshot struct {
 	Username      user.Username
 	WindowFrom    time.Time
@@ -95,6 +118,8 @@ type ProfileSnapshot struct {
 	Warnings      []Warning
 }
 
+// ContributionSnapshot records public contribution counts before domain
+// normalization.
 type ContributionSnapshot struct {
 	Available           bool
 	Commits             CountEvidence
@@ -104,6 +129,8 @@ type ContributionSnapshot struct {
 	RepositoriesTouched CountEvidence
 }
 
+// RepositorySample summarizes coverage and primary technologies for one
+// repository source.
 type RepositorySample struct {
 	Status              EvidenceStatus
 	Observed            int
@@ -113,6 +140,7 @@ type RepositorySample struct {
 	PrimaryTechnologies []LanguageShare
 }
 
+// RepositoryEvidence groups analysis coverage by relationship to the user.
 type RepositoryEvidence struct {
 	Owned       RepositorySample
 	Contributed RepositorySample
@@ -120,6 +148,7 @@ type RepositoryEvidence struct {
 	Forked      RepositorySample
 }
 
+// ContributionAnalysis is the normalized one-year public contribution view.
 type ContributionAnalysis struct {
 	WindowDays          int
 	Commits             CountMetric
@@ -129,12 +158,15 @@ type ContributionAnalysis struct {
 	RepositoriesTouched CountMetric
 }
 
+// TechnologyEvidence is one bounded, explainable input to a technology score.
 type TechnologyEvidence struct {
 	Kind   string
 	Value  int
 	Status EvidenceStatus
 }
 
+// OSSExperience is a coarse public-only experience level and its supporting
+// evidence.
 type OSSExperience struct {
 	Level      string
 	Confidence Confidence
@@ -142,6 +174,8 @@ type OSSExperience struct {
 	Evidence   []TechnologyEvidence
 }
 
+// RecentTechnology records a technology observed in the configured analysis
+// window.
 type RecentTechnology struct {
 	Name              string
 	Kind              TechnologyKind
@@ -151,6 +185,7 @@ type RecentTechnology struct {
 	Confidence        Confidence
 }
 
+// TechnologyProficiency is a deterministic five-level technology assessment.
 type TechnologyProficiency struct {
 	Name       string
 	Kind       TechnologyKind

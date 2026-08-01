@@ -7,11 +7,14 @@ import (
 
 const maximumUsernameLength = 39
 
+// ErrInvalidUsername reports a login outside GitHub's bounded ASCII syntax.
 var ErrInvalidUsername = errors.New("invalid GitHub username")
 
 // Username is a validated GitHub login identifier.
 type Username string
 
+// ParseUsername trims surrounding whitespace and validates a GitHub login.
+// It returns ErrInvalidUsername for empty, oversized, or malformed values.
 func ParseUsername(raw string) (Username, error) {
 	value := strings.TrimSpace(raw)
 	if len(value) < 1 || len(value) > maximumUsernameLength ||
@@ -40,6 +43,7 @@ func ParseUsername(raw string) (Username, error) {
 	return Username(value), nil
 }
 
+// String returns the validated login without further normalization.
 func (u Username) String() string {
 	return string(u)
 }
