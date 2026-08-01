@@ -8,6 +8,9 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/transport/response"
 )
 
+// CORS allows only exact configured browser origins, emits credential-aware
+// preflight headers, and rejects disallowed origins without invoking handlers.
+// The origin slice is copied into an immutable lookup during construction.
 func CORS(allowedOrigins []string, responder response.Responder) gin.HandlerFunc {
 	allowed := make(map[string]struct{}, len(allowedOrigins))
 	for _, origin := range allowedOrigins {

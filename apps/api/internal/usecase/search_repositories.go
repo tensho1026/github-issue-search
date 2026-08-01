@@ -17,11 +17,15 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
 )
 
+// SearchRepositoriesInput contains validated domain criteria and the requested
+// application-level page.
 type SearchRepositoriesInput struct {
 	Criteria   repository.DiscoveryCriteria
 	Pagination repository.DiscoveryPagination
 }
 
+// SearchRepositoriesPagination describes a page over the bounded, fully
+// analyzed repository result set.
 type SearchRepositoriesPagination struct {
 	Page       int
 	PerPage    int
@@ -30,13 +34,18 @@ type SearchRepositoriesPagination struct {
 	HasNext    bool
 }
 
+// RepositoryDiscoveryWarning is a stable non-fatal partial-result signal.
 type RepositoryDiscoveryWarning string
 
+// RepositoryDiscoveryWarning values distinguish upstream search truncation
+// from shortlist enrichment failures.
 const (
 	RepositoryDiscoveryWarningGitHubIncomplete     RepositoryDiscoveryWarning = "github_results_incomplete"
 	RepositoryDiscoveryWarningEnrichmentIncomplete RepositoryDiscoveryWarning = "enrichment_incomplete"
 )
 
+// SearchRepositoriesOutput combines ranked repositories, pagination,
+// bounded-work counters, warnings, quota metadata, and cache state.
 type SearchRepositoriesOutput struct {
 	Items                []repository.DiscoveryResult
 	Pagination           SearchRepositoriesPagination
@@ -51,7 +60,12 @@ type SearchRepositoriesOutput struct {
 	CacheHit             bool
 }
 
+// SearchRepositories returns a post-filtered application page over one
+// bounded GitHub candidate and enrichment window. Implementations must honor
+// ctx and retain partial results when optional enrichment fails.
 type SearchRepositories interface {
+	// Execute returns a post-filtered page, collapses concurrent misses, bounds
+	// enrichment fan-out, preserves optional failures, and honors ctx.
 	Execute(
 		ctx context.Context,
 		input SearchRepositoriesInput,
@@ -68,6 +82,8 @@ type searchRepositories struct {
 	now             func() time.Time
 }
 
+// NewSearchRepositories validates required ports and result/enrichment bounds.
+// Concurrent misses for an identical canonical key are collapsed.
 func NewSearchRepositories(
 	searcher port.GitHubRepositoryDiscoverySearcher,
 	enricher port.GitHubRepositoryDiscoveryEnricher,

@@ -9,6 +9,9 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/transport/response"
 )
 
+// RequestLogger emits one structured completion event per request with
+// request ID, method, route template, status, duration, and safe error code.
+// It never records query strings, bodies, cookies, authorization, or CSRF data.
 func RequestLogger(logger *slog.Logger) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		startedAt := time.Now()

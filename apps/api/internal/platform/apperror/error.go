@@ -8,6 +8,8 @@ import (
 // Code is a stable, machine-readable application error identifier.
 type Code string
 
+// Code values are stable machine-readable classifications shared by every
+// HTTP error response.
 const (
 	CodeInvalidRequest       Code = "INVALID_REQUEST"
 	CodeNotFound             Code = "NOT_FOUND"
@@ -36,6 +38,7 @@ type Error struct {
 	cause      error
 }
 
+// Error returns the safe code and message; it never formats the wrapped cause.
 func (e *Error) Error() string {
 	if e == nil {
 		return ""
@@ -43,6 +46,8 @@ func (e *Error) Error() string {
 	return string(e.Code) + ": " + e.Message
 }
 
+// Unwrap returns the internal cause for errors.Is and errors.As. Transport
+// encoders must not serialize the returned error.
 func (e *Error) Unwrap() error {
 	if e == nil {
 		return nil

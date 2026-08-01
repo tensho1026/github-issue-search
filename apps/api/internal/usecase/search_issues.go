@@ -49,7 +49,12 @@ type SearchIssuesOutput struct {
 	CacheHit             bool
 }
 
+// SearchIssues returns a post-filtered application page over one bounded
+// GitHub candidate window. Implementations must honor ctx and preserve
+// incomplete-result metadata.
 type SearchIssues interface {
+	// Execute returns a post-filtered page, collapses concurrent misses, bounds
+	// optional detail fan-out, and honors ctx.
 	Execute(
 		ctx context.Context,
 		input SearchIssuesInput,
@@ -101,6 +106,8 @@ func WithIssueRecommendationEnrichment(
 	}
 }
 
+// NewSearchIssues validates search bounds and applies optional detail
+// enrichment. Concurrent misses for an identical canonical key are collapsed.
 func NewSearchIssues(
 	searcher port.GitHubIssueSearcher,
 	cache port.IssueSearchCache,

@@ -21,11 +21,14 @@ const (
 	maxIssueDetailSkillBytes = 64
 )
 
+// IssueDetailHandler validates a public issue reference and bounded skills
+// before invoking detailed recommendation analysis.
 type IssueDetailHandler struct {
 	recommend usecase.IssueRecommender
 	responder response.Responder
 }
 
+// NewIssueDetailHandler binds the issue recommender to a shared responder.
 func NewIssueDetailHandler(
 	recommend usecase.IssueRecommender,
 	responder response.Responder,
@@ -36,6 +39,8 @@ func NewIssueDetailHandler(
 	}
 }
 
+// Get handles one cancellable issue-detail request and reports cache and
+// GitHub rate-limit metadata.
 func (handler IssueDetailHandler) Get(ctx *gin.Context) {
 	number, err := strconv.Atoi(ctx.Param("issueNumber"))
 	if err != nil {

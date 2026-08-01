@@ -16,6 +16,9 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/usecase"
 )
 
+// Dependencies contains every already-constructed router collaborator.
+// Anonymous dependencies are always required; account dependencies are
+// required only when Config.AuthEnabled is true.
 type Dependencies struct {
 	Config               config.Config
 	Logger               *slog.Logger

@@ -45,6 +45,9 @@ type Client struct {
 	now        func() time.Time
 }
 
+// NewClient constructs a GitHub adapter with a copied non-nil base URL,
+// process-memory token, per-request timeout, bounded retries, and redacted
+// structured logging. A nil logger uses slog.Default.
 func NewClient(
 	baseURL *url.URL,
 	token string,
@@ -68,6 +71,9 @@ func NewClient(
 	}
 }
 
+// GetUser fetches one normalized public profile. It propagates cancellation,
+// bounds the response body, retries only transient failures, and returns a
+// classified port.GitHubError for upstream failures.
 func (c *Client) GetUser(
 	ctx context.Context,
 	username user.Username,
@@ -125,6 +131,8 @@ func (c *Client) GetUser(
 	}, nil
 }
 
+// ListRepositories retrieves at most limit owned public repositories using
+// bounded GitHub pagination. A non-positive limit performs no I/O.
 func (c *Client) ListRepositories(
 	ctx context.Context,
 	username user.Username,
