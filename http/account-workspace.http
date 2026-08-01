@@ -1,21 +1,12 @@
-@apiBaseUrl = http://127.0.0.1:8080
-
 # Obtain fresh local values from GET /api/auth/session. Keep them only in a
 # private HTTPYAC environment. Never commit real session or CSRF credentials.
-@sessionToken = replace-with-fresh-session-cookie
-@csrfToken = replace-with-current-csrf-token
-@bookmarkID = 69cf232f-f1ba-4c24-9b18-9083f90b1a1a
-@bookmarkVersion = 1
-@savedSearchID = c718f6dd-8ea6-4af0-8363-b09b733463ac
-@savedSearchVersion = 1
-@preferencesVersion = 0
 
 ### List the authenticated account's normalized bookmarks
 # @name listAccountBookmarks
 GET {{apiBaseUrl}}/api/account/bookmarks?page=1&perPage=20
 Accept: application/json
 Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
-Origin: http://127.0.0.1:5173
+Origin: {{frontendOrigin}}
 X-Request-ID: httpyac-account-bookmarks-list
 
 ### Idempotently create or return an issue bookmark
@@ -24,7 +15,7 @@ PUT {{apiBaseUrl}}/api/account/bookmarks
 Accept: application/json
 Content-Type: application/json
 Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
-Origin: http://127.0.0.1:5173
+Origin: {{frontendOrigin}}
 X-CSRF-Token: {{csrfToken}}
 X-Request-ID: httpyac-account-bookmarks-upsert-issue
 
@@ -41,7 +32,7 @@ PUT {{apiBaseUrl}}/api/account/bookmarks
 Accept: application/json
 Content-Type: application/json
 Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
-Origin: http://127.0.0.1:5173
+Origin: {{frontendOrigin}}
 X-CSRF-Token: {{csrfToken}}
 X-Request-ID: httpyac-account-bookmarks-upsert-repository
 
@@ -56,7 +47,7 @@ X-Request-ID: httpyac-account-bookmarks-upsert-repository
 DELETE {{apiBaseUrl}}/api/account/bookmarks/{{bookmarkID}}?version={{bookmarkVersion}}
 Accept: application/json
 Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
-Origin: http://127.0.0.1:5173
+Origin: {{frontendOrigin}}
 X-CSRF-Token: {{csrfToken}}
 X-Request-ID: httpyac-account-bookmarks-delete
 
@@ -65,7 +56,7 @@ X-Request-ID: httpyac-account-bookmarks-delete
 GET {{apiBaseUrl}}/api/account/saved-searches?page=1&perPage=20
 Accept: application/json
 Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
-Origin: http://127.0.0.1:5173
+Origin: {{frontendOrigin}}
 X-Request-ID: httpyac-account-searches-list
 
 ### Create a saved issue search through the anonymous issue filter contract
@@ -74,7 +65,7 @@ POST {{apiBaseUrl}}/api/account/saved-searches
 Accept: application/json
 Content-Type: application/json
 Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
-Origin: http://127.0.0.1:5173
+Origin: {{frontendOrigin}}
 X-CSRF-Token: {{csrfToken}}
 X-Request-ID: httpyac-account-searches-create-issue
 
@@ -94,7 +85,7 @@ POST {{apiBaseUrl}}/api/account/saved-searches
 Accept: application/json
 Content-Type: application/json
 Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
-Origin: http://127.0.0.1:5173
+Origin: {{frontendOrigin}}
 X-CSRF-Token: {{csrfToken}}
 X-Request-ID: httpyac-account-searches-create-repository
 
@@ -114,7 +105,7 @@ PUT {{apiBaseUrl}}/api/account/saved-searches/{{savedSearchID}}
 Accept: application/json
 Content-Type: application/json
 Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
-Origin: http://127.0.0.1:5173
+Origin: {{frontendOrigin}}
 X-CSRF-Token: {{csrfToken}}
 X-Request-ID: httpyac-account-searches-update
 
@@ -134,7 +125,7 @@ X-Request-ID: httpyac-account-searches-update
 DELETE {{apiBaseUrl}}/api/account/saved-searches/{{savedSearchID}}?version={{savedSearchVersion}}
 Accept: application/json
 Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
-Origin: http://127.0.0.1:5173
+Origin: {{frontendOrigin}}
 X-CSRF-Token: {{csrfToken}}
 X-Request-ID: httpyac-account-searches-delete
 
@@ -143,7 +134,7 @@ X-Request-ID: httpyac-account-searches-delete
 GET {{apiBaseUrl}}/api/account/preferences
 Accept: application/json
 Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
-Origin: http://127.0.0.1:5173
+Origin: {{frontendOrigin}}
 X-Request-ID: httpyac-account-preferences-get
 
 ### Create or update preferences at the current version
@@ -152,7 +143,7 @@ PUT {{apiBaseUrl}}/api/account/preferences
 Accept: application/json
 Content-Type: application/json
 Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
-Origin: http://127.0.0.1:5173
+Origin: {{frontendOrigin}}
 X-CSRF-Token: {{csrfToken}}
 X-Request-ID: httpyac-account-preferences-update
 
@@ -168,20 +159,18 @@ X-Request-ID: httpyac-account-preferences-update
 GET {{apiBaseUrl}}/api/account/export
 Accept: application/json
 Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
-Origin: http://127.0.0.1:5173
+Origin: {{frontendOrigin}}
 X-Request-ID: httpyac-account-export
 
 # This destructive request is safe by default because the placeholder does not
 # equal DELETE. Replace it only for a disposable local account after export.
-@accountDeleteConfirmation = replace-only-after-export
-
 ### Permanently delete the authenticated account and all owned data
 # @name deleteAccount
 DELETE {{apiBaseUrl}}/api/account
 Accept: application/json
 Content-Type: application/json
 Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
-Origin: http://127.0.0.1:5173
+Origin: {{frontendOrigin}}
 X-CSRF-Token: {{csrfToken}}
 X-Request-ID: httpyac-account-delete
 
@@ -189,20 +178,20 @@ X-Request-ID: httpyac-account-delete
   "confirmation": "{{accountDeleteConfirmation}}"
 }
 
-### Prove account-only reads reject anonymous requests
+### [negative] Prove account-only reads reject anonymous requests
 # @name rejectAnonymousAccountRead
 GET {{apiBaseUrl}}/api/account/bookmarks
 Accept: application/json
-Origin: http://127.0.0.1:5173
+Origin: {{frontendOrigin}}
 X-Request-ID: httpyac-account-reject-anonymous
 
-### Prove account-only mutations reject a missing CSRF header
+### [negative] Prove account-only mutations reject a missing CSRF header
 # @name rejectMissingAccountCSRF
 PUT {{apiBaseUrl}}/api/account/preferences
 Accept: application/json
 Content-Type: application/json
 Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
-Origin: http://127.0.0.1:5173
+Origin: {{frontendOrigin}}
 X-Request-ID: httpyac-account-reject-csrf
 
 {

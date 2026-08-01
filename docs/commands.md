@@ -57,6 +57,8 @@ surface; pnpm scripts expose every CI building block.
 | `pnpm run format`                                 | Apply repository formatters                          |
 | `pnpm run format:check`                           | Verify repository formatting                         |
 | `pnpm run fuzz:api`                               | Run bounded Go fuzz smoke targets                    |
+| `pnpm run http:check`                             | Validate and safely execute all HTTPYAC requests     |
+| `pnpm run http:run -- <files> [options]`          | Run chosen HTTPYAC requests and environment          |
 | `pnpm run lint`                                   | Run web, API, and architecture lint                  |
 | `pnpm run lint:api`                               | Run golangci-lint                                    |
 | `pnpm run lint:docker-free`                       | Reject container files, workflows, and dependencies  |

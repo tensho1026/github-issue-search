@@ -33,7 +33,7 @@ Change detection avoids unrelated expensive work, but `CI required` always runs.
 | Repository quality | Formatting, architecture, migration and Docker-free policies, Actions/Shell/Markdown lint, commit/PR metadata |
 | Frontend           | Type-aware ESLint, strict TypeScript, Vitest coverage, production build, gzip bundle budget                   |
 | Backend            | GoDoc AST policy, golangci-lint, race/Example tests, coverage, fuzzing, performance budgets, production build |
-| API contracts      | Redocly, strict status/envelope/header policy, negative fixtures, generated types, bidirectional route drift  |
+| API contracts      | Redocly, status/envelope/header policy, fixtures, generated types, route drift, complete executable HTTPYAC   |
 | Release artifacts  | Two independent builds, byte comparison, secret-surface scan, checksums, manifests, native lifecycle smoke    |
 | Documentation      | markdownlint plus links and complete command/configuration/API coverage                                       |
 | End-to-end         | Native process lifecycle/smoke plus production Vite and compiled Go API in Chromium                           |
@@ -64,6 +64,7 @@ pnpm run docs:go:check
 pnpm run coverage:web
 pnpm run bundle:check
 pnpm run contracts:check
+pnpm run http:check
 pnpm run migrations:check
 pnpm run lint:docs
 pnpm run lint:workflows

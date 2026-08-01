@@ -120,4 +120,5 @@ pnpm run release:smoke artifacts/release v0.1.0
 - [Configuration reference](configuration.md)
 - [Commands](commands.md)
 - [API guide](api.md)
+- [HTTPYAC executable API collection](httpyac.md)
 - [Troubleshooting](troubleshooting.md)

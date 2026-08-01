@@ -1,0 +1,23 @@
+### Read a complete explainable issue recommendation
+# @name getIssueRecommendation
+GET {{apiBaseUrl}}/api/issues/{{owner}}/{{repository}}/{{issueNumber}}?skills=Go&skills=React
+Accept: application/json
+X-Request-ID: httpyac-issue-detail
+
+### Repeat issue detail to observe X-IssueScout-Cache
+# @name getIssueRecommendationCached
+GET {{apiBaseUrl}}/api/issues/{{owner}}/{{repository}}/{{issueNumber}}?skills=Go&skills=React
+Accept: application/json
+X-Request-ID: httpyac-issue-detail-cache-repeat
+
+### [negative] Reject a non-numeric issue number before upstream I/O
+# @name rejectInvalidIssueNumber
+GET {{apiBaseUrl}}/api/issues/{{owner}}/{{repository}}/not-a-number
+Accept: application/json
+X-Request-ID: httpyac-issue-detail-invalid-number
+
+### [negative] Reject an empty skill value
+# @name rejectEmptyIssueSkill
+GET {{apiBaseUrl}}/api/issues/{{owner}}/{{repository}}/{{issueNumber}}?skills=
+Accept: application/json
+X-Request-ID: httpyac-issue-detail-empty-skill

@@ -1,10 +1,9 @@
-@apiBaseUrl = http://127.0.0.1:8080
-@username = octocat
-
 ### Search with documented MVP defaults
 # @name searchIssuesDefault
 POST {{apiBaseUrl}}/api/issues/search
+Accept: application/json
 Content-Type: application/json
+X-Request-ID: httpyac-issue-search-default
 
 {
   "username": "{{username}}"
@@ -13,7 +12,9 @@ Content-Type: application/json
 ### Search issues that fit within half a day
 # @name searchIssuesByAvailableTime
 POST {{apiBaseUrl}}/api/issues/search?page=1&perPage=20
+Accept: application/json
 Content-Type: application/json
+X-Request-ID: httpyac-issue-search-filtered
 
 {
   "username": "{{username}}",
@@ -32,19 +33,51 @@ Content-Type: application/json
 ### Request the second server-ranked page
 # @name searchIssuesSecondPage
 POST {{apiBaseUrl}}/api/issues/search?page=2&perPage=5
+Accept: application/json
 Content-Type: application/json
+X-Request-ID: httpyac-issue-search-page-two
 
 {
   "username": "{{username}}",
   "maximumEffort": "one_day"
 }
 
-### Reject an unsupported effort band before GitHub I/O
+### Repeat the canonical search to observe X-IssueScout-Cache
+# @name searchIssuesCached
+POST {{apiBaseUrl}}/api/issues/search?page=1&perPage=20
+Accept: application/json
+Content-Type: application/json
+X-Request-ID: httpyac-issue-search-cache-repeat
+
+{
+  "username": "{{username}}",
+  "languages": ["Go", "TypeScript"],
+  "frameworks": ["Gin", "React"],
+  "labels": ["good first issue", "help wanted"],
+  "minimumStars": 10,
+  "maximumDifficulty": 3,
+  "maximumEffort": "half_day",
+  "updatedWithinDays": 180,
+  "includeDocumentation": false,
+  "includeEnglish": true,
+  "excludeArchived": true
+}
+
+### [negative] Reject an unsupported effort band before GitHub I/O
 # @name searchIssuesInvalidEffort
 POST {{apiBaseUrl}}/api/issues/search
 Content-Type: application/json
+X-Request-ID: httpyac-issue-search-invalid-effort
 
 {
   "username": "{{username}}",
   "maximumEffort": "weekend"
 }
+
+### [negative] Reject a null request body
+# @name searchIssuesNullBody
+POST {{apiBaseUrl}}/api/issues/search
+Content-Type: application/json
+X-Request-ID: httpyac-issue-search-null
+
+null

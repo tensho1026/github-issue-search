@@ -1,16 +1,18 @@
-@apiBaseUrl = http://127.0.0.1:8080
-
 ### Discover public repositories with documented defaults
 # @name discoverRepositoriesDefault
 POST {{apiBaseUrl}}/api/repositories/search
+Accept: application/json
 Content-Type: application/json
+X-Request-ID: httpyac-repository-default
 
 {}
 
 ### Combine cheap GitHub qualifiers with analyzed OSS evidence
 # @name discoverRepositoriesAdvanced
 POST {{apiBaseUrl}}/api/repositories/search?page=1&perPage=20
+Accept: application/json
 Content-Type: application/json
+X-Request-ID: httpyac-repository-filtered
 
 {
   "languages": ["Go", "TypeScript"],
@@ -31,7 +33,9 @@ Content-Type: application/json
 ### Require bounded Japanese README evidence
 # @name discoverRepositoriesJapaneseReadme
 POST {{apiBaseUrl}}/api/repositories/search?page=1&perPage=10
+Accept: application/json
 Content-Type: application/json
+X-Request-ID: httpyac-repository-japanese-readme
 
 {
   "languages": ["Go"],
@@ -41,7 +45,9 @@ Content-Type: application/json
 ### Inspect fork-only discovery
 # @name discoverForkRepositories
 POST {{apiBaseUrl}}/api/repositories/search
+Accept: application/json
 Content-Type: application/json
+X-Request-ID: httpyac-repository-forks
 
 {
   "forkPolicy": "only",
@@ -51,25 +57,38 @@ Content-Type: application/json
 ### Exercise a valid empty-result threshold
 # @name discoverRepositoriesNoResults
 POST {{apiBaseUrl}}/api/repositories/search
+Accept: application/json
 Content-Type: application/json
+X-Request-ID: httpyac-repository-empty
 
 {
   "minimumStars": 10000000
 }
 
-### Reject an unsupported SPDX identifier before GitHub I/O
+### Repeat defaults to observe X-IssueScout-Cache
+# @name discoverRepositoriesCached
+POST {{apiBaseUrl}}/api/repositories/search
+Accept: application/json
+Content-Type: application/json
+X-Request-ID: httpyac-repository-cache-repeat
+
+{}
+
+### [negative] Reject an unsupported SPDX identifier before GitHub I/O
 # @name discoverRepositoriesInvalidLicense
 POST {{apiBaseUrl}}/api/repositories/search
 Content-Type: application/json
+X-Request-ID: httpyac-repository-invalid-license
 
 {
   "licenses": ["Not-A-License"]
 }
 
-### Reject an inverted open-issue range before GitHub I/O
+### [negative] Reject an inverted open-issue range before GitHub I/O
 # @name discoverRepositoriesInvalidIssueRange
 POST {{apiBaseUrl}}/api/repositories/search
 Content-Type: application/json
+X-Request-ID: httpyac-repository-invalid-range
 
 {
   "minimumOpenIssues": 100,

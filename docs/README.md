@@ -12,15 +12,16 @@ then follow the topic guide that matches your change.
    [API contract](api.md).
 4. Open the [interactive API reference](api-reference.md) to browse or try the
    versioned contract.
-5. Read [Optional GitHub authentication](authentication.md) before changing
+5. Use the [HTTPYAC collection](httpyac.md) for repeatable endpoint probes.
+6. Read [Optional GitHub authentication](authentication.md) before changing
    sessions or account ownership.
-6. Read [Authenticated account workspace](account-workspace.md) before
+7. Read [Authenticated account workspace](account-workspace.md) before
    changing bookmarks, saved searches, preferences, export, or deletion.
-7. Read [GoDoc and internal API contracts](godoc.md) before changing Go package
+8. Read [GoDoc and internal API contracts](godoc.md) before changing Go package
    boundaries or exported declarations.
-8. Use [Commands](commands.md) and [Testing](testing.md) while changing code.
-9. Use [Troubleshooting](troubleshooting.md) when a local or CI check fails.
-10. Read [Extension playbooks](extending.md) before adding a feature,
+9. Use [Commands](commands.md) and [Testing](testing.md) while changing code.
+10. Use [Troubleshooting](troubleshooting.md) when a local or CI check fails.
+11. Read [Extension playbooks](extending.md) before adding a feature,
     upstream adapter, persistence, or a scoring rule.
 
 ## Knowledge map
@@ -31,6 +32,7 @@ then follow the topic guide that matches your change.
 | Local setup and native process lifecycle | [Getting started](getting-started.md)           | [Configuration](configuration.md)            |
 | Monorepo and dependency boundaries       | [Architecture](architecture.md)                 | [ADRs](adr/README.md)                        |
 | HTTP endpoints and errors                | [API](api.md)                                   | [Interactive reference](api-reference.md)    |
+| Executable HTTP requests                 | [HTTPYAC](httpyac.md)                           | [API](api.md)                                |
 | Profile and OSS evidence                 | [Profile analysis](profile-analysis.md)         | [API](api.md)                                |
 | Repository discovery and readiness       | [Repository discovery](repository-discovery.md) | [API](api.md)                                |
 | Issue analysis and ranking               | [Rule analysis](issue-analysis.md)              | [Recommendations](issue-recommendations.md)  |
@@ -46,7 +48,9 @@ then follow the topic guide that matches your change.
 
 ## Documentation contract
 
-`pnpm run lint:docs` validates Markdown and then checks local links, root
-commands, Make targets, environment variables, API paths, and error codes.
-`pnpm run docs:check` runs only the executable documentation contract. A
-behavioral change is incomplete until its guide and executable source agree.
+`pnpm run lint:docs` validates Markdown and then checks local links, Mermaid
+syntax, root commands, Make targets, environment variables, API paths, and
+error codes. `pnpm run docs:check` runs only the executable documentation
+contract. `pnpm run http:check` additionally maps and safely executes all
+HTTPYAC requests. A behavioral change is incomplete until its guide and
+executable source agree.

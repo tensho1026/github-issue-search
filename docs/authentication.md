@@ -86,7 +86,7 @@ sequenceDiagram
     Browser->>GitHub: Authorization (read:user, S256 challenge)
     GitHub-->>Browser: 302 callback with code and state
     Browser->>API: GET callback + encrypted flow cookie
-    API->>API: Authenticate cookie; constant-time state comparison
+    API->>API: Authenticate cookie and compare state in constant time
     API->>DB: Atomically consume unexpired state hash
     API->>GitHub: Exchange code + verifier
     GitHub-->>API: Short-lived access token

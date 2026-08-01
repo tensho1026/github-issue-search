@@ -72,7 +72,8 @@ The [GoDoc guide](docs/godoc.md) explains internal package contracts, runnable
 examples, local browsing, and the exported-documentation CI policy.
 The [interactive API reference guide](docs/api-reference.md) explains Swagger
 try-outs, machine-contract downloads, generated examples, and the CDN-free
-security boundary.
+security boundary. The [HTTPYAC guide](docs/httpyac.md) maps executable
+requests for every API capability and explains secret-safe local overrides.
 
 ## Prerequisites
 
@@ -187,6 +188,8 @@ OAuth; they never force a login or store credentials in browser storage.
 | `pnpm run docs:go`          | Browse all internal Go package documentation          |
 | `pnpm run docs:go:check`    | Enforce canonical GoDoc coverage                      |
 | `pnpm run contracts:sync`   | Refresh fixture examples and embedded OpenAPI         |
+| `pnpm run http:check`       | Parse and execute every HTTPYAC request safely        |
+| `pnpm run http:run -- ...`  | Run selected HTTPYAC requests against an environment  |
 
 Database commands load `apps/api/.env` without printing it. Leave
 `DATABASE_URL` empty for anonymous-only development. See

@@ -2,7 +2,15 @@ import { access, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
+import { JSDOM } from "jsdom";
 import { parse } from "yaml";
+
+const dom = new JSDOM("<!doctype html><html><body></body></html>");
+globalThis.window = dom.window;
+globalThis.document = dom.window.document;
+globalThis.Element = dom.window.Element;
+globalThis.SVGElement = dom.window.SVGElement;
+const mermaid = (await import("mermaid")).default;
 
 const repositoryRoot = path.resolve(import.meta.dirname, "../..");
 const docsRoot = path.join(repositoryRoot, "docs");
@@ -29,6 +37,7 @@ const sources = await Promise.all(
 );
 const documentation = sources.map(({ source }) => source).join("\n");
 const failures = [];
+let mermaidDiagramCount = 0;
 
 for (const { filename, source } of sources) {
   for (const match of source.matchAll(
@@ -45,6 +54,19 @@ for (const { filename, source } of sources) {
     } catch {
       failures.push(
         `${path.relative(repositoryRoot, filename)}: broken link ${rawTarget}`,
+      );
+    }
+  }
+
+  let diagramIndex = 0;
+  for (const match of source.matchAll(/```mermaid\s*\n([\s\S]*?)```/gu)) {
+    diagramIndex++;
+    mermaidDiagramCount++;
+    try {
+      await mermaid.parse(match[1]);
+    } catch (error) {
+      failures.push(
+        `${path.relative(repositoryRoot, filename)}: Mermaid diagram ${diagramIndex} is invalid: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -129,6 +151,7 @@ if (failures.length > 0) {
 console.log(
   `${markdownFiles.length} Markdown file(s), ${rootScripts.length} root command(s), ${makeTargets.length} Make target(s), ${environmentVariables.size} environment variable(s), and all API paths/error codes are documented.`,
 );
+console.log(`${mermaidDiagramCount} Mermaid diagram(s) parsed successfully.`);
 
 async function walk(directory) {
   const files = [];
