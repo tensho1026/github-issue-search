@@ -98,6 +98,7 @@ func buildPoolConfig(
 		settings.MaxConnections < 1 ||
 		settings.MaxConnections > 100 ||
 		settings.MinConnections < 0 ||
+		settings.MinConnections > 100 ||
 		settings.MinConnections > settings.MaxConnections ||
 		settings.QueryTimeout <= 0 {
 		return nil, ErrInvalidConfiguration
@@ -120,9 +121,8 @@ func buildPoolConfig(
 		durationMilliseconds(settings.QueryTimeout)
 	poolConfig.ConnConfig.RuntimeParams["lock_timeout"] =
 		durationMilliseconds(min(settings.QueryTimeout, 2*time.Second))
-	// The validation above constrains both values to the inclusive range 0..100.
-	poolConfig.MaxConns = int32(settings.MaxConnections) //nolint:gosec
-	poolConfig.MinConns = int32(settings.MinConnections) //nolint:gosec
+	poolConfig.MaxConns = int32(settings.MaxConnections)
+	poolConfig.MinConns = int32(settings.MinConnections)
 	poolConfig.MaxConnLifetime = settings.MaxConnectionLife
 	poolConfig.MaxConnIdleTime = settings.MaxConnectionIdle
 	poolConfig.HealthCheckPeriod = settings.HealthCheckPeriod

@@ -47,15 +47,28 @@ func TestBuildPoolConfigRejectsUnboundedSettingsWithoutCredentialLeak(
 	t *testing.T,
 ) {
 	const password = "pool-sensitive-value"
-	settings := testPoolSettings()
-	settings.MaxConnections = 0
-
-	_, err := buildPoolConfig(testDatabaseURL(password), settings)
-	if !errors.Is(err, ErrInvalidConfiguration) {
-		t.Fatalf("buildPoolConfig() error = %v", err)
+	tests := map[string]func(*PoolSettings){
+		"zero maximum": func(settings *PoolSettings) {
+			settings.MaxConnections = 0
+		},
+		"minimum exceeds int32 policy bound": func(settings *PoolSettings) {
+			settings.MaxConnections = 100
+			settings.MinConnections = 101
+		},
 	}
-	if strings.Contains(err.Error(), password) {
-		t.Fatal("configuration error exposed the database password")
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			settings := testPoolSettings()
+			mutate(&settings)
+
+			_, err := buildPoolConfig(testDatabaseURL(password), settings)
+			if !errors.Is(err, ErrInvalidConfiguration) {
+				t.Fatalf("buildPoolConfig() error = %v", err)
+			}
+			if strings.Contains(err.Error(), password) {
+				t.Fatal("configuration error exposed the database password")
+			}
+		})
 	}
 }
 
