@@ -30,7 +30,7 @@ Reproduce the complete build, byte comparison, extracted-content scan, and
 native smoke test locally:
 
 ```sh
-pnpm run release:reproducibility -- v0.1.0
+pnpm run release:reproducibility v0.1.0
 ```
 
 The archive scan rejects `.env` files, source maps, private-key formats,

@@ -148,7 +148,7 @@ fall back to BSD tar because normalization flags differ.
 
 ### Independent builds differ
 
-Run `pnpm run release:reproducibility -- v0.0.0-debug`. Differences commonly
+Run `pnpm run release:reproducibility v0.0.0-debug`. Differences commonly
 mean an uncontrolled timestamp, build ID, file order, mode, owner, source map,
 or environment-dependent frontend value entered the archive.
 

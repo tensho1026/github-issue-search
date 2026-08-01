@@ -10,37 +10,39 @@ then follow the topic guide that matches your change.
 2. Complete [Getting started](getting-started.md).
 3. Learn the [system architecture](architecture.md) and
    [API contract](api.md).
-4. Read [Optional GitHub authentication](authentication.md) before changing
+4. Open the [interactive API reference](api-reference.md) to browse or try the
+   versioned contract.
+5. Read [Optional GitHub authentication](authentication.md) before changing
    sessions or account ownership.
-5. Read [Authenticated account workspace](account-workspace.md) before
+6. Read [Authenticated account workspace](account-workspace.md) before
    changing bookmarks, saved searches, preferences, export, or deletion.
-6. Read [GoDoc and internal API contracts](godoc.md) before changing Go package
+7. Read [GoDoc and internal API contracts](godoc.md) before changing Go package
    boundaries or exported declarations.
-7. Use [Commands](commands.md) and [Testing](testing.md) while changing code.
-8. Use [Troubleshooting](troubleshooting.md) when a local or CI check fails.
-9. Read [Extension playbooks](extending.md) before adding a feature,
-   upstream adapter, persistence, or a scoring rule.
+8. Use [Commands](commands.md) and [Testing](testing.md) while changing code.
+9. Use [Troubleshooting](troubleshooting.md) when a local or CI check fails.
+10. Read [Extension playbooks](extending.md) before adding a feature,
+    upstream adapter, persistence, or a scoring rule.
 
 ## Knowledge map
 
-| Concern                                  | Primary guide                                   | Supporting material                           |
-| ---------------------------------------- | ----------------------------------------------- | --------------------------------------------- |
-| Product intent, vocabulary, journeys     | [Product](product.md)                           | [Frontend](frontend.md)                       |
-| Local setup and native process lifecycle | [Getting started](getting-started.md)           | [Configuration](configuration.md)             |
-| Monorepo and dependency boundaries       | [Architecture](architecture.md)                 | [ADRs](adr/README.md)                         |
-| HTTP endpoints and errors                | [API](api.md)                                   | [OpenAPI](../packages/contracts/openapi.yaml) |
-| Profile and OSS evidence                 | [Profile analysis](profile-analysis.md)         | [API](api.md)                                 |
-| Repository discovery and readiness       | [Repository discovery](repository-discovery.md) | [API](api.md)                                 |
-| Issue analysis and ranking               | [Rule analysis](issue-analysis.md)              | [Recommendations](issue-recommendations.md)   |
-| Security and anonymous-data rules        | [Security](security.md)                         | [Configuration](configuration.md)             |
-| Optional OAuth and server sessions       | [Authentication](authentication.md)             | [Database](database.md)                       |
-| Account-owned optional features          | [Account workspace](account-workspace.md)       | [Authentication](authentication.md)           |
-| Authenticated PostgreSQL persistence     | [Database](database.md)                         | [Architecture](architecture.md)               |
-| Go packages and internal contracts       | [GoDoc](godoc.md)                               | [Architecture](architecture.md)               |
-| Automated verification                   | [Testing](testing.md)                           | [CI](ci.md)                                   |
-| Release and promotion                    | [Delivery](delivery.md)                         | [ADR 0005](adr/0005-docker-free-delivery.md)  |
-| Logs and request correlation             | [Observability](observability.md)               | [Troubleshooting](troubleshooting.md)         |
-| Safe product evolution                   | [Extension playbooks](extending.md)             | [Contributing](../CONTRIBUTING.md)            |
+| Concern                                  | Primary guide                                   | Supporting material                          |
+| ---------------------------------------- | ----------------------------------------------- | -------------------------------------------- |
+| Product intent, vocabulary, journeys     | [Product](product.md)                           | [Frontend](frontend.md)                      |
+| Local setup and native process lifecycle | [Getting started](getting-started.md)           | [Configuration](configuration.md)            |
+| Monorepo and dependency boundaries       | [Architecture](architecture.md)                 | [ADRs](adr/README.md)                        |
+| HTTP endpoints and errors                | [API](api.md)                                   | [Interactive reference](api-reference.md)    |
+| Profile and OSS evidence                 | [Profile analysis](profile-analysis.md)         | [API](api.md)                                |
+| Repository discovery and readiness       | [Repository discovery](repository-discovery.md) | [API](api.md)                                |
+| Issue analysis and ranking               | [Rule analysis](issue-analysis.md)              | [Recommendations](issue-recommendations.md)  |
+| Security and anonymous-data rules        | [Security](security.md)                         | [Configuration](configuration.md)            |
+| Optional OAuth and server sessions       | [Authentication](authentication.md)             | [Database](database.md)                      |
+| Account-owned optional features          | [Account workspace](account-workspace.md)       | [Authentication](authentication.md)          |
+| Authenticated PostgreSQL persistence     | [Database](database.md)                         | [Architecture](architecture.md)              |
+| Go packages and internal contracts       | [GoDoc](godoc.md)                               | [Architecture](architecture.md)              |
+| Automated verification                   | [Testing](testing.md)                           | [CI](ci.md)                                  |
+| Release and promotion                    | [Delivery](delivery.md)                         | [ADR 0005](adr/0005-docker-free-delivery.md) |
+| Logs and request correlation             | [Observability](observability.md)               | [Troubleshooting](troubleshooting.md)        |
+| Safe product evolution                   | [Extension playbooks](extending.md)             | [Contributing](../CONTRIBUTING.md)           |
 
 ## Documentation contract
 

@@ -4,6 +4,10 @@ The versioned [OpenAPI 3.1 contract](../packages/contracts/openapi.yaml) is the
 source of truth. This guide explains the operational behavior; generated
 frontend types must come from the contract.
 
+Browse and execute the same contract through the
+[self-contained interactive API reference](api-reference.md), or download it
+from a running process at `GET /openapi.yaml`.
+
 ## Request flow and trust boundary
 
 ```mermaid
@@ -160,9 +164,9 @@ five-minute cache. Page and effort do not change the upstream candidate key.
 ## Contract maintenance
 
 1. Edit `packages/contracts/openapi.yaml`.
-2. Run `pnpm run contracts:lint` and `pnpm run contracts:policy`.
-3. Regenerate frontend types with the web package generator.
-4. Add or update shared fixtures.
+2. Add or update shared fixtures.
+3. Run `pnpm run contracts:sync`.
+4. Regenerate frontend types with the web package generator.
 5. Run `pnpm run contracts:check`.
 
 The fixture test validates correct documents and proves that undocumented

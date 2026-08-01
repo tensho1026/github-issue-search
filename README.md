@@ -36,6 +36,8 @@ make dev
 - Web: `http://127.0.0.1:5173`
 - API process health: `http://127.0.0.1:8080/api/health`
 - Optional database readiness: `http://127.0.0.1:8080/api/health/database`
+- Interactive API reference: `http://127.0.0.1:8080/docs/`
+- OpenAPI YAML: `http://127.0.0.1:8080/openapi.yaml`
 
 Press Ctrl-C once; the supervisor gracefully stops both process trees.
 
@@ -68,6 +70,9 @@ bookmarks, saved searches, preferences, privacy export, and deletion. The
 documents the score, sampling, warnings, cache, and deterministic ranking.
 The [GoDoc guide](docs/godoc.md) explains internal package contracts, runnable
 examples, local browsing, and the exported-documentation CI policy.
+The [interactive API reference guide](docs/api-reference.md) explains Swagger
+try-outs, machine-contract downloads, generated examples, and the CDN-free
+security boundary.
 
 ## Prerequisites
 
@@ -102,6 +107,7 @@ Examples contain no credential. Store local server secrets only in the ignored
 | `AUTH_FLOW_ENCRYPTION_KEY`   | Auth only | Dedicated 32-byte hex key for the encrypted short-lived flow cookie |
 | `AUTH_COOKIE_SECURE`         | No        | Must be `true` outside loopback development/test                    |
 | `TRUSTED_PROXY_CIDRS`        | No        | Explicit reverse-proxy CIDRs; empty trusts no proxy                 |
+| `API_DOCUMENTATION_ENABLED`  | No        | Serve embedded Swagger UI and OpenAPI YAML; defaults to `true`      |
 | `ALLOWED_ORIGINS`            | No        | Exact credentialed browser origins; defaults to local Vite          |
 | `PORT`                       | No        | API listener; defaults to `8080`                                    |
 | `VITE_API_BASE_URL`          | No        | Browser-visible API origin; defaults to local API                   |
@@ -180,6 +186,7 @@ OAuth; they never force a login or store credentials in browser storage.
 | `pnpm run migrations:check` | Enforce SQL safety and append-only migration history  |
 | `pnpm run docs:go`          | Browse all internal Go package documentation          |
 | `pnpm run docs:go:check`    | Enforce canonical GoDoc coverage                      |
+| `pnpm run contracts:sync`   | Refresh fixture examples and embedded OpenAPI         |
 
 Database commands load `apps/api/.env` without printing it. Leave
 `DATABASE_URL` empty for anonymous-only development. See

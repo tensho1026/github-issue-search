@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly repository_root="$(cd "${script_directory}/../.." && pwd)"
+script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly script_directory
+repository_root="$(cd "${script_directory}/../.." && pwd)"
+readonly repository_root
 readonly source_path="${repository_root}/packages/contracts/openapi.yaml"
 readonly embedded_path="${repository_root}/apps/api/internal/documentation/openapi.yaml"
 
