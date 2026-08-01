@@ -17,6 +17,11 @@ const (
 	CodeRateLimit           Code = "GITHUB_RATE_LIMIT_EXCEEDED"
 	CodeGitHubAPI           Code = "GITHUB_API_ERROR"
 	CodeDatabaseUnavailable Code = "DATABASE_UNAVAILABLE"
+	CodeAuthUnavailable     Code = "AUTH_UNAVAILABLE"
+	CodeAuthentication      Code = "AUTHENTICATION_REQUIRED"
+	CodeInvalidAuthState    Code = "INVALID_AUTH_STATE"
+	CodeCSRFRejected        Code = "CSRF_REJECTED"
+	CodeOAuthRejected       Code = "GITHUB_AUTHORIZATION_REJECTED"
 	CodeInternal            Code = "INTERNAL_SERVER_ERROR"
 )
 

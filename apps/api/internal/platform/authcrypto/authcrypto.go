@@ -7,7 +7,6 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -85,11 +84,11 @@ func (generator Generator) UUID() (string, error) {
 
 // PKCEChallenge creates the RFC 7636 S256 challenge for a verifier.
 func PKCEChallenge(verifier auth.Secret) (string, error) {
-	if !validCredential(verifier.Value()) {
+	challenge, err := auth.PKCEChallenge(verifier)
+	if err != nil {
 		return "", ErrInvalidConfiguration
 	}
-	digest := sha256.Sum256([]byte(verifier.Value()))
-	return base64.RawURLEncoding.EncodeToString(digest[:]), nil
+	return challenge, nil
 }
 
 // FlowPayload is the encrypted browser binding for one OAuth transaction.
@@ -232,6 +231,5 @@ func (codec *FlowCodec) Open(
 }
 
 func validCredential(value string) bool {
-	decoded, err := base64.RawURLEncoding.DecodeString(value)
-	return err == nil && len(decoded) == credentialBytes
+	return auth.IsOpaqueCredential(value)
 }

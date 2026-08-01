@@ -5,6 +5,7 @@ package auth
 import (
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"errors"
 	"net/url"
 	"strings"
@@ -15,6 +16,8 @@ import (
 )
 
 const MaximumReturnPathBytes = 2048
+
+const opaqueCredentialBytes = 32
 
 var (
 	// ErrInvalidReturnPath reports a path that could escape the configured
@@ -35,6 +38,8 @@ var (
 	ErrOAuthUnavailable = errors.New("GitHub authentication unavailable")
 	// ErrInvalidIdentity reports an incomplete upstream identity.
 	ErrInvalidIdentity = errors.New("invalid GitHub identity")
+	// ErrInvalidCredential reports a malformed opaque authentication value.
+	ErrInvalidCredential = errors.New("invalid authentication credential")
 )
 
 // Digest is a fixed-size SHA-256 credential digest stored by persistence
@@ -44,6 +49,22 @@ type Digest [sha256.Size]byte
 // Hash returns the SHA-256 digest of an opaque credential.
 func Hash(raw string) Digest {
 	return sha256.Sum256([]byte(raw))
+}
+
+// IsOpaqueCredential reports whether a value is an unpadded base64url
+// encoding of exactly 256 random bits.
+func IsOpaqueCredential(raw string) bool {
+	decoded, err := base64.RawURLEncoding.DecodeString(raw)
+	return err == nil && len(decoded) == opaqueCredentialBytes
+}
+
+// PKCEChallenge returns the RFC 7636 S256 challenge for an opaque verifier.
+func PKCEChallenge(verifier Secret) (string, error) {
+	if !IsOpaqueCredential(verifier.Value()) {
+		return "", ErrInvalidCredential
+	}
+	digest := sha256.Sum256([]byte(verifier.Value()))
+	return base64.RawURLEncoding.EncodeToString(digest[:]), nil
 }
 
 // Matches compares a candidate credential to the digest in constant time.
