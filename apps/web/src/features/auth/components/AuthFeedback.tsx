@@ -24,6 +24,7 @@ function readMarker(parameters: URLSearchParams): AuthMarker | undefined {
 export function AuthFeedback() {
   const [parameters, setParameters] = useSearchParams();
   const { query } = useAuth();
+  const { refetch } = query;
   const [marker] = useState(() => readMarker(parameters));
 
   useEffect(() => {
@@ -37,9 +38,9 @@ export function AuthFeedback() {
 
   useEffect(() => {
     if (marker === "success") {
-      void query.refetch();
+      void refetch();
     }
-  }, [marker, query]);
+  }, [marker, refetch]);
 
   if (!marker) {
     return null;
