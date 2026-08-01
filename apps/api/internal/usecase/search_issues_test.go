@@ -351,6 +351,137 @@ func TestSearchIssuesEnrichesBoundedCandidatesAndRanksDeterministically(
 	}
 }
 
+func TestSearchIssuesProductionLoadBounds(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, time.July, 30, 12, 0, 0, 0, time.UTC)
+	candidates := make([]issue.Candidate, issue.MaximumCandidateResults)
+	for index := range candidates {
+		number := index + 1
+		candidates[index] = searchCandidate(now, number, 100+number)
+		suffix := strconv.Itoa(number)
+		candidates[index].Repository.Name = "repo-" + suffix
+		candidates[index].Repository.FullName = "example/repo-" + suffix
+	}
+	searcher := &issueSearcherStub{result: port.GitHubIssueSearchResult{
+		Candidates: candidates,
+		TotalCount: 100_000,
+	}}
+	recommender := &searchRecommenderStub{
+		now:   now,
+		delay: 20 * time.Millisecond,
+	}
+	cache, err := memory.NewIssueSearch(10, time.Hour)
+	if err != nil {
+		t.Fatalf("NewIssueSearch() error = %v", err)
+	}
+	const (
+		analysisLimit = 20
+		concurrency   = 5
+	)
+	contract, err := NewSearchIssues(
+		searcher,
+		cache,
+		issue.MaximumCandidateResults,
+		WithIssueRecommendationEnrichment(
+			recommender,
+			analysisLimit,
+			concurrency,
+		),
+	)
+	if err != nil {
+		t.Fatalf("NewSearchIssues() error = %v", err)
+	}
+
+	startedAt := time.Now()
+	output, err := contract.Execute(context.Background(), SearchIssuesInput{
+		Criteria: searchCriteria(
+			t,
+			issue.SearchCriteriaOptions{Username: "octocat"},
+		),
+		Pagination: searchPagination(t, 1, 20),
+	})
+	elapsed := time.Since(startedAt)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if searcher.requestedLimit() != issue.MaximumCandidateResults ||
+		output.CandidatesChecked != issue.MaximumCandidateResults ||
+		output.EnrichmentAttempted != analysisLimit ||
+		recommender.Calls() != analysisLimit ||
+		recommender.MaxActive() > concurrency {
+		t.Fatalf(
+			"limit = %d, output = %+v, calls = %d, max active = %d",
+			searcher.requestedLimit(),
+			output,
+			recommender.Calls(),
+			recommender.MaxActive(),
+		)
+	}
+	// The deterministic dependency fixture represents 20 detail requests that
+	// each take 20 ms. Five-way fan-out should finish well below the product's
+	// three-second normal-request target even on constrained CI workers.
+	if elapsed >= time.Second {
+		t.Fatalf("bounded search took %s, want less than 1s", elapsed)
+	}
+}
+
+func TestSearchIssuesCancelsProductionFanout(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	candidates := make([]issue.Candidate, 20)
+	for index := range candidates {
+		number := index + 1
+		candidates[index] = searchCandidate(now, number, 100)
+		suffix := strconv.Itoa(number)
+		candidates[index].Repository.Name = "repo-" + suffix
+		candidates[index].Repository.FullName = "example/repo-" + suffix
+	}
+	searcher := &issueSearcherStub{result: port.GitHubIssueSearchResult{
+		Candidates: candidates,
+		TotalCount: len(candidates),
+	}}
+	recommender := &searchRecommenderStub{
+		now:   now,
+		delay: time.Second,
+	}
+	cache, err := memory.NewIssueSearch(10, time.Hour)
+	if err != nil {
+		t.Fatalf("NewIssueSearch() error = %v", err)
+	}
+	contract, err := NewSearchIssues(
+		searcher,
+		cache,
+		50,
+		WithIssueRecommendationEnrichment(recommender, 20, 5),
+	)
+	if err != nil {
+		t.Fatalf("NewSearchIssues() error = %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	startedAt := time.Now()
+	_, err = contract.Execute(ctx, SearchIssuesInput{
+		Criteria: searchCriteria(
+			t,
+			issue.SearchCriteriaOptions{Username: "octocat"},
+		),
+		Pagination: searchPagination(t, 1, 20),
+	})
+	elapsed := time.Since(startedAt)
+	var applicationError *apperror.Error
+	if !errors.As(err, &applicationError) ||
+		applicationError.Code != apperror.CodeRequestTimeout {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if recommender.MaxActive() > 5 {
+		t.Fatalf("max active = %d, want at most 5", recommender.MaxActive())
+	}
+	if elapsed >= time.Second {
+		t.Fatalf("cancellation took %s, want less than 1s", elapsed)
+	}
+}
+
 func TestSearchIssuesReusesRepositoryInspectionWithinWindow(t *testing.T) {
 	t.Parallel()
 	now := time.Now().UTC()
@@ -742,6 +873,12 @@ func (stub *issueSearcherStub) callCount() int {
 	stub.mu.Lock()
 	defer stub.mu.Unlock()
 	return stub.calls
+}
+
+func (stub *issueSearcherStub) requestedLimit() int {
+	stub.mu.Lock()
+	defer stub.mu.Unlock()
+	return stub.limit
 }
 
 func newIssueSearchUsecase(
