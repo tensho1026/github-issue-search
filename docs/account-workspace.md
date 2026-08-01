@@ -6,6 +6,49 @@ searches, display preferences, export, and deletion. Nothing in this feature
 changes the anonymous profile, repository, issue-search, or issue-detail
 journeys.
 
+## Frontend experience
+
+The header hydrates `GET /api/auth/session` without delaying any public route.
+An absent or malformed cookie returns anonymous state without a PostgreSQL
+query. A session or database failure changes only the compact account control;
+profile analysis, issue search, repository discovery, and issue detail keep
+rendering normally.
+
+```mermaid
+flowchart LR
+    Public["Public route and URL state"] --> Action{"Account-only action?"}
+    Action -->|No| PublicAPI["Anonymous GitHub API boundary"]
+    Action -->|Yes, anonymous| Prompt["Radix benefit dialog"]
+    Prompt --> Continue["Continue anonymously"]
+    Prompt --> OAuth["GitHub OAuth with safe returnTo"]
+    OAuth --> Public
+    Action -->|Yes, authenticated| CSRF["Cookie plus in-memory CSRF"]
+    CSRF --> Workspace["Lazy /workspace route"]
+```
+
+Bookmark buttons appear on issue recommendations, issue detail, and repository
+cards. `Save this search` stores the current validated issue or repository
+filter definition. Anonymous clicks open an explanatory dialog; they never
+redirect automatically. Choosing sign-in preserves only a validated
+same-origin product path and its current query state. Callback markers are
+rendered as accessible success, denial, or failure alerts and then removed from
+the URL with history replacement.
+
+`/workspace` is a separately loaded route with Bookmarks, Saved searches,
+Preferences, and Privacy tabs. Queries run only for the active tab. A `401`
+clears the in-memory principal and account query cache while preserving local
+form state. A `409` asks the user to reload the latest optimistic version, and
+a `503` links back to anonymous search. The privacy tab downloads the bounded
+JSON export and requires the literal `DELETE` before enabling account
+deletion.
+
+The opaque session remains HttpOnly. The CSRF value exists only in React Query
+memory and mutation headers; neither credential enters `localStorage`,
+`sessionStorage`, URLs, logs, analytics, source maps, or static artifacts.
+Theme and reduced-motion preferences are applied as document data attributes
+without browser persistence. The authenticated route is code-split, and the
+bundle gate limits every JavaScript asset to 75 KiB gzip.
+
 ## Ownership and request boundary
 
 ```mermaid
