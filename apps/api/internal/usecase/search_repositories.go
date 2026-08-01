@@ -10,10 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/sync/singleflight"
-
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/repository"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/platform/apperror"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/platform/coalesce"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
 )
 
@@ -78,7 +77,7 @@ type searchRepositories struct {
 	cache           port.RepositoryDiscoveryCache
 	resultLimit     int
 	enrichmentLimit int
-	requests        singleflight.Group
+	requests        coalesce.Group[string, port.RepositoryDiscoveryCacheEntry]
 	now             func() time.Time
 }
 
@@ -146,39 +145,32 @@ func (usecase *searchRepositories) Execute(
 		return SearchRepositoriesOutput{}, mapRepositoryDiscoveryError(err)
 	}
 
-	resultChannel := usecase.requests.DoChan(key, func() (any, error) {
-		if cached, found, err := usecase.cache.Get(ctx, key); err == nil && found {
+	entry, err := usecase.requests.Do(ctx, key, func(
+		sharedContext context.Context,
+	) (port.RepositoryDiscoveryCacheEntry, error) {
+		if cached, found, err := usecase.cache.Get(
+			sharedContext,
+			key,
+		); err == nil && found {
 			return cached, nil
-		} else if err != nil && ctx.Err() != nil {
+		} else if err != nil && sharedContext.Err() != nil {
 			return port.RepositoryDiscoveryCacheEntry{}, err
 		}
 
-		entry, err := usecase.loadRepositoryDiscovery(ctx, input.Criteria)
+		entry, err := usecase.loadRepositoryDiscovery(
+			sharedContext,
+			input.Criteria,
+		)
 		if err != nil {
 			return port.RepositoryDiscoveryCacheEntry{}, err
 		}
-		_ = usecase.cache.Set(ctx, key, entry)
+		_ = usecase.cache.Set(sharedContext, key, entry)
 		return entry, nil
 	})
-
-	select {
-	case <-ctx.Done():
-		return SearchRepositoriesOutput{}, mapRepositoryDiscoveryError(ctx.Err())
-	case result := <-resultChannel:
-		if result.Err != nil {
-			return SearchRepositoriesOutput{},
-				mapRepositoryDiscoveryError(result.Err)
-		}
-		entry, valid := result.Val.(port.RepositoryDiscoveryCacheEntry)
-		if !valid {
-			return SearchRepositoriesOutput{}, apperror.New(
-				apperror.CodeInternal,
-				"An unexpected error occurred",
-				http.StatusInternalServerError,
-			)
-		}
-		return repositoryDiscoveryOutput(entry, input.Pagination, false), nil
+	if err != nil {
+		return SearchRepositoriesOutput{}, mapRepositoryDiscoveryError(err)
 	}
+	return repositoryDiscoveryOutput(entry, input.Pagination, false), nil
 }
 
 func (usecase *searchRepositories) loadRepositoryDiscovery(

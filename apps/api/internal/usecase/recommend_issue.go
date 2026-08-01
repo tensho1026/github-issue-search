@@ -7,10 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"golang.org/x/sync/singleflight"
-
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/issue"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/platform/apperror"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/platform/coalesce"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
 )
 
@@ -51,7 +50,7 @@ type IssueRecommender interface {
 type recommendIssue struct {
 	reader   port.GitHubIssueDetailReader
 	cache    port.IssueDetailCache
-	requests singleflight.Group
+	requests coalesce.Group[string, issueDetailLoad]
 	now      func() time.Time
 }
 
@@ -92,15 +91,20 @@ func (usecase *recommendIssue) Execute(
 		return RecommendIssueOutput{}, mapIssueDetailError(err)
 	}
 
-	resultChannel := usecase.requests.DoChan(key, func() (any, error) {
-		if cached, found, err := usecase.cache.Get(ctx, key); err == nil && found {
+	load, err := usecase.requests.Do(ctx, key, func(
+		sharedContext context.Context,
+	) (issueDetailLoad, error) {
+		if cached, found, err := usecase.cache.Get(
+			sharedContext,
+			key,
+		); err == nil && found {
 			return issueDetailLoad{detail: cached, cacheHit: true}, nil
-		} else if err != nil && ctx.Err() != nil {
+		} else if err != nil && sharedContext.Err() != nil {
 			return issueDetailLoad{}, err
 		}
 
 		detail, err := usecase.reader.GetIssueDetail(
-			ctx,
+			sharedContext,
 			input.Reference.Owner(),
 			input.Reference.RepositoryName(),
 			input.Reference.Number(),
@@ -108,31 +112,17 @@ func (usecase *recommendIssue) Execute(
 		if err != nil {
 			return issueDetailLoad{}, err
 		}
-		_ = usecase.cache.Set(ctx, key, detail)
+		_ = usecase.cache.Set(sharedContext, key, detail)
 		return issueDetailLoad{detail: detail}, nil
 	})
-
-	select {
-	case <-ctx.Done():
-		return RecommendIssueOutput{}, mapIssueDetailError(ctx.Err())
-	case result := <-resultChannel:
-		if result.Err != nil {
-			return RecommendIssueOutput{}, mapIssueDetailError(result.Err)
-		}
-		load, valid := result.Val.(issueDetailLoad)
-		if !valid {
-			return RecommendIssueOutput{}, apperror.New(
-				apperror.CodeInternal,
-				"An unexpected error occurred",
-				http.StatusInternalServerError,
-			)
-		}
-		return usecase.output(
-			load.detail,
-			input.DesiredSkills,
-			load.cacheHit,
-		), nil
+	if err != nil {
+		return RecommendIssueOutput{}, mapIssueDetailError(err)
 	}
+	return usecase.output(
+		load.detail,
+		input.DesiredSkills,
+		load.cacheHit,
+	), nil
 }
 
 type issueDetailLoad struct {

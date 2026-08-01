@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
-	"golang.org/x/sync/singleflight"
 
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/issue"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/platform/apperror"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/platform/coalesce"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
 )
 
@@ -68,7 +68,7 @@ type searchIssues struct {
 	recommender    IssueRecommender
 	analysisLimit  int
 	maxConcurrency int
-	requests       singleflight.Group
+	requests       coalesce.Group[string, port.IssueSearchCacheEntry]
 	now            func() time.Time
 }
 
@@ -164,15 +164,20 @@ func (usecase *searchIssues) Execute(
 		return SearchIssuesOutput{}, mapIssueSearchError(err)
 	}
 
-	resultChannel := usecase.requests.DoChan(key, func() (any, error) {
-		if cached, found, err := usecase.cache.Get(ctx, key); err == nil && found {
+	entry, err := usecase.requests.Do(ctx, key, func(
+		sharedContext context.Context,
+	) (port.IssueSearchCacheEntry, error) {
+		if cached, found, err := usecase.cache.Get(
+			sharedContext,
+			key,
+		); err == nil && found {
 			return cached, nil
-		} else if err != nil && ctx.Err() != nil {
+		} else if err != nil && sharedContext.Err() != nil {
 			return port.IssueSearchCacheEntry{}, err
 		}
 
 		result, err := usecase.searcher.SearchIssues(
-			ctx,
+			sharedContext,
 			input.Criteria,
 			usecase.resultLimit,
 		)
@@ -181,32 +186,18 @@ func (usecase *searchIssues) Execute(
 		}
 
 		entry := filterIssueCandidates(input.Criteria, result, usecase.now())
-		_ = usecase.cache.Set(ctx, key, entry)
+		_ = usecase.cache.Set(sharedContext, key, entry)
 		return entry, nil
 	})
-
-	select {
-	case <-ctx.Done():
-		return SearchIssuesOutput{}, mapIssueSearchError(ctx.Err())
-	case result := <-resultChannel:
-		if result.Err != nil {
-			return SearchIssuesOutput{}, mapIssueSearchError(result.Err)
-		}
-		entry, valid := result.Val.(port.IssueSearchCacheEntry)
-		if !valid {
-			return SearchIssuesOutput{}, apperror.New(
-				apperror.CodeInternal,
-				"An unexpected error occurred",
-				http.StatusInternalServerError,
-			)
-		}
-		return usecase.issueSearchOutput(
-			ctx,
-			entry,
-			input,
-			false,
-		)
+	if err != nil {
+		return SearchIssuesOutput{}, mapIssueSearchError(err)
 	}
+	return usecase.issueSearchOutput(
+		ctx,
+		entry,
+		input,
+		false,
+	)
 }
 
 func filterIssueCandidates(
