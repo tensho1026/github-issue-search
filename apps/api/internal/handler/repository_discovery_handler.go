@@ -1,11 +1,6 @@
 package handler
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"io"
-	"mime"
 	"net/http"
 	"slices"
 	"time"
@@ -84,11 +79,7 @@ func (handler RepositoryDiscoveryHandler) Search(ctx *gin.Context) {
 		return
 	}
 
-	cacheStatus := issueSearchCacheMiss
-	if output.CacheHit {
-		cacheStatus = issueSearchCacheHit
-	}
-	ctx.Header(issueSearchCacheHeader, cacheStatus)
+	writeCacheStatus(ctx, output.CacheHit)
 
 	var remaining *int
 	if output.RateLimit.Known {
@@ -134,97 +125,26 @@ type repositoryDiscoveryRequest struct {
 func decodeRepositoryDiscoveryRequest(
 	ctx *gin.Context,
 ) (repositoryDiscoveryRequest, error) {
-	contentType, _, err := mime.ParseMediaType(ctx.GetHeader("Content-Type"))
-	if err != nil || contentType != "application/json" {
-		return repositoryDiscoveryRequest{}, fmt.Errorf(
-			"Content-Type must be application/json",
-		)
-	}
-	body := http.MaxBytesReader(
-		ctx.Writer,
-		ctx.Request.Body,
-		maxRepositoryDiscoveryRequestBytes,
+	return decodeStrictJSONBody[repositoryDiscoveryRequest](
+		ctx,
+		strictJSONOptions{
+			description:      "repository discovery request",
+			maximumBytes:     maxRepositoryDiscoveryRequestBytes,
+			rejectNullFields: true,
+		},
 	)
-	defer body.Close()
-	raw, err := io.ReadAll(body)
-	if err != nil {
-		return repositoryDiscoveryRequest{}, fmt.Errorf(
-			"read repository discovery request: %w",
-			err,
-		)
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-
-	var request *repositoryDiscoveryRequest
-	if err := decoder.Decode(&request); err != nil {
-		return repositoryDiscoveryRequest{}, fmt.Errorf(
-			"decode repository discovery request: %w",
-			err,
-		)
-	}
-	if request == nil {
-		return repositoryDiscoveryRequest{}, fmt.Errorf(
-			"repository discovery request must be a JSON object",
-		)
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		if err == nil {
-			return repositoryDiscoveryRequest{}, fmt.Errorf(
-				"repository discovery request must contain exactly one JSON object",
-			)
-		}
-		return repositoryDiscoveryRequest{}, fmt.Errorf(
-			"decode trailing repository discovery request data: %w",
-			err,
-		)
-	}
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &fields); err != nil {
-		return repositoryDiscoveryRequest{}, fmt.Errorf(
-			"inspect repository discovery request: %w",
-			err,
-		)
-	}
-	for field, value := range fields {
-		if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-			return repositoryDiscoveryRequest{}, fmt.Errorf(
-				"repository discovery field %q cannot be null",
-				field,
-			)
-		}
-	}
-	return *request, nil
 }
 
 func parseRepositoryDiscoveryPagination(
 	ctx *gin.Context,
 ) (repository.DiscoveryPagination, error) {
-	query := ctx.Request.URL.Query()
-	for key := range query {
-		if key != "page" && key != "perPage" {
-			return repository.DiscoveryPagination{}, fmt.Errorf(
-				"unsupported query parameter %q",
-				key,
-			)
-		}
-	}
-	page, err := parseSingleQueryInteger(
-		query["page"],
+	page, perPage, err := parsePaginationQuery(
+		ctx,
 		repository.DefaultDiscoveryPage,
-	)
-	if err != nil {
-		return repository.DiscoveryPagination{}, fmt.Errorf("page: %w", err)
-	}
-	perPage, err := parseSingleQueryInteger(
-		query["perPage"],
 		repository.DefaultDiscoveryPerPage,
 	)
 	if err != nil {
-		return repository.DiscoveryPagination{}, fmt.Errorf(
-			"perPage: %w",
-			err,
-		)
+		return repository.DiscoveryPagination{}, err
 	}
 	return repository.NewDiscoveryPagination(page, perPage)
 }
