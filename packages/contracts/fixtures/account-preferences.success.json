@@ -1,0 +1,14 @@
+{
+  "data": {
+    "theme": "dark",
+    "reducedMotion": "reduce",
+    "resultsPerPage": 50,
+    "version": 2,
+    "createdAt": "2026-08-01T01:02:03Z",
+    "updatedAt": "2026-08-01T02:03:04Z"
+  },
+  "meta": {
+    "requestId": "req_account_preferences",
+    "timestamp": "2026-08-01T02:03:04Z"
+  }
+}

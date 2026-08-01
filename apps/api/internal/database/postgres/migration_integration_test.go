@@ -4,12 +4,15 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"net"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestMigrationsAgainstConfiguredPostgreSQL(t *testing.T) {
@@ -44,18 +47,12 @@ func TestMigrationsAgainstConfiguredPostgreSQL(t *testing.T) {
 		}
 	})
 
-	isolatedURL, parseErr := url.Parse(databaseURL)
-	if parseErr != nil {
-		t.Fatal("parse TEST_DATABASE_URL")
-	}
-	parameters := isolatedURL.Query()
-	parameters.Set("search_path", schema)
-	isolatedURL.RawQuery = parameters.Encode()
-	isolatedPool, isolatedOpenErr := Open(ctx, isolatedURL.String(), settings)
-	if isolatedOpenErr != nil {
-		t.Fatal("open isolated migration pool")
-	}
-	t.Cleanup(isolatedPool.Close)
+	isolatedPool := openIntegrationPoolInSchema(
+		t,
+		ctx,
+		databaseURL,
+		schema,
+	)
 
 	if err := isolatedPool.Migrate(ctx); err != nil {
 		t.Fatalf("Migrate() error = %v", err)
@@ -82,6 +79,72 @@ func TestMigrationsAgainstConfiguredPostgreSQL(t *testing.T) {
 	).Scan(&accountTable); err != nil || accountTable != "accounts" {
 		t.Fatal("migrated accounts table is unavailable")
 	}
+}
+
+func openIntegrationPoolInSchema(
+	t *testing.T,
+	ctx context.Context,
+	databaseURL string,
+	schema string,
+) *Pool {
+	t.Helper()
+	settings := integrationPoolSettings()
+	directURL, err := directIntegrationDatabaseURL(databaseURL)
+	if err != nil {
+		t.Fatal("derive direct integration database endpoint")
+	}
+	poolConfig, err := buildPoolConfig(directURL, settings)
+	if err != nil {
+		t.Fatal("build isolated integration pool configuration")
+	}
+	schemaIdentifier := pgx.Identifier{schema}.Sanitize()
+	poolConfig.AfterConnect = func(
+		connectionContext context.Context,
+		connection *pgx.Conn,
+	) error {
+		_, execErr := connection.Exec(
+			connectionContext,
+			"SET search_path TO "+schemaIdentifier,
+		)
+		return execErr
+	}
+	client, err := pgxpool.NewWithConfig(ctx, poolConfig)
+	if err != nil {
+		t.Fatal("open isolated integration pool")
+	}
+	pool := &Pool{
+		client:       client,
+		queryTimeout: settings.QueryTimeout,
+	}
+	t.Cleanup(pool.Close)
+	var currentSchema string
+	if err := pool.client.QueryRow(
+		ctx,
+		"SELECT current_schema()",
+	).Scan(&currentSchema); err != nil || currentSchema != schema {
+		t.Fatalf(
+			"isolated integration search path resolved to %q",
+			currentSchema,
+		)
+	}
+	return pool
+}
+
+func directIntegrationDatabaseURL(databaseURL string) (string, error) {
+	parsed, err := url.Parse(databaseURL)
+	if err != nil {
+		return "", err
+	}
+	hostname := strings.Replace(parsed.Hostname(), "-pooler.", ".", 1)
+	if hostname == "" {
+		return "", ErrInvalidConfiguration
+	}
+	if port := parsed.Port(); port != "" {
+		parsed.Host = net.JoinHostPort(hostname, port)
+	} else {
+		parsed.Host = hostname
+	}
+	return parsed.String(), nil
 }
 
 func integrationPoolSettings() PoolSettings {

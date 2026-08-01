@@ -21,6 +21,26 @@
       "schema": "AuthLogoutEnvelope"
     },
     {
+      "file": "account-bookmarks.success.json",
+      "schema": "BookmarkListEnvelope"
+    },
+    {
+      "file": "account-saved-searches.success.json",
+      "schema": "SavedSearchListEnvelope"
+    },
+    {
+      "file": "account-preferences.success.json",
+      "schema": "PreferencesEnvelope"
+    },
+    {
+      "file": "account-export.success.json",
+      "schema": "AccountExportEnvelope"
+    },
+    {
+      "file": "account-delete.success.json",
+      "schema": "AccountDeleteEnvelope"
+    },
+    {
       "file": "github-user.success.json",
       "schema": "GitHubUserEnvelope"
     },

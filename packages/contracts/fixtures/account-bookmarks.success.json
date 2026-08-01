@@ -1,0 +1,27 @@
+{
+  "data": {
+    "items": [
+      {
+        "id": "69cf232f-f1ba-4c24-9b18-9083f90b1a1a",
+        "targetType": "issue",
+        "repositoryOwner": "openai",
+        "repositoryName": "openai-go",
+        "issueNumber": 42,
+        "upstreamState": "unverified",
+        "version": 1,
+        "createdAt": "2026-08-01T01:02:03Z",
+        "updatedAt": "2026-08-01T01:02:03Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "perPage": 20,
+      "total": 1,
+      "totalPages": 1
+    }
+  },
+  "meta": {
+    "requestId": "req_account_bookmarks",
+    "timestamp": "2026-08-01T01:02:03Z"
+  }
+}

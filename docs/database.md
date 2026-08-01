@@ -78,12 +78,20 @@ The database never stores:
 
 Identity, session, bookmark, saved-search, and preference rows reference an
 account with `ON DELETE CASCADE`. Deleting an account therefore removes every
-account-owned row atomically. Privacy audit rows retain only an event type and
-timestamp; their account reference becomes null.
+account-owned row. The account repository performs deletion and a content-free
+`account_deleted` audit insert in one PostgreSQL statement. Privacy audit rows
+retain only an event type and timestamp; the deletion event has a null account
+reference.
 
 Repository methods accept a validated opaque account UUID and include it as a
 parameterized ownership predicate. A missing or foreign account is exposed as
 not found, preventing identifier enumeration.
+
+Bookmark and saved-search quota checks serialize per account with
+transaction-scoped advisory locks in the insert statement. Bookmark duplicate
+writes are idempotent. Saved-search updates and all feature deletes include the
+current optimistic version. Full behavior and privacy export policy are in
+[Authenticated account workspace](account-workspace.md).
 
 GitHub identity linking takes a transaction-scoped advisory lock keyed by the
 numeric GitHub user ID. Two concurrent first callbacks therefore serialize,
@@ -125,6 +133,9 @@ go -C apps/api test -run TestMigrationsAgainstConfiguredPostgreSQL \
   ./internal/database/postgres
 
 go -C apps/api test -run TestAuthRepositoryAgainstConfiguredPostgreSQL \
+  ./internal/database/postgres
+
+go -C apps/api test -run TestAccountFeaturesAgainstConfiguredPostgreSQL \
   ./internal/database/postgres
 ```
 

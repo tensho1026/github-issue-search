@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
-	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -247,19 +246,7 @@ func isolatedIntegrationPool(
 			t.Error("drop isolated authentication schema")
 		}
 	})
-	isolatedURL, parseErr := url.Parse(databaseURL)
-	if parseErr != nil {
-		t.Fatal("parse TEST_DATABASE_URL")
-	}
-	parameters := isolatedURL.Query()
-	parameters.Set("search_path", schema)
-	isolatedURL.RawQuery = parameters.Encode()
-	pool, isolatedOpenErr := Open(ctx, isolatedURL.String(), settings)
-	if isolatedOpenErr != nil {
-		t.Fatal("open isolated authentication pool")
-	}
-	t.Cleanup(pool.Close)
-	return pool
+	return openIntegrationPoolInSchema(t, ctx, databaseURL, schema)
 }
 
 func assertPlaintextCredentialsAbsent(

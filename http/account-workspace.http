@@ -1,0 +1,213 @@
+@apiBaseUrl = http://127.0.0.1:8080
+
+# Obtain fresh local values from GET /api/auth/session. Keep them only in a
+# private HTTPYAC environment. Never commit real session or CSRF credentials.
+@sessionToken = replace-with-fresh-session-cookie
+@csrfToken = replace-with-current-csrf-token
+@bookmarkID = 69cf232f-f1ba-4c24-9b18-9083f90b1a1a
+@bookmarkVersion = 1
+@savedSearchID = c718f6dd-8ea6-4af0-8363-b09b733463ac
+@savedSearchVersion = 1
+@preferencesVersion = 0
+
+### List the authenticated account's normalized bookmarks
+# @name listAccountBookmarks
+GET {{apiBaseUrl}}/api/account/bookmarks?page=1&perPage=20
+Accept: application/json
+Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
+Origin: http://127.0.0.1:5173
+X-Request-ID: httpyac-account-bookmarks-list
+
+### Idempotently create or return an issue bookmark
+# @name upsertIssueBookmark
+PUT {{apiBaseUrl}}/api/account/bookmarks
+Accept: application/json
+Content-Type: application/json
+Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
+Origin: http://127.0.0.1:5173
+X-CSRF-Token: {{csrfToken}}
+X-Request-ID: httpyac-account-bookmarks-upsert-issue
+
+{
+  "targetType": "issue",
+  "repositoryOwner": "openai",
+  "repositoryName": "openai-go",
+  "issueNumber": 42
+}
+
+### Idempotently create or return a repository bookmark
+# @name upsertRepositoryBookmark
+PUT {{apiBaseUrl}}/api/account/bookmarks
+Accept: application/json
+Content-Type: application/json
+Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
+Origin: http://127.0.0.1:5173
+X-CSRF-Token: {{csrfToken}}
+X-Request-ID: httpyac-account-bookmarks-upsert-repository
+
+{
+  "targetType": "repository",
+  "repositoryOwner": "openai",
+  "repositoryName": "openai-go"
+}
+
+### Delete an owned bookmark with optimistic concurrency
+# @name deleteAccountBookmark
+DELETE {{apiBaseUrl}}/api/account/bookmarks/{{bookmarkID}}?version={{bookmarkVersion}}
+Accept: application/json
+Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
+Origin: http://127.0.0.1:5173
+X-CSRF-Token: {{csrfToken}}
+X-Request-ID: httpyac-account-bookmarks-delete
+
+### List the authenticated account's normalized saved searches
+# @name listAccountSavedSearches
+GET {{apiBaseUrl}}/api/account/saved-searches?page=1&perPage=20
+Accept: application/json
+Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
+Origin: http://127.0.0.1:5173
+X-Request-ID: httpyac-account-searches-list
+
+### Create a saved issue search through the anonymous issue filter contract
+# @name createAccountIssueSearch
+POST {{apiBaseUrl}}/api/account/saved-searches
+Accept: application/json
+Content-Type: application/json
+Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
+Origin: http://127.0.0.1:5173
+X-CSRF-Token: {{csrfToken}}
+X-Request-ID: httpyac-account-searches-create-issue
+
+{
+  "searchType": "issue",
+  "name": "Go starter issues",
+  "filters": {
+    "username": "octocat",
+    "languages": ["Go"],
+    "maximumDifficulty": 3
+  }
+}
+
+### Create a saved repository search through the discovery filter contract
+# @name createAccountRepositorySearch
+POST {{apiBaseUrl}}/api/account/saved-searches
+Accept: application/json
+Content-Type: application/json
+Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
+Origin: http://127.0.0.1:5173
+X-CSRF-Token: {{csrfToken}}
+X-Request-ID: httpyac-account-searches-create-repository
+
+{
+  "searchType": "repository",
+  "name": "Maintained Go repositories",
+  "filters": {
+    "languages": ["Go"],
+    "minimumStars": 100,
+    "forkPolicy": "exclude"
+  }
+}
+
+### Replace a saved search at its current version
+# @name updateAccountSavedSearch
+PUT {{apiBaseUrl}}/api/account/saved-searches/{{savedSearchID}}
+Accept: application/json
+Content-Type: application/json
+Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
+Origin: http://127.0.0.1:5173
+X-CSRF-Token: {{csrfToken}}
+X-Request-ID: httpyac-account-searches-update
+
+{
+  "searchType": "issue",
+  "name": "Go starter issues",
+  "filters": {
+    "username": "octocat",
+    "languages": ["Go", "TypeScript"],
+    "maximumDifficulty": 4
+  },
+  "version": {{savedSearchVersion}}
+}
+
+### Delete an owned saved search with optimistic concurrency
+# @name deleteAccountSavedSearch
+DELETE {{apiBaseUrl}}/api/account/saved-searches/{{savedSearchID}}?version={{savedSearchVersion}}
+Accept: application/json
+Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
+Origin: http://127.0.0.1:5173
+X-CSRF-Token: {{csrfToken}}
+X-Request-ID: httpyac-account-searches-delete
+
+### Read persisted preferences or version-zero defaults
+# @name getAccountPreferences
+GET {{apiBaseUrl}}/api/account/preferences
+Accept: application/json
+Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
+Origin: http://127.0.0.1:5173
+X-Request-ID: httpyac-account-preferences-get
+
+### Create or update preferences at the current version
+# @name updateAccountPreferences
+PUT {{apiBaseUrl}}/api/account/preferences
+Accept: application/json
+Content-Type: application/json
+Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
+Origin: http://127.0.0.1:5173
+X-CSRF-Token: {{csrfToken}}
+X-Request-ID: httpyac-account-preferences-update
+
+{
+  "theme": "dark",
+  "reducedMotion": "system",
+  "resultsPerPage": 20,
+  "version": {{preferencesVersion}}
+}
+
+### Export all bounded non-secret account feature data
+# @name exportAccountData
+GET {{apiBaseUrl}}/api/account/export
+Accept: application/json
+Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
+Origin: http://127.0.0.1:5173
+X-Request-ID: httpyac-account-export
+
+# This destructive request is safe by default because the placeholder does not
+# equal DELETE. Replace it only for a disposable local account after export.
+@accountDeleteConfirmation = replace-only-after-export
+
+### Permanently delete the authenticated account and all owned data
+# @name deleteAccount
+DELETE {{apiBaseUrl}}/api/account
+Accept: application/json
+Content-Type: application/json
+Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
+Origin: http://127.0.0.1:5173
+X-CSRF-Token: {{csrfToken}}
+X-Request-ID: httpyac-account-delete
+
+{
+  "confirmation": "{{accountDeleteConfirmation}}"
+}
+
+### Prove account-only reads reject anonymous requests
+# @name rejectAnonymousAccountRead
+GET {{apiBaseUrl}}/api/account/bookmarks
+Accept: application/json
+Origin: http://127.0.0.1:5173
+X-Request-ID: httpyac-account-reject-anonymous
+
+### Prove account-only mutations reject a missing CSRF header
+# @name rejectMissingAccountCSRF
+PUT {{apiBaseUrl}}/api/account/preferences
+Accept: application/json
+Content-Type: application/json
+Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
+Origin: http://127.0.0.1:5173
+X-Request-ID: httpyac-account-reject-csrf
+
+{
+  "theme": "system",
+  "reducedMotion": "system",
+  "resultsPerPage": 20,
+  "version": {{preferencesVersion}}
+}

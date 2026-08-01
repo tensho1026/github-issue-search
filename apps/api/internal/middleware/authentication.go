@@ -14,6 +14,29 @@ import (
 
 const csrfHeader = "X-CSRF-Token"
 
+// RequireAuthenticated validates the HttpOnly browser credentials and
+// attaches the trusted principal to account-only read requests. It does not
+// require a CSRF header because safe reads do not mutate server state.
+func RequireAuthenticated(
+	authentication usecase.Authentication,
+	cookies authhttp.Policy,
+	responder response.Responder,
+) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		principal, ok := authenticateRequest(
+			ctx,
+			authentication,
+			cookies,
+			responder,
+		)
+		if !ok {
+			return
+		}
+		attachPrincipal(ctx, principal)
+		ctx.Next()
+	}
+}
+
 // RequireAuthenticatedCSRF validates both HttpOnly browser credentials and a
 // double-submit header before an authenticated mutation reaches its handler.
 // It is intentionally registered only on account/session mutation routes.
@@ -23,30 +46,13 @@ func RequireAuthenticatedCSRF(
 	responder response.Responder,
 ) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		if authentication == nil {
-			responder.Error(ctx, apperror.New(
-				apperror.CodeAuthUnavailable,
-				"GitHub sign-in is not configured",
-				http.StatusServiceUnavailable,
-			))
-			return
-		}
-		sessionToken, csrfToken, ok := cookies.Credentials(ctx.Request)
-		if !ok {
-			responder.Error(ctx, apperror.New(
-				apperror.CodeAuthentication,
-				"Authentication is required",
-				http.StatusUnauthorized,
-			))
-			return
-		}
-		principal, err := authentication.Authenticate(
-			ctx.Request.Context(),
-			sessionToken,
-			csrfToken,
+		principal, ok := authenticateRequest(
+			ctx,
+			authentication,
+			cookies,
+			responder,
 		)
-		if err != nil {
-			responder.Error(ctx, err)
+		if !ok {
 			return
 		}
 		if err := authentication.ValidateCSRF(
@@ -56,12 +62,51 @@ func RequireAuthenticatedCSRF(
 			responder.Error(ctx, err)
 			return
 		}
-		ctx.Request = ctx.Request.WithContext(
-			requestcontext.WithPrincipal(
-				ctx.Request.Context(),
-				principal,
-			),
-		)
+		attachPrincipal(ctx, principal)
 		ctx.Next()
 	}
+}
+
+func authenticateRequest(
+	ctx *gin.Context,
+	authentication usecase.Authentication,
+	cookies authhttp.Policy,
+	responder response.Responder,
+) (auth.Principal, bool) {
+	if authentication == nil {
+		responder.Error(ctx, apperror.New(
+			apperror.CodeAuthUnavailable,
+			"GitHub sign-in is not configured",
+			http.StatusServiceUnavailable,
+		))
+		return auth.Principal{}, false
+	}
+	sessionToken, csrfToken, ok := cookies.Credentials(ctx.Request)
+	if !ok {
+		responder.Error(ctx, apperror.New(
+			apperror.CodeAuthentication,
+			"Authentication is required",
+			http.StatusUnauthorized,
+		))
+		return auth.Principal{}, false
+	}
+	principal, err := authentication.Authenticate(
+		ctx.Request.Context(),
+		sessionToken,
+		csrfToken,
+	)
+	if err != nil {
+		responder.Error(ctx, err)
+		return auth.Principal{}, false
+	}
+	return principal, true
+}
+
+func attachPrincipal(ctx *gin.Context, principal auth.Principal) {
+	ctx.Request = ctx.Request.WithContext(
+		requestcontext.WithPrincipal(
+			ctx.Request.Context(),
+			principal,
+		),
+	)
 }

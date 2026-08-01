@@ -80,6 +80,14 @@ protected environments are never entered from pull request events.
   response bodies are not logged.
 - PostgreSQL is optional, TLS-only, pool-bounded, and reserved for authenticated
   account data. Anonymous handlers have no database repository dependency.
+- Account routes derive ownership only from the server-validated principal.
+  Every feature query includes `account_id`; a foreign resource UUID is masked
+  as not found. Mutations require CSRF and optimistic versions, quota writes
+  serialize per account, and stored bookmarks contain only normalized
+  references rather than GitHub payloads.
+- Privacy export excludes credentials, audit identifiers, upstream payloads,
+  and anonymous activity. Confirmed account deletion cascades through all
+  owned data and leaves only a content-free event without an account ID.
 - Database URLs use redacting configuration values and never enter errors,
   fixtures, frontend assets, migration output, or release artifacts.
 - Release archives reject `.env`, source-map, and private-key files plus
@@ -87,6 +95,8 @@ protected environments are never entered from pull request events.
 
 The complete authentication threat model and lifecycle are in
 [Optional GitHub authentication](authentication.md).
+Account-specific ownership, quota, stale-reference, export, and deletion rules
+are in [Authenticated account workspace](account-workspace.md).
 
 ## Incident response
 
