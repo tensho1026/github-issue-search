@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -132,6 +134,36 @@ func TestAuthenticationSkipsDatabaseForMalformedCookie(t *testing.T) {
 	}
 	if repository.findCalls != 0 {
 		t.Fatalf("FindSession() calls = %d", repository.findCalls)
+	}
+}
+
+func TestAuthenticationMapsDatabaseFailureWithoutLeakingDetails(t *testing.T) {
+	repository := &authRepositoryStub{
+		findErr: errors.New(
+			"private database host and credential detail",
+		),
+	}
+	service := newAuthenticationForTest(
+		t,
+		&oauthStub{},
+		repository,
+		&credentialGeneratorStub{},
+	)
+	_, err := service.Authenticate(
+		context.Background(),
+		opaqueSecret(1),
+		opaqueSecret(2),
+	)
+	applicationError := apperror.From(err)
+	if applicationError.Code != apperror.CodeAuthUnavailable ||
+		applicationError.HTTPStatus != 503 {
+		t.Fatalf("Authenticate() error = %v", err)
+	}
+	if strings.Contains(
+		applicationError.Error(),
+		"private database",
+	) {
+		t.Fatal("authentication error exposed a database detail")
 	}
 }
 
