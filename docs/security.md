@@ -53,6 +53,25 @@ protected environments are never entered from pull request events.
 - The runtime GitHub token required for GraphQL issue search is accepted only
   by the backend process and must never be sent to browser code, logs, errors,
   analytics, cache keys, or fixtures.
+- GitHub OAuth uses Authorization Code with PKCE `S256`, a random single-use
+  state digest, an exact callback URL, and the explicit minimum `read:user`
+  scope. The exchanged access token is used only for `GET /user`, then
+  discarded without database, browser, cache, analytics, or log exposure.
+- The OAuth flow cookie is AES-256-GCM authenticated, short-lived, versioned,
+  HttpOnly, and paired with an atomically consumed database state hash.
+  Callback query state is compared in constant time before any code exchange.
+- Session and CSRF credentials contain 256 random bits. Only SHA-256 digests
+  are persisted. HTTPS deployment cookies use `Secure`, `HttpOnly`,
+  `SameSite=Lax`, `Path=/`, no Domain, and the `__Host-` prefix.
+- Authenticated mutations require the session cookie, CSRF cookie, active
+  server digest, and constant-time matching `X-CSRF-Token` header. Refresh
+  atomically revokes the old session and rotates both browser credentials.
+- OAuth return paths accept only bounded root-relative values. Callback
+  redirects are assembled from the fixed `AUTH_FRONTEND_URL`; provider
+  descriptions and caller-supplied origins are never reflected.
+- Credentialed CORS echoes only an exact configured origin. Reverse-proxy
+  forwarding headers are ignored unless `TRUSTED_PROXY_CIDRS` explicitly
+  names the actual ingress.
 - Public profile GraphQL queries filter owned, forked, and contributed
   repositories to `PUBLIC`; remove non-public star/contribution nodes; and
   never request restricted-contribution totals. Anonymous profile analysis is
@@ -65,6 +84,9 @@ protected environments are never entered from pull request events.
   fixtures, frontend assets, migration output, or release artifacts.
 - Release archives reject `.env`, source-map, and private-key files plus
   credential-shaped GitHub, PostgreSQL/Neon, and AWS content.
+
+The complete authentication threat model and lifecycle are in
+[Optional GitHub authentication](authentication.md).
 
 ## Incident response
 

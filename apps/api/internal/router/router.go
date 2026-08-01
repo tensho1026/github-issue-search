@@ -9,6 +9,8 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/config"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/handler"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/middleware"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/platform/authcrypto"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/platform/authhttp"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/transport/response"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/usecase"
@@ -25,6 +27,8 @@ type Dependencies struct {
 	RecommendIssue       usecase.IssueRecommender
 	DatabaseHealth       port.DatabaseHealth
 	DatabaseConfigured   bool
+	Authentication       usecase.Authentication
+	AuthFlowCodec        *authcrypto.FlowCodec
 }
 
 // New composes concrete HTTP dependencies. Feature handlers are constructed by
@@ -59,9 +63,18 @@ func New(dependencies Dependencies) (http.Handler, error) {
 			"compose router: configured database health probe is required",
 		)
 	}
+	if dependencies.Config.AuthEnabled &&
+		(dependencies.Authentication == nil ||
+			dependencies.AuthFlowCodec == nil) {
+		return nil, fmt.Errorf(
+			"compose router: enabled authentication dependencies are required",
+		)
+	}
 
 	engine := gin.New()
-	if err := engine.SetTrustedProxies(nil); err != nil {
+	if err := engine.SetTrustedProxies(
+		dependencies.Config.TrustedProxyCIDRs,
+	); err != nil {
 		return nil, fmt.Errorf("configure trusted proxies: %w", err)
 	}
 
@@ -99,6 +112,20 @@ func New(dependencies Dependencies) (http.Handler, error) {
 		dependencies.SearchRepositories,
 		dependencies.Responder,
 	)
+	authCookies := authhttp.NewPolicy(
+		dependencies.Config.AuthCookieSecure,
+	)
+	authHandler, err := handler.NewAuthHandler(
+		dependencies.Config.AuthEnabled,
+		dependencies.Authentication,
+		dependencies.AuthFlowCodec,
+		authCookies,
+		dependencies.Config.AuthFrontendURL,
+		dependencies.Responder,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("compose authentication handler: %w", err)
+	}
 	api := engine.Group("/api")
 	api.GET(
 		"/health",
@@ -155,6 +182,53 @@ func New(dependencies Dependencies) (http.Handler, error) {
 			dependencies.Responder,
 		),
 		issueDetailHandler.Get,
+	)
+	api.GET(
+		"/auth/session",
+		middleware.Timeout(
+			dependencies.Config.NormalRequestTimeout,
+			dependencies.Responder,
+		),
+		authHandler.Session,
+	)
+	api.GET(
+		"/auth/github/start",
+		middleware.Timeout(
+			dependencies.Config.NormalRequestTimeout,
+			dependencies.Responder,
+		),
+		authHandler.Start,
+	)
+	api.GET(
+		"/auth/github/callback",
+		middleware.Timeout(
+			dependencies.Config.NormalRequestTimeout,
+			dependencies.Responder,
+		),
+		authHandler.Callback,
+	)
+	authenticatedMutation := middleware.RequireAuthenticatedCSRF(
+		dependencies.Authentication,
+		authCookies,
+		dependencies.Responder,
+	)
+	api.POST(
+		"/auth/session/refresh",
+		middleware.Timeout(
+			dependencies.Config.NormalRequestTimeout,
+			dependencies.Responder,
+		),
+		authenticatedMutation,
+		authHandler.Refresh,
+	)
+	api.POST(
+		"/auth/logout",
+		middleware.Timeout(
+			dependencies.Config.NormalRequestTimeout,
+			dependencies.Responder,
+		),
+		authenticatedMutation,
+		authHandler.Logout,
 	)
 
 	engine.NoRoute(dependencies.Responder.NotFound)

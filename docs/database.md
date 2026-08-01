@@ -85,6 +85,12 @@ Repository methods accept a validated opaque account UUID and include it as a
 parameterized ownership predicate. A missing or foreign account is exposed as
 not found, preventing identifier enumeration.
 
+GitHub identity linking takes a transaction-scoped advisory lock keyed by the
+numeric GitHub user ID. Two concurrent first callbacks therefore serialize,
+reuse the unique identity, and cannot create duplicate accounts. State
+consumption is one atomic conditional update. Session rotation revokes the old
+token and inserts the new session/CSRF hashes in one transaction.
+
 ## Native migration workflow
 
 No Docker or container runtime is required. After placing only a rotated
@@ -117,12 +123,18 @@ For an approved disposable PostgreSQL database, set a separate rotated
 ```sh
 go -C apps/api test -run TestMigrationsAgainstConfiguredPostgreSQL \
   ./internal/database/postgres
+
+go -C apps/api test -run TestAuthRepositoryAgainstConfiguredPostgreSQL \
+  ./internal/database/postgres
 ```
 
 The test creates a randomly named isolated schema, migrates it twice to prove
 idempotency, verifies checksums and required tables, then removes only that
-schema. The variable is intentionally absent from ordinary tests and pull
-request CI because untrusted PR code must never receive a database secret.
+schema. The authentication test independently verifies single-use state,
+identity linking, session lookup, rotation, full revocation, and the absence of
+plaintext browser credentials. The variable is intentionally absent from
+ordinary tests and pull request CI because untrusted PR code must never receive
+a database secret.
 
 ## Least-privilege deployment
 

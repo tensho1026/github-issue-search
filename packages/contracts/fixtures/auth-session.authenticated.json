@@ -1,0 +1,18 @@
+{
+  "data": {
+    "configured": true,
+    "authenticated": true,
+    "user": {
+      "accountId": "6ca6dfc4-0114-44fb-a9f8-d703f8c9a8b2",
+      "login": "example-user",
+      "avatarUrl": "https://avatars.githubusercontent.com/u/1",
+      "profileUrl": "https://github.com/example-user"
+    },
+    "expiresAt": "2026-08-01T17:00:00Z",
+    "csrfToken": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  },
+  "meta": {
+    "requestId": "req_auth_authenticated",
+    "timestamp": "2026-08-01T05:00:00Z"
+  }
+}

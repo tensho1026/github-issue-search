@@ -39,6 +39,18 @@ var configurationKeys = []string{
 	"DATABASE_MAX_CONNECTION_LIFETIME",
 	"DATABASE_MAX_CONNECTION_IDLE_TIME",
 	"DATABASE_HEALTH_CHECK_PERIOD",
+	"GITHUB_OAUTH_CLIENT_ID",
+	"GITHUB_OAUTH_CLIENT_SECRET",
+	"GITHUB_OAUTH_AUTHORIZE_URL",
+	"GITHUB_OAUTH_TOKEN_URL",
+	"GITHUB_OAUTH_CALLBACK_URL",
+	"AUTH_FRONTEND_URL",
+	"AUTH_FLOW_ENCRYPTION_KEY",
+	"AUTH_STATE_TTL",
+	"AUTH_SESSION_TTL",
+	"AUTH_MAX_SESSIONS",
+	"AUTH_COOKIE_SECURE",
+	"TRUSTED_PROXY_CIDRS",
 	"USE_GITHUB_API_MOCK",
 }
 
@@ -105,6 +117,14 @@ func TestLoadUsesSafeDefaults(t *testing.T) {
 			defaultDatabaseMaxConnectionIdleTime ||
 		cfg.DatabaseHealthCheckPeriod != defaultDatabaseHealthCheckPeriod {
 		t.Fatal("Load() did not apply database-safe defaults")
+	}
+	if cfg.AuthEnabled ||
+		cfg.AuthStateTTL != defaultAuthStateTTL ||
+		cfg.AuthSessionTTL != defaultAuthSessionTTL ||
+		cfg.AuthMaxSessions != defaultAuthMaxSessions ||
+		cfg.AuthCookieSecure ||
+		len(cfg.TrustedProxyCIDRs) != 0 {
+		t.Fatal("Load() did not apply disabled development auth defaults")
 	}
 }
 
@@ -191,6 +211,91 @@ func TestLoadReadsConfiguredValues(t *testing.T) {
 	wantOrigins := []string{"https://issuescout.example", "http://localhost:5173"}
 	if !reflect.DeepEqual(cfg.AllowedOrigins, wantOrigins) {
 		t.Fatalf("Load().AllowedOrigins = %v, want %v", cfg.AllowedOrigins, wantOrigins)
+	}
+}
+
+func TestLoadEnablesBoundedOAuthConfiguration(t *testing.T) {
+	clearConfiguration(t)
+	setCompleteOAuthConfiguration(t)
+	t.Setenv("AUTH_STATE_TTL", "5m")
+	t.Setenv("AUTH_SESSION_TTL", "24h")
+	t.Setenv("AUTH_MAX_SESSIONS", "7")
+	t.Setenv("AUTH_COOKIE_SECURE", "false")
+	t.Setenv("TRUSTED_PROXY_CIDRS", "127.0.0.1/32,10.0.0.0/8")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !cfg.AuthEnabled ||
+		cfg.GitHubOAuthClientID != "oauth-client-id" ||
+		cfg.GitHubOAuthClientSecret.Value() !=
+			"oauth-client-secret-value" ||
+		cfg.AuthFlowEncryptionKey.Value() != strings.Repeat("ab", 32) ||
+		cfg.GitHubOAuthCallbackURL.String() !=
+			"http://127.0.0.1:8080/api/auth/github/callback" ||
+		cfg.AuthFrontendURL.String() != "http://127.0.0.1:5173" ||
+		cfg.AuthStateTTL != 5*time.Minute ||
+		cfg.AuthSessionTTL != 24*time.Hour ||
+		cfg.AuthMaxSessions != 7 ||
+		cfg.AuthCookieSecure {
+		t.Fatalf("Load() OAuth configuration = %+v", cfg)
+	}
+	wantProxies := []string{"127.0.0.1/32", "10.0.0.0/8"}
+	if !reflect.DeepEqual(cfg.TrustedProxyCIDRs, wantProxies) {
+		t.Fatalf("Load().TrustedProxyCIDRs = %v", cfg.TrustedProxyCIDRs)
+	}
+}
+
+func TestLoadRejectsUnsafeOAuthConfiguration(t *testing.T) {
+	tests := map[string]func(*testing.T){
+		"partial": func(t *testing.T) {
+			t.Setenv("GITHUB_OAUTH_CLIENT_ID", "oauth-client-id")
+		},
+		"database required": func(t *testing.T) {
+			setCompleteOAuthConfiguration(t)
+			t.Setenv("DATABASE_URL", "")
+		},
+		"callback path": func(t *testing.T) {
+			setCompleteOAuthConfiguration(t)
+			t.Setenv(
+				"GITHUB_OAUTH_CALLBACK_URL",
+				"http://127.0.0.1:8080/untrusted",
+			)
+		},
+		"frontend allowlist": func(t *testing.T) {
+			setCompleteOAuthConfiguration(t)
+			t.Setenv("AUTH_FRONTEND_URL", "http://localhost:5173")
+		},
+		"encryption key": func(t *testing.T) {
+			setCompleteOAuthConfiguration(t)
+			t.Setenv("AUTH_FLOW_ENCRYPTION_KEY", "short")
+		},
+		"insecure production cookie": func(t *testing.T) {
+			setCompleteOAuthConfiguration(t)
+			t.Setenv("APP_ENV", "production")
+			t.Setenv("AUTH_COOKIE_SECURE", "false")
+		},
+		"non-loopback insecure cookie": func(t *testing.T) {
+			setCompleteOAuthConfiguration(t)
+			t.Setenv("AUTH_COOKIE_SECURE", "false")
+			t.Setenv(
+				"GITHUB_OAUTH_CALLBACK_URL",
+				"https://api.issuescout.example/api/auth/github/callback",
+			)
+		},
+		"proxy not CIDR": func(t *testing.T) {
+			t.Setenv("TRUSTED_PROXY_CIDRS", "127.0.0.1")
+		},
+	}
+	for name, arrange := range tests {
+		t.Run(name, func(t *testing.T) {
+			clearConfiguration(t)
+			arrange(t)
+			if _, err := Load(); !errors.Is(err, errInvalidConfig) {
+				t.Fatalf("Load() error = %v, want invalid configuration", err)
+			}
+		})
 	}
 }
 
@@ -432,4 +537,21 @@ func clearConfiguration(t *testing.T) {
 	for _, key := range configurationKeys {
 		t.Setenv(key, "")
 	}
+}
+
+func setCompleteOAuthConfiguration(t *testing.T) {
+	t.Helper()
+	t.Setenv("ALLOWED_ORIGINS", "http://127.0.0.1:5173")
+	t.Setenv(
+		"DATABASE_URL",
+		"postgresql://owner:configuration-test-value@db.example/issuescout?sslmode=require",
+	)
+	t.Setenv("GITHUB_OAUTH_CLIENT_ID", "oauth-client-id")
+	t.Setenv("GITHUB_OAUTH_CLIENT_SECRET", "oauth-client-secret-value")
+	t.Setenv(
+		"GITHUB_OAUTH_CALLBACK_URL",
+		"http://127.0.0.1:8080/api/auth/github/callback",
+	)
+	t.Setenv("AUTH_FRONTEND_URL", "http://127.0.0.1:5173")
+	t.Setenv("AUTH_FLOW_ENCRYPTION_KEY", strings.Repeat("ab", 32))
 }

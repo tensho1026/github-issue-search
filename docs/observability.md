@@ -18,6 +18,12 @@ Request completion records include:
 - safe user-agent and client address metadata;
 - stable application error code when present.
 
+The request logger uses Gin's normalized route and never includes the query
+string. OAuth callback codes, state, provider descriptions, Cookie headers,
+CSRF headers, authorization headers, and database parameters are therefore
+excluded. Authentication dependencies return fixed safe errors rather than
+driver or upstream response details.
+
 Startup records include listener address and build version/commit. Shutdown
 records indicate graceful termination. Upstream retry logs describe attempt and
 status without response bodies or credentials.

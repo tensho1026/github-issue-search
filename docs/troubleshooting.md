@@ -45,6 +45,42 @@ remain healthy. Check only that `DATABASE_URL` contains a rotated TLS
 credential, then run `pnpm run database:status`. Never print the value or paste
 driver output containing connection parameters.
 
+### GitHub sign-in reports `AUTH_UNAVAILABLE`
+
+First call `GET /api/auth/session`. `configured: false` means the five required
+OAuth values are all absent; this is healthy anonymous-only mode. If enabling
+login, set the complete group, ensure `DATABASE_URL` is present, apply
+migrations, and restart. Do not paste values into a report.
+
+When `configured: true`, verify `/api/health/database` independently. A
+temporary GitHub token-exchange or identity failure may return 502 while a
+database operation returns 503. In both cases public routes remain usable.
+
+### GitHub sign-in reports `INVALID_AUTH_STATE`
+
+Restart from `/api/auth/github/start`. The flow may be expired, consumed,
+modified, paired with a different browser Cookie jar, or returned with a state
+that does not match the encrypted cookie. Do not retry a callback URL or
+one-time code. Confirm the OAuth App callback exactly matches
+`GITHUB_OAUTH_CALLBACK_URL`, including scheme, host, port, and path.
+
+### Refresh or logout reports a CSRF or session error
+
+Call `GET /api/auth/session` with browser credentials. If authenticated, use
+the returned current token only in the `X-CSRF-Token` header and keep it in
+memory. `CSRF_REJECTED` means the header, HttpOnly cookie, or server digest did
+not match. `AUTHENTICATION_REQUIRED` means the session is missing, expired,
+revoked, or rotated; bootstrap or sign in again.
+
+### Login works directly but not through a reverse proxy
+
+Leave `TRUSTED_PROXY_CIDRS` empty unless the API is actually behind an ingress.
+If it is, list only the ingress's canonical CIDRs. Keep the registered callback
+and `AUTH_FRONTEND_URL` as public HTTPS URLs, keep
+`AUTH_COOKIE_SECURE=true`, and put the exact browser origin in
+`ALLOWED_ORIGINS`. Never solve a proxy mismatch by accepting wildcard origins
+or insecure production cookies.
+
 ### Migration verification reports drift
 
 Stop deployment. Do not edit the migration table or rewrite an existing SQL
