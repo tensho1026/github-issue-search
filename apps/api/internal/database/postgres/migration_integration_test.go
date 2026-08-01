@@ -20,8 +20,8 @@ func TestMigrationsAgainstConfiguredPostgreSQL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	settings := integrationPoolSettings()
-	adminPool, err := Open(ctx, databaseURL, settings)
-	if err != nil {
+	adminPool, openErr := Open(ctx, databaseURL, settings)
+	if openErr != nil {
 		t.Fatal("Open() rejected TEST_DATABASE_URL")
 	}
 	t.Cleanup(adminPool.Close)
@@ -44,15 +44,15 @@ func TestMigrationsAgainstConfiguredPostgreSQL(t *testing.T) {
 		}
 	})
 
-	isolatedURL, err := url.Parse(databaseURL)
-	if err != nil {
+	isolatedURL, parseErr := url.Parse(databaseURL)
+	if parseErr != nil {
 		t.Fatal("parse TEST_DATABASE_URL")
 	}
 	parameters := isolatedURL.Query()
 	parameters.Set("search_path", schema)
 	isolatedURL.RawQuery = parameters.Encode()
-	isolatedPool, err := Open(ctx, isolatedURL.String(), settings)
-	if err != nil {
+	isolatedPool, isolatedOpenErr := Open(ctx, isolatedURL.String(), settings)
+	if isolatedOpenErr != nil {
 		t.Fatal("open isolated migration pool")
 	}
 	t.Cleanup(isolatedPool.Close)

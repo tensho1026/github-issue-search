@@ -401,6 +401,7 @@ func TestLoadRejectsInvalidConfiguration(t *testing.T) {
 
 func TestSecretsNeverFormatTheirValues(t *testing.T) {
 	clearConfiguration(t)
+	//nolint:gosec // This is a synthetic sentinel used only to prove redaction.
 	const token = "github-configuration-sensitive-value"
 	const databasePassword = "database-configuration-sensitive-value"
 	t.Setenv("GITHUB_TOKEN", token)

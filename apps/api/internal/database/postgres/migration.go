@@ -56,12 +56,12 @@ func (pool *Pool) Migrate(ctx context.Context) error {
 	if pool == nil || pool.client == nil {
 		return ErrUnavailable
 	}
-	migrations, err := loadMigrations()
-	if err != nil {
-		return err
+	migrations, loadErr := loadMigrations()
+	if loadErr != nil {
+		return loadErr
 	}
-	connection, err := pool.client.Acquire(ctx)
-	if err != nil {
+	connection, acquireErr := pool.client.Acquire(ctx)
+	if acquireErr != nil {
 		return ErrMigrationFailed
 	}
 	defer connection.Release()
@@ -88,9 +88,9 @@ func (pool *Pool) Migrate(ctx context.Context) error {
 		)
 	}()
 
-	applied, err := readAppliedMigrations(ctx, connection)
-	if err != nil {
-		return err
+	applied, readErr := readAppliedMigrations(ctx, connection)
+	if readErr != nil {
+		return readErr
 	}
 	if err := verifyMigrationSet(migrations, applied); err != nil {
 		return err
@@ -115,18 +115,18 @@ func (pool *Pool) MigrationStatus(
 	if pool == nil || pool.client == nil {
 		return nil, ErrUnavailable
 	}
-	migrations, err := loadMigrations()
-	if err != nil {
-		return nil, err
+	migrations, loadErr := loadMigrations()
+	if loadErr != nil {
+		return nil, loadErr
 	}
 	statusContext, cancel := context.WithTimeout(ctx, pool.queryTimeout)
 	defer cancel()
 	if _, err := pool.client.Exec(statusContext, migrationTableSQL); err != nil {
 		return nil, ErrMigrationFailed
 	}
-	applied, err := readAppliedMigrations(statusContext, pool.client)
-	if err != nil {
-		return nil, err
+	applied, readErr := readAppliedMigrations(statusContext, pool.client)
+	if readErr != nil {
+		return nil, readErr
 	}
 	if err := verifyMigrationSet(migrations, applied); err != nil {
 		return nil, err

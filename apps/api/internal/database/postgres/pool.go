@@ -106,10 +106,10 @@ func buildPoolConfig(
 	if err != nil {
 		return nil, ErrInvalidConfiguration
 	}
-	if sslMode := poolConfig.ConnConfig.Config.RuntimeParams["sslmode"]; sslMode != "" {
+	if sslMode := poolConfig.ConnConfig.RuntimeParams["sslmode"]; sslMode != "" {
 		// sslmode is consumed by pgx while parsing and is normally absent from
 		// RuntimeParams. This guard exists only for future parser behavior.
-		delete(poolConfig.ConnConfig.Config.RuntimeParams, "sslmode")
+		delete(poolConfig.ConnConfig.RuntimeParams, "sslmode")
 	}
 	poolConfig.ConnConfig.ConnectTimeout = settings.ConnectTimeout
 	poolConfig.ConnConfig.RuntimeParams["application_name"] =
@@ -120,8 +120,9 @@ func buildPoolConfig(
 		durationMilliseconds(settings.QueryTimeout)
 	poolConfig.ConnConfig.RuntimeParams["lock_timeout"] =
 		durationMilliseconds(min(settings.QueryTimeout, 2*time.Second))
-	poolConfig.MaxConns = int32(settings.MaxConnections)
-	poolConfig.MinConns = int32(settings.MinConnections)
+	// The validation above constrains both values to the inclusive range 0..100.
+	poolConfig.MaxConns = int32(settings.MaxConnections) //nolint:gosec
+	poolConfig.MinConns = int32(settings.MinConnections) //nolint:gosec
 	poolConfig.MaxConnLifetime = settings.MaxConnectionLife
 	poolConfig.MaxConnIdleTime = settings.MaxConnectionIdle
 	poolConfig.HealthCheckPeriod = settings.HealthCheckPeriod

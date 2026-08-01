@@ -38,7 +38,7 @@ func TestBuildPoolConfigAppliesBoundedPolicy(t *testing.T) {
 		parameters["lock_timeout"] != "2000" {
 		t.Fatalf("runtime parameters = %v", parameters)
 	}
-	if poolConfig.ConnConfig.Config.Password != "pool-test-value" {
+	if poolConfig.ConnConfig.Password != "pool-test-value" {
 		t.Fatal("driver config did not receive the credential")
 	}
 }
