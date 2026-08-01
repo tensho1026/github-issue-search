@@ -34,10 +34,14 @@ type RecommendIssueOutput struct {
 // IssueRecommender provides cached detail reads and a no-I/O fallback for
 // candidates beyond the bounded enrichment window.
 type IssueRecommender interface {
+	// Execute returns cached or freshly loaded detail analysis, collapses
+	// concurrent misses, and honors ctx cancellation.
 	Execute(
 		ctx context.Context,
 		input RecommendIssueInput,
 	) (RecommendIssueOutput, error)
+	// EvaluateCandidate performs deterministic no-I/O fallback analysis with
+	// unavailable repository evidence.
 	EvaluateCandidate(
 		candidate issue.Candidate,
 		desiredSkills []string,
@@ -51,6 +55,8 @@ type recommendIssue struct {
 	now      func() time.Time
 }
 
+// NewRecommendIssue composes detailed GitHub inspection with a concurrency-safe
+// cache. Both dependencies are required.
 func NewRecommendIssue(
 	reader port.GitHubIssueDetailReader,
 	cache port.IssueDetailCache,

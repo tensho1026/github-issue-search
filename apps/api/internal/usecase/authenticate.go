@@ -43,29 +43,42 @@ type AuthSessionOutput struct {
 // Authentication coordinates OAuth, PKCE, identity linking, session
 // authentication, rotation, CSRF validation, and revocation.
 type Authentication interface {
+	// Start validates a same-origin return path, persists a single-use state
+	// hash, and returns short-lived redacting browser credentials.
 	Start(
 		ctx context.Context,
 		returnPath string,
 	) (OAuthStartOutput, error)
+	// Complete consumes the flow exactly once, exchanges PKCE credentials,
+	// links the identity, and creates a bounded server session.
 	Complete(
 		ctx context.Context,
 		input CompleteOAuthInput,
 	) (AuthSessionOutput, error)
+	// Deny consumes the supplied state and returns its validated path without
+	// exchanging an authorization code.
 	Deny(
 		ctx context.Context,
 		state auth.Secret,
 		flowReturnPath string,
 	) (string, error)
+	// Authenticate validates opaque cookie credentials, loads an unexpired
+	// server session, and never accepts an account ID from the caller.
 	Authenticate(
 		ctx context.Context,
 		sessionToken auth.Secret,
 		csrfToken auth.Secret,
 	) (auth.Principal, error)
+	// ValidateCSRF compares the header, cookie, and stored digest in constant
+	// time for state-changing requests.
 	ValidateCSRF(principal auth.Principal, headerToken auth.Secret) error
+	// Refresh atomically revokes the current session and returns newly generated
+	// session and CSRF credentials.
 	Refresh(
 		ctx context.Context,
 		principal auth.Principal,
 	) (AuthSessionOutput, error)
+	// Logout revokes the principal's current session and honors ctx.
 	Logout(ctx context.Context, principal auth.Principal) error
 }
 

@@ -20,11 +20,15 @@ import (
 
 const maxRepositoryDiscoveryRequestBytes = 16 << 10
 
+// RepositoryDiscoveryHandler decodes bounded filters and presents explainable
+// public repository discovery results.
 type RepositoryDiscoveryHandler struct {
 	search    usecase.SearchRepositories
 	responder response.Responder
 }
 
+// NewRepositoryDiscoveryHandler binds the repository-search use case to a
+// shared responder.
 func NewRepositoryDiscoveryHandler(
 	search usecase.SearchRepositories,
 	responder response.Responder,
@@ -32,6 +36,8 @@ func NewRepositoryDiscoveryHandler(
 	return RepositoryDiscoveryHandler{search: search, responder: responder}
 }
 
+// Search handles one cancellable JSON repository-discovery request. It rejects
+// unknown fields, trailing values, oversized bodies, and unsupported queries.
 func (handler RepositoryDiscoveryHandler) Search(ctx *gin.Context) {
 	request, err := decodeRepositoryDiscoveryRequest(ctx)
 	if err != nil {

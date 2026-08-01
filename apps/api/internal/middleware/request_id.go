@@ -16,12 +16,18 @@ const requestIDHeader = "X-Request-ID"
 
 var fallbackRequestIDCounter atomic.Uint64
 
+// RequestIDGenerator returns a candidate correlation identifier. Test callers
+// may inject a deterministic generator through RequestIDWithGenerator.
 type RequestIDGenerator func() string
 
+// RequestID installs correlation middleware backed by cryptographic random
+// identifiers with a process-local monotonic fallback.
 func RequestID() gin.HandlerFunc {
 	return RequestIDWithGenerator(generateRequestID)
 }
 
+// RequestIDWithGenerator accepts a bounded safe inbound X-Request-ID or uses
+// generate, then propagates the value through context and response headers.
 func RequestIDWithGenerator(generate RequestIDGenerator) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		requestID := strings.TrimSpace(ctx.GetHeader(requestIDHeader))

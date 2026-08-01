@@ -2,6 +2,7 @@ package issue
 
 import "time"
 
+// Recommendation score limits define the fixed 100-point model invariant.
 const (
 	MaximumRecommendationScore = 100
 
@@ -18,6 +19,7 @@ const (
 // from the percentage denominator.
 type MatchStatus string
 
+// MatchStatus values preserve unavailable evidence separately from mismatch.
 const (
 	MatchMatched   MatchStatus = "matched"
 	MatchUnmatched MatchStatus = "unmatched"
@@ -44,6 +46,7 @@ type SkillMatchAssessment struct {
 // readiness signal.
 type RepositorySignalKey string
 
+// RepositorySignalKey values enumerate contribution-readiness observations.
 const (
 	RepositoryREADME        RepositorySignalKey = "readme"
 	RepositoryContributing  RepositorySignalKey = "contributing"
@@ -62,6 +65,7 @@ type RepositorySignal struct {
 // CIState is the normalized state of the default branch's latest check rollup.
 type CIState string
 
+// CIState values normalize the default branch's latest check rollup.
 const (
 	CIStateSuccess CIState = "success"
 	CIStateFailure CIState = "failure"
@@ -73,6 +77,7 @@ const (
 // misleading zero duration.
 type AggregateStatus string
 
+// AggregateStatus values distinguish usable samples from absent evidence.
 const (
 	AggregateAvailable   AggregateStatus = "available"
 	AggregateUnavailable AggregateStatus = "unavailable"
@@ -140,6 +145,7 @@ type ClaimEvidence struct {
 // Severity orders warning presentation and allows clients to style risk.
 type Severity string
 
+// Severity values order heuristic warning presentation.
 const (
 	SeverityInfo     Severity = "info"
 	SeverityWarning  Severity = "warning"

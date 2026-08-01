@@ -15,6 +15,7 @@ type IssueSearch struct {
 	store *lruCache[string, port.IssueSearchCacheEntry]
 }
 
+// NewIssueSearch constructs an LRU cache with positive capacity and TTL.
 func NewIssueSearch(capacity int, ttl time.Duration) (*IssueSearch, error) {
 	store, err := newLRUCache[string, port.IssueSearchCacheEntry](
 		capacity,
@@ -27,6 +28,8 @@ func NewIssueSearch(capacity int, ttl time.Duration) (*IssueSearch, error) {
 	return &IssueSearch{store: store}, nil
 }
 
+// Get returns a deep copy, reports misses without error, and honors a
+// pre-cancelled context before acquiring the cache lock.
 func (cache *IssueSearch) Get(
 	ctx context.Context,
 	key string,
@@ -34,6 +37,8 @@ func (cache *IssueSearch) Get(
 	return cache.store.get(ctx, key)
 }
 
+// Set stores a deep copy, refreshes TTL on replacement, and may evict the
+// least-recently-used entry.
 func (cache *IssueSearch) Set(
 	ctx context.Context,
 	key string,

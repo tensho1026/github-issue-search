@@ -15,6 +15,8 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/user"
 )
 
+// MaximumReturnPathBytes bounds the same-origin location retained during an
+// OAuth round trip. The limit prevents oversized cookie and persistence input.
 const MaximumReturnPathBytes = 2048
 
 const opaqueCredentialBytes = 32

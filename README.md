@@ -66,6 +66,8 @@ response. The [account workspace guide](docs/account-workspace.md) defines
 bookmarks, saved searches, preferences, privacy export, and deletion. The
 [issue recommendation guide](docs/issue-recommendations.md)
 documents the score, sampling, warnings, cache, and deterministic ranking.
+The [GoDoc guide](docs/godoc.md) explains internal package contracts, runnable
+examples, local browsing, and the exported-documentation CI policy.
 
 ## Prerequisites
 
@@ -176,6 +178,8 @@ OAuth; they never force a login or store credentials in browser storage.
 | `pnpm run database:migrate` | Apply pending forward-only migrations                 |
 | `pnpm run database:verify`  | Require a complete, checksum-matching database schema |
 | `pnpm run migrations:check` | Enforce SQL safety and append-only migration history  |
+| `pnpm run docs:go`          | Browse all internal Go package documentation          |
+| `pnpm run docs:go:check`    | Enforce canonical GoDoc coverage                      |
 
 Database commands load `apps/api/.env` without printing it. Leave
 `DATABASE_URL` empty for anonymous-only development. See

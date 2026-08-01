@@ -12,11 +12,15 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/usecase"
 )
 
+// GitHubProfileAnalysisHandler validates profile path input and presents
+// public, explainable analysis through the shared response contract.
 type GitHubProfileAnalysisHandler struct {
 	analyze   usecase.AnalyzeGitHubProfile
 	responder response.Responder
 }
 
+// NewGitHubProfileAnalysisHandler binds a profile-analysis use case to a
+// responder. Dependencies must be fully composed by the router.
 func NewGitHubProfileAnalysisHandler(
 	analyze usecase.AnalyzeGitHubProfile,
 	responder response.Responder,
@@ -27,6 +31,7 @@ func NewGitHubProfileAnalysisHandler(
 	}
 }
 
+// Get handles one cancellable public profile-analysis request.
 func (h GitHubProfileAnalysisHandler) Get(ctx *gin.Context) {
 	username, err := user.ParseUsername(ctx.Param("username"))
 	if err != nil {

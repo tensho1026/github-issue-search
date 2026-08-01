@@ -2,6 +2,7 @@ package issue
 
 import "fmt"
 
+// Confidence values order rule certainty from weak to strong.
 const (
 	// MaximumAnalysisTextBytes bounds the title and body inspected by the rule
 	// engine. GitHub content beyond this limit cannot increase complexity
@@ -17,6 +18,7 @@ const (
 // rule-derived result.
 type Confidence string
 
+// SignalState values distinguish observed states from unavailable evidence.
 const (
 	ConfidenceLow    Confidence = "low"
 	ConfidenceMedium Confidence = "medium"
@@ -27,6 +29,7 @@ const (
 // evidence. Consumers must not render unknown as a negative result.
 type SignalState string
 
+// EvidenceSource values identify each normalized rule input.
 const (
 	SignalPresent       SignalState = "present"
 	SignalAbsent        SignalState = "absent"
@@ -37,6 +40,7 @@ const (
 // EvidenceSource identifies the normalized input that activated a rule.
 type EvidenceSource string
 
+// QualitySignalKey values enumerate supported issue-description signals.
 const (
 	EvidenceTitle              EvidenceSource = "title"
 	EvidenceBody               EvidenceSource = "body"
@@ -58,6 +62,7 @@ type Evidence struct {
 // QualitySignalKey names a concrete issue-description quality signal.
 type QualitySignalKey string
 
+// TechnologyKind values classify concrete and cross-cutting requirements.
 const (
 	QualityProblemDescription     QualitySignalKey = "problem_description"
 	QualityExpectedBehavior       QualitySignalKey = "expected_behavior"
@@ -88,6 +93,7 @@ type QualityAssessment struct {
 // TechnologyKind separates concrete technologies from cross-cutting skills.
 type TechnologyKind string
 
+// Category values are the closed rule-based issue classification vocabulary.
 const (
 	TechnologyLanguage   TechnologyKind = "language"
 	TechnologyFramework  TechnologyKind = "framework"
@@ -109,6 +115,7 @@ type RequiredTechnology struct {
 // Category is the primary rule-based issue classification.
 type Category string
 
+// ChangeArea values name product surfaces that an issue may affect.
 const (
 	CategoryBug           Category = "bug"
 	CategoryFeature       Category = "feature"
@@ -135,6 +142,7 @@ type CategoryAssessment struct {
 // ChangeArea is a typed, extensible estimate of the affected product surface.
 type ChangeArea string
 
+// ChangeArea values name product surfaces that an issue may affect.
 const (
 	ChangeFrontend       ChangeArea = "frontend"
 	ChangeBackend        ChangeArea = "backend"
@@ -172,6 +180,7 @@ type DifficultyAssessment struct {
 // EffortBand is the product's intentionally coarse effort scale.
 type EffortBand string
 
+// EffortBand values form the ordered, intentionally coarse effort scale.
 const (
 	EffortThirtyMinutes EffortBand = "thirty_minutes"
 	EffortTwoHours      EffortBand = "two_hours"

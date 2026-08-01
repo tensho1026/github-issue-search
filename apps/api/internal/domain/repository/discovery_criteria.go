@@ -12,6 +12,8 @@ import (
 	"unicode/utf8"
 )
 
+// Repository-discovery defaults and hard limits bound qualifier size,
+// pagination, enrichment fan-out, and numeric filters.
 const (
 	DefaultDiscoveryMinimumStars      = 10
 	DefaultDiscoveryUpdatedWithinDays = 365
@@ -29,6 +31,8 @@ const (
 	MaximumDiscoveryCountFilter       = 10_000_000
 )
 
+// ErrInvalidDiscoveryCriteria reports an unsafe or unsupported discovery
+// option.
 var ErrInvalidDiscoveryCriteria = errors.New(
 	"invalid repository discovery criteria",
 )
@@ -61,6 +65,7 @@ func ParseFilterValue(raw string) (FilterValue, error) {
 	return FilterValue(value), nil
 }
 
+// String returns the validated, trimmed repository filter value.
 func (value FilterValue) String() string {
 	return string(value)
 }
@@ -89,6 +94,8 @@ var supportedSPDXLicenses = map[string]SPDXLicense{
 	"unlicense":    "Unlicense",
 }
 
+// ParseSPDXLicense resolves a case-insensitive input against the supported
+// SPDX allowlist.
 func ParseSPDXLicense(raw string) (SPDXLicense, error) {
 	key := strings.ToLower(strings.TrimSpace(raw))
 	license, supported := supportedSPDXLicenses[key]
@@ -102,6 +109,7 @@ func ParseSPDXLicense(raw string) (SPDXLicense, error) {
 	return license, nil
 }
 
+// String returns the canonical case-preserving SPDX identifier.
 func (license SPDXLicense) String() string {
 	return string(license)
 }
@@ -109,6 +117,7 @@ func (license SPDXLicense) String() string {
 // Category is an explainable, preliminary OSS project classification.
 type Category string
 
+// Category values form the supported preliminary OSS classifications.
 const (
 	CategoryApplication    Category = "application"
 	CategoryData           Category = "data"
@@ -133,6 +142,7 @@ var validCategories = map[Category]struct{}{
 	CategoryTooling:        {},
 }
 
+// ParseCategory validates a case-insensitive OSS project category.
 func ParseCategory(raw string) (Category, error) {
 	category := Category(strings.ToLower(strings.TrimSpace(raw)))
 	if _, valid := validCategories[category]; !valid {
@@ -149,12 +159,14 @@ func ParseCategory(raw string) (Category, error) {
 // eligible. GitHub excludes forks by default, so the policy is explicit.
 type ForkPolicy string
 
+// ForkPolicy values define original-and-fork eligibility.
 const (
 	ForkPolicyExclude ForkPolicy = "exclude"
 	ForkPolicyInclude ForkPolicy = "include"
 	ForkPolicyOnly    ForkPolicy = "only"
 )
 
+// ParseForkPolicy validates the closed, case-insensitive fork vocabulary.
 func ParseForkPolicy(raw string) (ForkPolicy, error) {
 	policy := ForkPolicy(strings.ToLower(strings.TrimSpace(raw)))
 	switch policy {
@@ -204,6 +216,8 @@ type DiscoveryCriteria struct {
 	excludeArchived   bool
 }
 
+// NewDiscoveryCriteria validates, defaults, deduplicates, and canonicalizes
+// repository filters. Returned slice accessors do not expose internal storage.
 func NewDiscoveryCriteria(
 	options DiscoveryCriteriaOptions,
 ) (DiscoveryCriteria, error) {
@@ -317,34 +331,42 @@ func NewDiscoveryCriteria(
 	}, nil
 }
 
+// Languages returns a defensive copy of canonical language filters.
 func (criteria DiscoveryCriteria) Languages() []FilterValue {
 	return slices.Clone(criteria.languages)
 }
 
+// Technologies returns a defensive copy of canonical technology filters.
 func (criteria DiscoveryCriteria) Technologies() []FilterValue {
 	return slices.Clone(criteria.technologies)
 }
 
+// Licenses returns a defensive copy of canonical SPDX filters.
 func (criteria DiscoveryCriteria) Licenses() []SPDXLicense {
 	return slices.Clone(criteria.licenses)
 }
 
+// Categories returns a defensive copy of canonical category filters.
 func (criteria DiscoveryCriteria) Categories() []Category {
 	return slices.Clone(criteria.categories)
 }
 
+// MinimumStars returns the inclusive repository star threshold.
 func (criteria DiscoveryCriteria) MinimumStars() int {
 	return criteria.minimumStars
 }
 
+// MinimumForks returns the inclusive repository fork threshold.
 func (criteria DiscoveryCriteria) MinimumForks() int {
 	return criteria.minimumForks
 }
 
+// MinimumOpenIssues returns the inclusive lower open-issue threshold.
 func (criteria DiscoveryCriteria) MinimumOpenIssues() int {
 	return criteria.minimumOpenIssues
 }
 
+// MaximumOpenIssues returns the optional inclusive upper open-issue threshold.
 func (criteria DiscoveryCriteria) MaximumOpenIssues() (int, bool) {
 	if criteria.maximumOpenIssues == nil {
 		return 0, false
@@ -352,18 +374,22 @@ func (criteria DiscoveryCriteria) MaximumOpenIssues() (int, bool) {
 	return *criteria.maximumOpenIssues, true
 }
 
+// UpdatedWithinDays returns the repository freshness window.
 func (criteria DiscoveryCriteria) UpdatedWithinDays() int {
 	return criteria.updatedWithinDays
 }
 
+// MaximumDifficulty returns the inclusive preliminary difficulty ceiling.
 func (criteria DiscoveryCriteria) MaximumDifficulty() int {
 	return criteria.maximumDifficulty
 }
 
+// MinimumReadiness returns the inclusive contribution-readiness threshold.
 func (criteria DiscoveryCriteria) MinimumReadiness() int {
 	return criteria.minimumReadiness
 }
 
+// HasJapaneseREADME returns the optional README-language requirement.
 func (criteria DiscoveryCriteria) HasJapaneseREADME() (bool, bool) {
 	if criteria.hasJapaneseREADME == nil {
 		return false, false
@@ -371,10 +397,12 @@ func (criteria DiscoveryCriteria) HasJapaneseREADME() (bool, bool) {
 	return *criteria.hasJapaneseREADME, true
 }
 
+// ForkPolicy returns the validated original-and-fork selection policy.
 func (criteria DiscoveryCriteria) ForkPolicy() ForkPolicy {
 	return criteria.forkPolicy
 }
 
+// ExcludesArchived reports whether archived repositories are rejected.
 func (criteria DiscoveryCriteria) ExcludesArchived() bool {
 	return criteria.excludeArchived
 }
@@ -452,6 +480,8 @@ type DiscoveryPagination struct {
 	PerPage int
 }
 
+// NewDiscoveryPagination validates an application page over the bounded
+// repository result set.
 func NewDiscoveryPagination(page, perPage int) (DiscoveryPagination, error) {
 	if page < 1 || page > MaximumDiscoveryPage {
 		return DiscoveryPagination{}, fmt.Errorf(

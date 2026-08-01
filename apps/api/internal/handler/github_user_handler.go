@@ -12,11 +12,14 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/usecase"
 )
 
+// GitHubUserHandler validates profile path input and presents normalized
+// public GitHub user and repository data.
 type GitHubUserHandler struct {
 	getUser   usecase.GetGitHubUser
 	responder response.Responder
 }
 
+// NewGitHubUserHandler binds the public profile use case to a responder.
 func NewGitHubUserHandler(
 	getUser usecase.GetGitHubUser,
 	responder response.Responder,
@@ -27,6 +30,7 @@ func NewGitHubUserHandler(
 	}
 }
 
+// Get handles one cancellable public GitHub profile request.
 func (h GitHubUserHandler) Get(ctx *gin.Context) {
 	username, err := user.ParseUsername(ctx.Param("username"))
 	if err != nil {

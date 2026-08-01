@@ -10,6 +10,7 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/repository"
 )
 
+// GitHub candidate constants normalize upstream state and actor type values.
 const (
 	StateOpen   = "open"
 	AuthorBot   = "Bot"
@@ -47,6 +48,7 @@ type Summary struct {
 // not satisfy the validated IssueScout search criteria.
 type ExclusionReason string
 
+// ExclusionReason values are stable diagnostics returned in search metadata.
 const (
 	ExclusionPullRequest             ExclusionReason = "pull_request"
 	ExclusionNotOpen                 ExclusionReason = "not_open"

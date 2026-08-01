@@ -14,32 +14,44 @@ import (
 // AccountWorkspace exposes persistence only for an authenticated account.
 // Anonymous profile, repository, and issue use cases never depend on it.
 type AccountWorkspace interface {
+	// ListBookmarks returns one account-owned page and never accepts account
+	// identity from an HTTP request body or URL.
 	ListBookmarks(
 		context.Context,
 		account.ID,
 		account.Page,
 	) (account.PageResult[account.Bookmark], error)
+	// UpsertBookmark validates and canonicalizes the reference before performing
+	// an idempotent account-owned write.
 	UpsertBookmark(
 		context.Context,
 		account.ID,
 		UpsertBookmarkInput,
 	) (account.Bookmark, error)
+	// DeleteBookmark requires the authenticated account, resource ID, and
+	// optimistic version.
 	DeleteBookmark(
 		context.Context,
 		account.ID,
 		account.ResourceID,
 		int64,
 	) error
+	// ListSavedSearches returns one account-owned page with canonical JSON
+	// filters.
 	ListSavedSearches(
 		context.Context,
 		account.ID,
 		account.Page,
 	) (account.PageResult[account.SavedSearch], error)
+	// CreateSavedSearch validates name, type, size, keys, and canonical JSON
+	// before persistence.
 	CreateSavedSearch(
 		context.Context,
 		account.ID,
 		WriteSavedSearchInput,
 	) (account.SavedSearch, error)
+	// UpdateSavedSearch validates replacement content and requires the current
+	// optimistic version.
 	UpdateSavedSearch(
 		context.Context,
 		account.ID,
@@ -47,23 +59,32 @@ type AccountWorkspace interface {
 		int64,
 		WriteSavedSearchInput,
 	) (account.SavedSearch, error)
+	// DeleteSavedSearch requires the authenticated account, resource ID, and
+	// optimistic version.
 	DeleteSavedSearch(
 		context.Context,
 		account.ID,
 		account.ResourceID,
 		int64,
 	) error
+	// GetPreferences returns persisted account preferences or the domain default.
 	GetPreferences(
 		context.Context,
 		account.ID,
 	) (account.Preferences, error)
+	// UpdatePreferences validates the closed preference vocabulary and requires
+	// the expected version.
 	UpdatePreferences(
 		context.Context,
 		account.ID,
 		int64,
 		UpdatePreferencesInput,
 	) (account.Preferences, error)
+	// Export returns a bounded ownership-isolated snapshot without authentication
+	// credentials or account identifiers from another principal.
 	Export(context.Context, account.ID) (account.Export, error)
+	// DeleteAccount returns content-free deletion counts after atomically
+	// removing the authenticated account and owned data.
 	DeleteAccount(
 		context.Context,
 		account.ID,

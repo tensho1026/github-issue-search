@@ -25,11 +25,14 @@ const (
 	issueSearchCacheMiss       = "MISS"
 )
 
+// IssueSearchHandler decodes bounded discovery input and presents ranked issue
+// results with pagination and partial-result metadata.
 type IssueSearchHandler struct {
 	search    usecase.SearchIssues
 	responder response.Responder
 }
 
+// NewIssueSearchHandler binds the issue-search use case to a responder.
 func NewIssueSearchHandler(
 	search usecase.SearchIssues,
 	responder response.Responder,
@@ -37,6 +40,8 @@ func NewIssueSearchHandler(
 	return IssueSearchHandler{search: search, responder: responder}
 }
 
+// Search handles one cancellable JSON issue-discovery request. Unknown fields,
+// trailing values, oversized bodies, and unsupported query keys are rejected.
 func (handler IssueSearchHandler) Search(ctx *gin.Context) {
 	request, err := decodeIssueSearchRequest(ctx)
 	if err != nil {

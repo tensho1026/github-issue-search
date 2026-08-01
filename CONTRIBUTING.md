@@ -81,6 +81,8 @@ Use the repository template. A ready pull request must:
 - complete every self-review checkbox;
 - contain only conventional, focused commits;
 - update OpenAPI and developer documentation when behavior changes.
+- maintain canonical GoDoc and executable examples according to the
+  [GoDoc guide](docs/godoc.md) when Go contracts change.
 
 The stable branch-protection statuses are `CI required` and `Security required`. Individual path-aware jobs may be skipped, but each aggregate status fails if any applicable job fails or is cancelled.
 

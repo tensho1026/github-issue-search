@@ -17,6 +17,7 @@ type ProfileAnalysis struct {
 	store *lruCache[string, port.ProfileAnalysisCacheEntry]
 }
 
+// NewProfileAnalysis constructs an LRU cache with positive capacity and TTL.
 func NewProfileAnalysis(
 	capacity int,
 	ttl time.Duration,
@@ -32,6 +33,8 @@ func NewProfileAnalysis(
 	return &ProfileAnalysis{store: store}, nil
 }
 
+// Get returns a deep copy, reports misses without error, and honors a
+// pre-cancelled context before acquiring the cache lock.
 func (c *ProfileAnalysis) Get(
 	ctx context.Context,
 	username user.Username,
@@ -39,6 +42,8 @@ func (c *ProfileAnalysis) Get(
 	return c.store.get(ctx, profileAnalysisKey(username))
 }
 
+// Set stores a deep copy, refreshes TTL on replacement, and may evict the
+// least-recently-used entry.
 func (c *ProfileAnalysis) Set(
 	ctx context.Context,
 	username user.Username,

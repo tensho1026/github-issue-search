@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// Public-sample bounds cap metric and claim-analysis work.
 const (
 	MaximumMetricSamples  = 100
 	MaximumClaimComments  = 100

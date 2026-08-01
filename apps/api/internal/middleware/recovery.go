@@ -10,6 +10,8 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/transport/response"
 )
 
+// Recovery converts a downstream panic into the generic application error
+// envelope and logs correlation metadata without request credentials.
 func Recovery(logger *slog.Logger, responder response.Responder) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		defer func() {

@@ -14,6 +14,8 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/user"
 )
 
+// Issue-search defaults and hard limits bound filtering, pagination, and
+// upstream candidate work.
 const (
 	DefaultMinimumStars      = 10
 	DefaultMaximumDifficulty = 3
@@ -29,6 +31,7 @@ const (
 	MaximumPageSize          = 50
 )
 
+// ErrInvalidSearchCriteria reports an unsafe or unsupported search option.
 var ErrInvalidSearchCriteria = errors.New("invalid issue search criteria")
 
 var defaultLabels = []string{"good first issue", "help wanted"}
@@ -40,6 +43,7 @@ var defaultLabels = []string{"good first issue", "help wanted"}
 // qualifier. The client remains responsible for URL encoding the final query.
 type FilterValue string
 
+// ParseFilterValue validates a bounded GitHub search qualifier value.
 func ParseFilterValue(raw string) (FilterValue, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" ||
@@ -65,6 +69,7 @@ func ParseFilterValue(raw string) (FilterValue, error) {
 	return FilterValue(value), nil
 }
 
+// String returns the validated, trimmed filter value.
 func (value FilterValue) String() string {
 	return string(value)
 }
@@ -72,6 +77,7 @@ func (value FilterValue) String() string {
 // Difficulty is the bounded, five-level effort scale used by IssueScout.
 type Difficulty uint8
 
+// ParseDifficulty validates a difficulty level in the inclusive range 1-5.
 func ParseDifficulty(value int) (Difficulty, error) {
 	if value < 1 || value > 5 {
 		return 0, fmt.Errorf(
@@ -82,6 +88,7 @@ func ParseDifficulty(value int) (Difficulty, error) {
 	return Difficulty(value), nil
 }
 
+// Int returns the validated numeric difficulty level.
 func (difficulty Difficulty) Int() int {
 	return int(difficulty)
 }
@@ -119,6 +126,8 @@ type SearchCriteria struct {
 	excludeArchived      bool
 }
 
+// NewSearchCriteria validates, defaults, deduplicates, and canonicalizes issue
+// discovery options. Returned slice accessors never expose internal storage.
 func NewSearchCriteria(options SearchCriteriaOptions) (SearchCriteria, error) {
 	username, err := user.ParseUsername(options.Username)
 	if err != nil {
@@ -207,30 +216,37 @@ func NewSearchCriteria(options SearchCriteriaOptions) (SearchCriteria, error) {
 	}, nil
 }
 
+// Username returns the validated GitHub login used for discovery.
 func (criteria SearchCriteria) Username() user.Username {
 	return criteria.username
 }
 
+// Languages returns a defensive copy of canonical language filters.
 func (criteria SearchCriteria) Languages() []FilterValue {
 	return slices.Clone(criteria.languages)
 }
 
+// Frameworks returns a defensive copy of canonical framework filters.
 func (criteria SearchCriteria) Frameworks() []FilterValue {
 	return slices.Clone(criteria.frameworks)
 }
 
+// Labels returns a defensive copy of canonical issue-label filters.
 func (criteria SearchCriteria) Labels() []FilterValue {
 	return slices.Clone(criteria.labels)
 }
 
+// MinimumStars returns the inclusive repository popularity threshold.
 func (criteria SearchCriteria) MinimumStars() int {
 	return criteria.minimumStars
 }
 
+// MaximumDifficulty returns the inclusive rule-derived difficulty ceiling.
 func (criteria SearchCriteria) MaximumDifficulty() Difficulty {
 	return criteria.maximumDifficulty
 }
 
+// MaximumEffort returns the optional inclusive effort ceiling.
 func (criteria SearchCriteria) MaximumEffort() (EffortBand, bool) {
 	if criteria.maximumEffort == nil {
 		return "", false
@@ -238,18 +254,22 @@ func (criteria SearchCriteria) MaximumEffort() (EffortBand, bool) {
 	return *criteria.maximumEffort, true
 }
 
+// UpdatedWithinDays returns the repository and issue freshness window.
 func (criteria SearchCriteria) UpdatedWithinDays() int {
 	return criteria.updatedWithinDays
 }
 
+// IncludesDocumentation reports whether documentation issues are eligible.
 func (criteria SearchCriteria) IncludesDocumentation() bool {
 	return criteria.includeDocumentation
 }
 
+// IncludesEnglish reports whether English-only issues are eligible.
 func (criteria SearchCriteria) IncludesEnglish() bool {
 	return criteria.includeEnglish
 }
 
+// ExcludesArchived reports whether archived repositories are rejected.
 func (criteria SearchCriteria) ExcludesArchived() bool {
 	return criteria.excludeArchived
 }
@@ -300,6 +320,7 @@ type Pagination struct {
 	PerPage int
 }
 
+// NewPagination validates an application page over the bounded candidate set.
 func NewPagination(page, perPage int) (Pagination, error) {
 	if page < 1 {
 		return Pagination{}, fmt.Errorf(

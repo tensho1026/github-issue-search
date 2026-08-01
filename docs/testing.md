@@ -24,6 +24,7 @@ flowchart LR
 | Go domain      | table tests, fuzz tests, benchmarks      | rule invariants, parser safety, bounded cost           |
 | Go adapter     | `httptest.Server`, race detector         | retries, cancellation, decoding, pagination, limits    |
 | Go application | fakes and in-memory caches               | fan-out, singleflight, fallback, error mapping         |
+| GoDoc          | AST policy and executable examples       | package, declaration, interface, and contract coverage |
 | HTTP           | Gin recorder and typed fixtures          | status, envelope, headers, validation, middleware      |
 | Contract       | Redocly, Ajv, generated types            | OpenAPI semantics, fixture shape, route and type drift |
 | React          | Vitest and Testing Library               | forms, hooks, routing, a11y states, safe presentation  |
@@ -57,6 +58,7 @@ Run the strict quality evidence:
 pnpm run coverage:api
 pnpm run fuzz:api
 pnpm run performance:api
+pnpm run docs:go:check
 pnpm run coverage:web
 pnpm run bundle:check
 pnpm run contracts:check
@@ -73,6 +75,13 @@ pnpm run e2e
 ```
 
 No test command requires `GITHUB_TOKEN`.
+
+Go examples run as ordinary `go test` cases and remain deterministic, offline,
+and credential-free. They exercise safe configuration defaults, cache
+ownership isolation, GitHub cancellation, response/error encoding, and full
+anonymous router composition. `pnpm run docs:go:check` independently parses
+production Go source and rejects a missing or non-canonical package,
+declaration, method, constant, sentinel, or interface-method comment.
 
 Ordinary tests also require no database. Router tests inject a recording
 database health port and prove that process health, profile analysis,

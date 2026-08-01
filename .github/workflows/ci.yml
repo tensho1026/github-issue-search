@@ -204,6 +204,9 @@ jobs:
           cache-dependency-path: apps/api/go.sum
           go-version-file: apps/api/go.mod
 
+      - name: Enforce GoDoc coverage and canonical comments
+        run: go run scripts/ci/check-godoc.go apps/api
+
       - name: Run strict Go linters
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with:

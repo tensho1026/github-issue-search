@@ -12,12 +12,19 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
 )
 
+// AnalyzeGitHubProfileOutput combines derived profile evidence with the
+// GitHub quota snapshot observed by the underlying load.
 type AnalyzeGitHubProfileOutput struct {
 	Analysis  profile.Analysis
 	RateLimit port.RateLimit
 }
 
+// AnalyzeGitHubProfile returns cached or freshly derived public profile
+// evidence. Implementations must honor ctx and collapse concurrent misses for
+// the same username.
 type AnalyzeGitHubProfile interface {
+	// Execute returns cached or freshly loaded analysis, honors ctx, and maps
+	// upstream failures to safe application errors.
 	Execute(
 		ctx context.Context,
 		username user.Username,
@@ -32,6 +39,8 @@ type analyzeGitHubProfile struct {
 	requests        singleflight.Group
 }
 
+// NewAnalyzeGitHubProfile composes a bounded reader and ownership-isolating
+// cache. Limits control repository and manifest fan-out per cache miss.
 func NewAnalyzeGitHubProfile(
 	reader port.GitHubProfileAnalysisReader,
 	cache port.ProfileAnalysisCache,

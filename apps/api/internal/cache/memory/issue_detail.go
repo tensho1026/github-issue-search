@@ -15,6 +15,7 @@ type IssueDetail struct {
 	store *lruCache[string, port.GitHubIssueDetailResult]
 }
 
+// NewIssueDetail constructs an LRU cache with positive capacity and TTL.
 func NewIssueDetail(
 	capacity int,
 	ttl time.Duration,
@@ -30,6 +31,8 @@ func NewIssueDetail(
 	return &IssueDetail{store: store}, nil
 }
 
+// Get returns a deep copy, reports misses without error, and honors a
+// pre-cancelled context before acquiring the cache lock.
 func (cache *IssueDetail) Get(
 	ctx context.Context,
 	key string,
@@ -37,6 +40,8 @@ func (cache *IssueDetail) Get(
 	return cache.store.get(ctx, key)
 }
 
+// Set stores a deep copy, refreshes TTL on replacement, and may evict the
+// least-recently-used entry.
 func (cache *IssueDetail) Set(
 	ctx context.Context,
 	key string,

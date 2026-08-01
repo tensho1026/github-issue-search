@@ -11,13 +11,19 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
 )
 
+// GetGitHubUserOutput combines a public profile, a bounded owned-repository
+// list, and the most recent known GitHub quota snapshot.
 type GetGitHubUserOutput struct {
 	Profile      user.Profile
 	Repositories []repository.Summary
 	RateLimit    port.RateLimit
 }
 
+// GetGitHubUser retrieves a public profile and bounded repository list.
+// Implementations must honor ctx and return only normalized domain values.
 type GetGitHubUser interface {
+	// Execute retrieves the profile before its bounded repository list, honors
+	// ctx, and returns the last known quota snapshot.
 	Execute(
 		ctx context.Context,
 		username user.Username,
@@ -29,6 +35,7 @@ type getGitHubUser struct {
 	repositoryLimit int
 }
 
+// NewGetGitHubUser composes a profile reader with its repository result limit.
 func NewGetGitHubUser(
 	reader port.GitHubProfileReader,
 	repositoryLimit int,

@@ -12,17 +12,22 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/user"
 )
 
+// LanguageShare is one whole-number allocation of observed repository bytes.
+// A non-empty aggregate is deterministic and sums to exactly 100 percent.
 type LanguageShare struct {
 	Name       string
 	Percentage int
 }
 
+// Warning records bounded partial-analysis context without upstream content.
 type Warning struct {
 	Code       string
 	Message    string
 	Repository string
 }
 
+// Analysis is the complete public-profile evidence returned by the domain
+// engine. Slices are newly allocated and safe for the caller to retain.
 type Analysis struct {
 	Username             user.Username
 	Languages            []LanguageShare
@@ -38,6 +43,7 @@ type Analysis struct {
 	Warnings             []Warning
 }
 
+// Manifest is bounded repository metadata used only for framework inference.
 type Manifest struct {
 	Path    string
 	Content []byte
@@ -148,6 +154,8 @@ func AggregateLanguages(languageBytes []map[string]int64) []LanguageShare {
 	return result
 }
 
+// ManifestCandidates returns a deterministic bounded list of conventional
+// manifest paths for a repository's primary language.
 func ManifestCandidates(mainLanguage string, limit int) []string {
 	if limit <= 0 {
 		return []string{}
@@ -172,6 +180,8 @@ func ManifestCandidates(mainLanguage string, limit int) []string {
 	return slices.Clone(candidates)
 }
 
+// InferFrameworks detects a closed set of frameworks from supplied manifest
+// bytes. Invalid manifests are ignored and the returned names are sorted.
 func InferFrameworks(manifests []Manifest) []string {
 	found := make(map[string]struct{})
 	for _, manifest := range manifests {

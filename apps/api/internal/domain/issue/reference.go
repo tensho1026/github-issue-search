@@ -7,6 +7,7 @@ import (
 	"strings"
 )
 
+// ErrInvalidReference reports an unsafe owner, repository, or issue number.
 var ErrInvalidReference = errors.New("invalid issue reference")
 
 // Reference is a validated public GitHub owner, repository, and issue number.
@@ -17,6 +18,8 @@ type Reference struct {
 	number         int
 }
 
+// NewReference validates GitHub owner and repository syntax and requires a
+// positive issue number.
 func NewReference(
 	owner string,
 	repositoryName string,
@@ -47,18 +50,22 @@ func NewReference(
 	}, nil
 }
 
+// Owner returns the validated, case-preserving repository owner.
 func (reference Reference) Owner() string {
 	return reference.owner
 }
 
+// RepositoryName returns the validated, case-preserving repository name.
 func (reference Reference) RepositoryName() string {
 	return reference.repositoryName
 }
 
+// Number returns the positive GitHub issue number.
 func (reference Reference) Number() int {
 	return reference.number
 }
 
+// CacheKey returns the canonical case-insensitive issue-detail cache key.
 func (reference Reference) CacheKey() string {
 	return "github:issue-detail:" +
 		strings.ToLower(reference.owner) + "/" +
