@@ -9,20 +9,23 @@ import (
 type Code string
 
 const (
-	CodeInvalidRequest      Code = "INVALID_REQUEST"
-	CodeNotFound            Code = "NOT_FOUND"
-	CodeGitHubUserNotFound  Code = "GITHUB_USER_NOT_FOUND"
-	CodeForbiddenOrigin     Code = "FORBIDDEN_ORIGIN"
-	CodeRequestTimeout      Code = "REQUEST_TIMEOUT"
-	CodeRateLimit           Code = "GITHUB_RATE_LIMIT_EXCEEDED"
-	CodeGitHubAPI           Code = "GITHUB_API_ERROR"
-	CodeDatabaseUnavailable Code = "DATABASE_UNAVAILABLE"
-	CodeAuthUnavailable     Code = "AUTH_UNAVAILABLE"
-	CodeAuthentication      Code = "AUTHENTICATION_REQUIRED"
-	CodeInvalidAuthState    Code = "INVALID_AUTH_STATE"
-	CodeCSRFRejected        Code = "CSRF_REJECTED"
-	CodeOAuthRejected       Code = "GITHUB_AUTHORIZATION_REJECTED"
-	CodeInternal            Code = "INTERNAL_SERVER_ERROR"
+	CodeInvalidRequest       Code = "INVALID_REQUEST"
+	CodeNotFound             Code = "NOT_FOUND"
+	CodeGitHubUserNotFound   Code = "GITHUB_USER_NOT_FOUND"
+	CodeForbiddenOrigin      Code = "FORBIDDEN_ORIGIN"
+	CodeRequestTimeout       Code = "REQUEST_TIMEOUT"
+	CodeRateLimit            Code = "GITHUB_RATE_LIMIT_EXCEEDED"
+	CodeGitHubAPI            Code = "GITHUB_API_ERROR"
+	CodeDatabaseUnavailable  Code = "DATABASE_UNAVAILABLE"
+	CodeAuthUnavailable      Code = "AUTH_UNAVAILABLE"
+	CodeAuthentication       Code = "AUTHENTICATION_REQUIRED"
+	CodeInvalidAuthState     Code = "INVALID_AUTH_STATE"
+	CodeCSRFRejected         Code = "CSRF_REJECTED"
+	CodeOAuthRejected        Code = "GITHUB_AUTHORIZATION_REJECTED"
+	CodeAccountQuota         Code = "ACCOUNT_QUOTA_EXCEEDED"
+	CodeVersionConflict      Code = "VERSION_CONFLICT"
+	CodeDuplicateSavedSearch Code = "DUPLICATE_SAVED_SEARCH"
+	CodeInternal             Code = "INTERNAL_SERVER_ERROR"
 )
 
 // Error carries safe client information while retaining an internal cause.
