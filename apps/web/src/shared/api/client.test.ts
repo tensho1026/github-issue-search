@@ -21,6 +21,7 @@ describe("createApiClient", () => {
     expect(request).toHaveBeenCalledWith("/api/health", expect.any(Object));
     const options = request.mock.calls[0]?.[1];
     expect(options).toMatchObject({
+      credentials: "include",
       method: "GET",
       signal: controller.signal,
     });
@@ -50,6 +51,44 @@ describe("createApiClient", () => {
     const headers = new Headers(options?.headers);
     expect(headers.get("Accept")).toBe("application/json");
     expect(headers.get("Content-Type")).toBe("application/json");
+  });
+
+  it("supports CSRF-protected PUT and bodyless DELETE operations", async () => {
+    const request = vi.fn<typeof fetch>().mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ data: { deleted: true } }), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        }),
+      ),
+    );
+    const client = createApiClient(request);
+
+    await client.put(
+      "/api/account/preferences",
+      { theme: "dark", version: 0 },
+      { headers: { "X-CSRF-Token": "csrf" } },
+    );
+    await client.delete(
+      "/api/account/bookmarks/bookmark?version=1",
+      undefined,
+      {
+        headers: { "X-CSRF-Token": "csrf" },
+      },
+    );
+
+    const putOptions = request.mock.calls[0]?.[1];
+    expect(putOptions).toMatchObject({
+      body: JSON.stringify({ theme: "dark", version: 0 }),
+      credentials: "include",
+      method: "PUT",
+    });
+    expect(new Headers(putOptions?.headers).get("X-CSRF-Token")).toBe("csrf");
+    expect(request.mock.calls[1]?.[1]).toMatchObject({
+      body: undefined,
+      credentials: "include",
+      method: "DELETE",
+    });
   });
 
   it("normalizes the shared API error envelope", async () => {

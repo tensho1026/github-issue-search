@@ -22,14 +22,24 @@ export class ApiError extends Error {
   }
 }
 
-type ApiRequestOptions = Omit<RequestInit, "body" | "method">;
+type ApiRequestOptions = Omit<RequestInit, "body" | "credentials" | "method">;
 
 export interface ApiClient {
+  delete<TResponse, TBody = never>(
+    path: `/${string}`,
+    body?: TBody,
+    options?: ApiRequestOptions,
+  ): Promise<TResponse>;
   get<TResponse>(
     path: `/${string}`,
     options?: ApiRequestOptions,
   ): Promise<TResponse>;
   post<TResponse, TBody>(
+    path: `/${string}`,
+    body: TBody,
+    options?: ApiRequestOptions,
+  ): Promise<TResponse>;
+  put<TResponse, TBody>(
     path: `/${string}`,
     body: TBody,
     options?: ApiRequestOptions,
@@ -72,18 +82,19 @@ export function createApiClient(
 ): ApiClient {
   async function execute<TResponse>(
     path: `/${string}`,
-    method: "GET" | "POST",
+    method: "DELETE" | "GET" | "POST" | "PUT",
     options: ApiRequestOptions,
     body?: unknown,
   ): Promise<TResponse> {
     const headers = new Headers(options.headers);
     headers.set("Accept", "application/json");
-    if (method === "POST") {
+    if (body !== undefined) {
       headers.set("Content-Type", "application/json");
     }
     const response = await request(requestUrl(path), {
       ...options,
       body: body === undefined ? undefined : JSON.stringify(body),
+      credentials: "include",
       headers,
       method,
     });
@@ -116,6 +127,13 @@ export function createApiClient(
   }
 
   return {
+    async delete<TResponse, TBody = never>(
+      path: `/${string}`,
+      body?: TBody,
+      options: ApiRequestOptions = {},
+    ): Promise<TResponse> {
+      return execute<TResponse>(path, "DELETE", options, body);
+    },
     async get<TResponse>(
       path: `/${string}`,
       options: ApiRequestOptions = {},
@@ -128,6 +146,13 @@ export function createApiClient(
       options: ApiRequestOptions = {},
     ): Promise<TResponse> {
       return execute<TResponse>(path, "POST", options, body);
+    },
+    async put<TResponse, TBody>(
+      path: `/${string}`,
+      body: TBody,
+      options: ApiRequestOptions = {},
+    ): Promise<TResponse> {
+      return execute<TResponse>(path, "PUT", options, body);
     },
   };
 }
