@@ -53,7 +53,10 @@ func (group *Group[K, V]) Do(
 	group.flights[key] = current
 	group.mu.Unlock()
 
-	go group.run(operationContext, key, current, work)
+	go func() {
+		defer cancel()
+		group.run(operationContext, key, current, work)
+	}()
 	return group.wait(ctx, key, current)
 }
 
@@ -73,7 +76,6 @@ func (group *Group[K, V]) run(
 	}
 	close(current.done)
 	group.mu.Unlock()
-	current.cancel()
 }
 
 func (group *Group[K, V]) wait(
