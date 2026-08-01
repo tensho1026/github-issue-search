@@ -9,9 +9,9 @@ requirements, estimated effort, and repository health.
 
 The anonymous core is intentionally stateless: the API reads public GitHub data
 on demand and may cache it in memory, but it does not require a database or
-GitHub OAuth. Optional account features use a separate TLS-only PostgreSQL
-boundary; database failure never disables anonymous profile, repository, or
-issue discovery.
+GitHub OAuth. Optional account features use GitHub OAuth with PKCE, rotating
+server sessions, and a separate TLS-only PostgreSQL boundary. Database or OAuth
+failure never disables anonymous profile, repository, or issue discovery.
 
 ## Quick start
 
@@ -87,18 +87,69 @@ corepack prepare --activate
 Examples contain no credential. Store local server secrets only in the ignored
 `apps/api/.env`; never put them in a `VITE_*` variable.
 
-| Variable            | Required | Purpose                                                            |
-| ------------------- | -------- | ------------------------------------------------------------------ |
-| `GITHUB_TOKEN`      | Live use | Server-only public GitHub REST/GraphQL access                      |
-| `DATABASE_URL`      | No       | Rotated TLS PostgreSQL URL for optional authenticated account data |
-| `ALLOWED_ORIGINS`   | No       | Exact browser origins; defaults to the local Vite origin           |
-| `PORT`              | No       | API listener; defaults to `8080`                                   |
-| `VITE_API_BASE_URL` | No       | Browser-visible API origin; defaults to local API                  |
+| Variable                     | Required  | Purpose                                                             |
+| ---------------------------- | --------- | ------------------------------------------------------------------- |
+| `GITHUB_TOKEN`               | Live use  | Server-only public GitHub REST/GraphQL access                       |
+| `DATABASE_URL`               | Auth only | Rotated TLS PostgreSQL URL for authenticated account data           |
+| `GITHUB_OAUTH_CLIENT_ID`     | Auth only | GitHub OAuth App public client identifier                           |
+| `GITHUB_OAUTH_CLIENT_SECRET` | Auth only | Server-only OAuth App secret                                        |
+| `GITHUB_OAUTH_CALLBACK_URL`  | Auth only | Exact API callback registered in GitHub                             |
+| `AUTH_FRONTEND_URL`          | Auth only | Fixed frontend origin used after a validated callback               |
+| `AUTH_FLOW_ENCRYPTION_KEY`   | Auth only | Dedicated 32-byte hex key for the encrypted short-lived flow cookie |
+| `AUTH_COOKIE_SECURE`         | No        | Must be `true` outside loopback development/test                    |
+| `TRUSTED_PROXY_CIDRS`        | No        | Explicit reverse-proxy CIDRs; empty trusts no proxy                 |
+| `ALLOWED_ORIGINS`            | No        | Exact credentialed browser origins; defaults to local Vite          |
+| `PORT`                       | No        | API listener; defaults to `8080`                                    |
+| `VITE_API_BASE_URL`          | No        | Browser-visible API origin; defaults to local API                   |
 
 `DATABASE_URL` must use `sslmode=require` or `sslmode=verify-full`. A
 connection string exposed in chat, an issue, a screenshot, or terminal output
 must be rotated before use. The complete bounded configuration surface is in
 [the configuration reference](docs/configuration.md).
+
+### Optional local GitHub sign-in
+
+Anonymous development needs no OAuth App. To exercise login and future
+account-owned features, first create a GitHub OAuth App with:
+
+- Homepage URL: `http://127.0.0.1:5173`
+- Authorization callback URL:
+  `http://127.0.0.1:8080/api/auth/github/callback`
+
+Then set `DATABASE_URL` and all five required authentication values together in
+the ignored `apps/api/.env`:
+
+```dotenv
+GITHUB_OAUTH_CLIENT_ID=replace-with-oauth-app-client-id
+GITHUB_OAUTH_CLIENT_SECRET=replace-with-oauth-app-secret
+GITHUB_OAUTH_CALLBACK_URL=http://127.0.0.1:8080/api/auth/github/callback
+AUTH_FRONTEND_URL=http://127.0.0.1:5173
+AUTH_FLOW_ENCRYPTION_KEY=replace-with-output-from-openssl-rand
+AUTH_COOKIE_SECURE=false
+```
+
+Generate the last value:
+
+```sh
+openssl rand -hex 32
+```
+
+Apply migrations and start the stack:
+
+```sh
+pnpm run database:migrate
+make dev
+```
+
+The API requests only `read:user`, retains only the minimum public GitHub
+identity, and discards GitHub's access token after `GET /user`. A complete
+authentication setup makes
+`http://127.0.0.1:8080/api/auth/github/start?returnTo=/` the login entry point.
+If the five required values are all absent, authentication stays disabled and
+`GET /api/auth/session` returns an anonymous `configured: false` response
+without querying PostgreSQL. See the
+[authentication guide](docs/authentication.md) for callback, Cookie, PKCE,
+CSRF, rotation, proxy, and production HTTPS details.
 
 ## Essential commands
 

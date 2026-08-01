@@ -11,6 +11,7 @@ GitHub availability.
 flowchart LR
     Domain["Domain rules and validators"] --> Usecase["Usecase orchestration"]
     Adapter["GitHub httptest and mock adapters"] --> Usecase
+    Auth["OAuth, cryptography, and PostgreSQL fakes"] --> Usecase
     Usecase --> Handler["Gin handlers and middleware"]
     Contract["OpenAPI 3.1 and shared JSON fixtures"] --> Handler
     Contract --> Web["React hooks and components"]
@@ -77,8 +78,11 @@ Ordinary tests also require no database. Router tests inject a recording
 database health port and prove that process health, profile analysis,
 repository discovery, issue search, and issue detail cause zero database
 calls. PostgreSQL repository tests assert parameterized account ownership and
-safe error mapping. `pnpm run migrations:check` validates the forward-only
-catalog without a live service.
+safe error mapping. Authentication tests additionally cover PKCE, encrypted
+flow-cookie tamper/expiry, single-use state, denial, Cookie attributes,
+constant-time CSRF decisions, rotation, logout, and the zero-DB anonymous
+short circuit. `pnpm run migrations:check` validates the forward-only catalog
+without a live service.
 
 An explicit clean-schema integration is available only with an approved,
 disposable `TEST_DATABASE_URL`:
@@ -86,9 +90,14 @@ disposable `TEST_DATABASE_URL`:
 ```sh
 go -C apps/api test -run TestMigrationsAgainstConfiguredPostgreSQL \
   ./internal/database/postgres
+
+go -C apps/api test -run TestAuthRepositoryAgainstConfiguredPostgreSQL \
+  ./internal/database/postgres
 ```
 
-It uses a random isolated schema and removes that schema after verification.
+Each uses a random isolated schema and removes that schema after verification.
+The authentication case verifies state replay rejection, stable identity
+linking, session rotation and revocation, plus hashed-only credential storage.
 Pull request CI intentionally receives no database secret.
 
 ## Deterministic GitHub adapter

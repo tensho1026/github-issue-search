@@ -2,22 +2,31 @@
 
 ## Goals
 
-IssueScout is a stateless recommendation application. The browser talks only
-to the IssueScout API; the API owns GitHub credentials, upstream rate-limit
-handling, analysis, and response normalization.
+IssueScout has a stateless anonymous recommendation core plus an optional
+authenticated account boundary. The browser talks only to the IssueScout API;
+the API owns GitHub credentials, upstream rate-limit handling, analysis,
+session security, persistence, and response normalization.
 
 ```mermaid
 flowchart LR
-    User["Anonymous contributor"] --> Web["React web application"]
+    User["Contributor"] --> Web["React web application"]
     Web -->|"IssueScout HTTP / JSON"| API["Go API (Gin)"]
     API -->|"Bounded REST / GraphQL"| GitHub["GitHub public APIs"]
-    Account["Future authenticated workspace"] -.-> API
-    API -.->|"Authenticated data only"| Neon["Future Neon PostgreSQL"]
+    Web -->|"Optional OAuth navigation"| API
+    API -->|"Code + PKCE / GET user"| OAuth["GitHub OAuth"]
+    API -->|"Authenticated data only"| Neon["Neon PostgreSQL"]
+    Anonymous["Anonymous routes"] -. "no repository dependency" .-> Isolation["No PostgreSQL call"]
 ```
 
 The anonymous core does not persist user or issue data. Storage-facing ports
-remain behind application boundaries so the later authenticated Neon
-PostgreSQL adapter cannot leak database access into anonymous handlers.
+remain behind application boundaries so the authenticated PostgreSQL adapter
+cannot leak database access into anonymous handlers.
+
+OAuth is composed only when its complete validated configuration group and
+`DATABASE_URL` are present. Authentication start, callback, session, refresh,
+and logout depend on dedicated ports and repositories. Public handlers do not.
+See [Optional GitHub authentication](authentication.md) and
+[Authenticated PostgreSQL persistence](database.md).
 
 ## Monorepo boundaries
 
@@ -33,7 +42,7 @@ flowchart LR
     Transport["router / middleware / handler"] --> Usecase["application usecases"]
     Usecase --> Domain["domain policies and values"]
     Usecase --> Ports["application ports"]
-    Adapters["GitHub / cache / future Neon adapters"] --> Ports
+    Adapters["GitHub / cache / OAuth / PostgreSQL adapters"] --> Ports
     Composition["cmd/api composition root"] --> Transport
     Composition --> Adapters
 ```
@@ -185,6 +194,29 @@ a missing user or a failed primary search remains a request-level error.
 - GitHub rate-limit information is normalized into optional response metadata.
 - The frontend uses generated or contract-checked types rather than maintaining
   a second handwritten schema.
+- OAuth navigation success uses an explicit bodyless `302` and required
+  `Location`; JSON operations retain the standard envelope.
+
+## Authentication boundaries
+
+```mermaid
+flowchart LR
+    Start["OAuth start handler"] --> AuthUsecase["Authentication usecase"]
+    Callback["OAuth callback handler"] --> AuthUsecase
+    Mutation["CSRF middleware + session handlers"] --> AuthUsecase
+    AuthUsecase --> OAuthPort["GitHub OAuth port"]
+    AuthUsecase --> AuthPort["Authentication repository port"]
+    OAuthAdapter["Minimal GitHub OAuth adapter"] --> OAuthPort
+    PostgresAdapter["Hashed PostgreSQL adapter"] --> AuthPort
+    Public["Public handlers"] -. "no auth middleware / no auth port" .-> Anonymous["Anonymous execution"]
+```
+
+The domain owns opaque credential shape, digest comparison, public identity,
+return-path, state, session, and principal rules. The usecase owns PKCE
+orchestration, single-use state, identity linking, rotation, CSRF decisions,
+and safe error mapping. HTTP owns query limits, fixed-origin redirects, Cookie
+attributes, and request-context principals. Adapters own GitHub transport,
+AES-256-GCM flow sealing, randomness, and parameterized PostgreSQL operations.
 
 ## Frontend state principles
 
@@ -203,8 +235,14 @@ a missing user or a failed primary search remains a request-level error.
 - Upstream responses are normalized; the browser never receives arbitrary
   GitHub transport objects.
 - Configuration is read from the environment and examples contain no secrets.
-- CORS, timeouts, error mapping, and security headers are enforced at the API
-  boundary in issue #2.
+- CORS, timeouts, error mapping, security headers, credentialed-origin policy,
+  and explicit trusted proxies are enforced at the API boundary.
+- OAuth uses PKCE S256, one-time hashed state, an encrypted HttpOnly flow
+  Cookie, a fixed callback, minimum public identity, and immediate upstream
+  token disposal.
+- Server sessions and CSRF values are random, hashed at rest, rotated
+  atomically, bounded per account, and exposed only through purpose-specific
+  Cookie/header boundaries.
 - Search values reject quotes, backslashes, control characters, unknown JSON
   fields, and oversized request bodies before any GitHub request.
 - Issue candidates containing credential-shaped text are excluded from

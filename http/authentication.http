@@ -1,0 +1,88 @@
+@apiBaseUrl = http://127.0.0.1:8080
+@frontendReturnPath = /workspace?tab=saved
+
+# Authentication is optional. With no OAuth configuration this remains 200,
+# configured=false, authenticated=false, and performs no database call.
+
+### Bootstrap the current optional session
+# @name getAuthSession
+GET {{apiBaseUrl}}/api/auth/session
+Accept: application/json
+Origin: http://127.0.0.1:5173
+X-Request-ID: httpyac-auth-session
+
+### Start GitHub OAuth and inspect the 302 Location + flow Set-Cookie
+# @name startGitHubOAuth
+# @no-redirect
+GET {{apiBaseUrl}}/api/auth/github/start?returnTo=%2Fworkspace%3Ftab%3Dsaved
+Accept: application/json
+X-Request-ID: httpyac-auth-start
+
+# Complete the following requests only with fresh values obtained in your own
+# local browser flow. Never commit, paste into an issue, or share OAuth codes,
+# state, encrypted flow cookies, session cookies, or CSRF values.
+@oauthCode = replace-with-fresh-one-time-code
+@oauthState = replace-with-fresh-43-character-state
+@oauthFlowCookie = replace-with-fresh-encrypted-flow-cookie
+
+### Complete one OAuth callback and inspect session/CSRF Set-Cookie headers
+# @name completeGitHubOAuth
+# @no-redirect
+GET {{apiBaseUrl}}/api/auth/github/callback?code={{oauthCode}}&state={{oauthState}}
+Accept: application/json
+Cookie: issuescout_oauth_flow={{oauthFlowCookie}}
+X-Request-ID: httpyac-auth-callback
+
+### Consume a freshly denied authorization state
+# @name denyGitHubOAuth
+# @no-redirect
+GET {{apiBaseUrl}}/api/auth/github/callback?error=access_denied&state={{oauthState}}
+Accept: application/json
+Cookie: issuescout_oauth_flow={{oauthFlowCookie}}
+X-Request-ID: httpyac-auth-denial
+
+# Copy fresh local response values only into your HTTPYAC private environment,
+# not this tracked file. Production HTTPS uses __Host- prefixed Cookie names.
+@sessionToken = replace-with-fresh-session-cookie
+@csrfToken = replace-with-fresh-csrf-cookie-and-session-response-token
+
+### Read an authenticated session and obtain the current in-memory CSRF token
+# @name getAuthenticatedSession
+GET {{apiBaseUrl}}/api/auth/session
+Accept: application/json
+Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
+Origin: http://127.0.0.1:5173
+X-Request-ID: httpyac-authenticated-session
+
+### Rotate session and CSRF credentials atomically
+# @name refreshAuthSession
+POST {{apiBaseUrl}}/api/auth/session/refresh
+Accept: application/json
+Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
+Origin: http://127.0.0.1:5173
+X-CSRF-Token: {{csrfToken}}
+X-Request-ID: httpyac-auth-refresh
+
+### Revoke the current server session and expire both browser cookies
+# @name logoutAuthSession
+POST {{apiBaseUrl}}/api/auth/logout
+Accept: application/json
+Cookie: issuescout_session={{sessionToken}}; issuescout_csrf={{csrfToken}}
+Origin: http://127.0.0.1:5173
+X-CSRF-Token: {{csrfToken}}
+X-Request-ID: httpyac-auth-logout
+
+### Prove a protected mutation rejects missing browser credentials
+# @name rejectAnonymousRefresh
+POST {{apiBaseUrl}}/api/auth/session/refresh
+Accept: application/json
+Origin: http://127.0.0.1:5173
+X-CSRF-Token: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+X-Request-ID: httpyac-auth-reject-anonymous
+
+### Prove CORS rejects a credentialed untrusted browser origin
+# @name rejectUntrustedAuthOrigin
+GET {{apiBaseUrl}}/api/auth/session
+Accept: application/json
+Origin: https://untrusted.example
+X-Request-ID: httpyac-auth-reject-origin

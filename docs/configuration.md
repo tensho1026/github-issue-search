@@ -36,11 +36,54 @@ contain names and safe defaults, never credentials. Commit no `.env` file.
 | `DATABASE_MAX_CONNECTION_LIFETIME`      | `30m`                    | Positive duration, at most 24 hours                                   | No     |
 | `DATABASE_MAX_CONNECTION_IDLE_TIME`     | `5m`                     | Positive duration, at most 24 hours                                   | No     |
 | `DATABASE_HEALTH_CHECK_PERIOD`          | `30s`                    | Pool health cycle, positive and at most one hour                      | No     |
+| `GITHUB_OAUTH_CLIENT_ID`                | empty                    | Required OAuth App ID when authentication is enabled; at most 255     | No     |
+| `GITHUB_OAUTH_CLIENT_SECRET`            | empty                    | Required server-only OAuth App secret; at least 20 characters         | Yes    |
+| `GITHUB_OAUTH_AUTHORIZE_URL`            | official GitHub URL      | Absolute HTTPS authorization endpoint; loopback allowed in tests      | No     |
+| `GITHUB_OAUTH_TOKEN_URL`                | official GitHub URL      | Absolute HTTPS token endpoint; loopback allowed in tests              | No     |
+| `GITHUB_OAUTH_CALLBACK_URL`             | empty                    | Exact absolute `/api/auth/github/callback` URL                        | No     |
+| `AUTH_FRONTEND_URL`                     | empty                    | One fixed origin also present in `ALLOWED_ORIGINS`                    | No     |
+| `AUTH_FLOW_ENCRYPTION_KEY`              | empty                    | Exactly 64 lowercase hex characters for AES-256-GCM                   | Yes    |
+| `AUTH_STATE_TTL`                        | `10m`                    | Positive OAuth state/cookie lifetime, at most 15 minutes              | No     |
+| `AUTH_SESSION_TTL`                      | `12h`                    | Positive server-session lifetime, at most seven days                  | No     |
+| `AUTH_MAX_SESSIONS`                     | `10`                     | Active sessions retained per account, 1–50                            | No     |
+| `AUTH_COOKIE_SECURE`                    | environment-dependent    | Defaults false in dev/test and true in staging/production             | No     |
+| `TRUSTED_PROXY_CIDRS`                   | empty                    | Canonical comma-separated ingress CIDRs; empty trusts no proxy        | No     |
 | `USE_GITHUB_API_MOCK`                   | `false`                  | Deterministic adapter; `true` is legal only with `APP_ENV=test`       | No     |
 
 `apps/api/.env.example` is the copyable API reference. The process validates
 all values before opening a listener. Configuration errors fail closed and log
 only the variable name and validation reason.
+
+## Authentication configuration group
+
+Authentication is enabled only when all of these values are non-empty:
+
+- `GITHUB_OAUTH_CLIENT_ID`;
+- `GITHUB_OAUTH_CLIENT_SECRET`;
+- `GITHUB_OAUTH_CALLBACK_URL`;
+- `AUTH_FRONTEND_URL`;
+- `AUTH_FLOW_ENCRYPTION_KEY`.
+
+The group also requires `DATABASE_URL`. All values absent means
+authentication is intentionally disabled; a partial group fails startup.
+`GITHUB_OAUTH_CALLBACK_URL` must have exactly the
+`/api/auth/github/callback` path and no query. `AUTH_FRONTEND_URL` must be one
+origin already listed in `ALLOWED_ORIGINS`.
+
+Development/test may use loopback HTTP only when `AUTH_COOKIE_SECURE=false`.
+Staging and production require HTTPS and secure cookies. The authorization and
+token endpoint overrides exist for GitHub Enterprise and deterministic
+adapter tests; ordinary GitHub.com deployments keep their defaults.
+
+Generate `AUTH_FLOW_ENCRYPTION_KEY` independently with:
+
+```sh
+openssl rand -hex 32
+```
+
+Never reuse the OAuth client secret, database password, runtime GitHub token,
+or another encryption key. See [Optional GitHub authentication](authentication.md)
+for registration, flow, Cookie, CSRF, proxy, and rotation behavior.
 
 ## Web and native supervisor environment
 
@@ -97,7 +140,7 @@ Restarting the API clears all anonymous data. See
 - Test may opt into the deterministic adapter.
 - Staging and production must reject the deterministic adapter.
 - Anonymous routes never require or access database configuration.
-- Database and future OAuth secrets belong only to the API process and
+- Database and OAuth secrets belong only to the API process and
   protected delivery environment, not examples, logs, frontend assets, or
   release manifests.
 

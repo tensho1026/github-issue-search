@@ -13,12 +13,17 @@ sequenceDiagram
     participant Handler
     participant Usecase
     participant Cache
+    participant Database
     participant GitHub
 
     Browser->>Middleware: HTTP request + optional X-Request-ID
     Middleware->>Middleware: Correlation, security, CORS, timeout
     Middleware->>Handler: Validated route context
     Handler->>Usecase: Typed input + context
+    opt Authenticated account operation
+        Usecase->>Database: Bounded owned/session operation
+        Database-->>Usecase: Typed result
+    end
     Usecase->>Cache: Canonical bounded key
     alt Cache miss
         Usecase->>GitHub: Bounded REST or GraphQL request
@@ -29,6 +34,12 @@ sequenceDiagram
     Usecase-->>Handler: Domain/application result
     Handler-->>Browser: Stable envelope + X-Request-ID
 ```
+
+Authentication routes use the same middleware envelope and correlation
+boundary, but session operations call the separate PostgreSQL adapter. Public
+routes never receive that dependency. OAuth start and callback are top-level
+browser navigations and return documented `302` responses with a required
+`Location` rather than JSON.
 
 ## Envelope and headers
 
@@ -63,6 +74,11 @@ or `MISS`.
 | POST `/api/repositories/search`                      | Filtered public repositories with OSS readiness evidence        | 50 candidates, one 20-repository enrichment batch          |
 | POST `/api/issues/search`                            | Eligible, ranked, paginated public issues                       | 50 candidates, 20 detail enrichments, page size at most 50 |
 | GET `/api/issues/{owner}/{repository}/{issueNumber}` | Complete issue recommendation and bounded repository evidence   | One canonical issue; every activity collection is bounded  |
+| GET `/api/auth/session`                              | Optional anonymous/authenticated session bootstrap              | Zero DB calls for absent/malformed cookies                 |
+| GET `/api/auth/github/start`                         | Store state, seal PKCE flow, redirect to GitHub                 | One state write; 15-minute maximum                         |
+| GET `/api/auth/github/callback`                      | Consume state, fetch public identity, create session            | One-time code; fixed-origin redirect                       |
+| POST `/api/auth/session/refresh`                     | CSRF-check and atomically rotate both browser credentials       | One active session transaction                             |
+| POST `/api/auth/logout`                              | CSRF-check, revoke server session, expire cookies               | One session revocation                                     |
 
 Unknown JSON fields, malformed path values, unsupported query keys, control
 characters, excessive collection sizes, and out-of-range pagination are
@@ -79,6 +95,10 @@ readiness filters. Its request ceiling, category rules, evidence states, and
 partial fallback are defined in
 [Repository discovery](repository-discovery.md).
 
+OAuth setup, redirect validation, PKCE, cookie attributes, CSRF, session
+rotation, proxy trust, and failure isolation are defined in
+[Optional GitHub authentication](authentication.md).
+
 ## Statuses
 
 Every operation explicitly documents `403`, `500`, and `504` because CORS,
@@ -86,17 +106,22 @@ panic recovery, and request deadlines apply at the middleware boundary.
 Feature routes additionally declare their possible `400`, `404`, `429`, and
 `502` outcomes. The contract forbids a catch-all default response.
 
-| Error code                   | Typical HTTP status | Meaning and caller action                                      |
-| ---------------------------- | ------------------: | -------------------------------------------------------------- |
-| `INVALID_REQUEST`            |                 400 | Fix request syntax, validation, or bounds                      |
-| `GITHUB_USER_NOT_FOUND`      |                 404 | Check the public username                                      |
-| `NOT_FOUND`                  |                 404 | Check the route, repository, or issue reference                |
-| `GITHUB_RATE_LIMIT_EXCEEDED` |                 429 | Wait for normalized rate-limit recovery                        |
-| `GITHUB_API_ERROR`           |                 502 | GitHub failed or returned unusable required data; retry later  |
-| `DATABASE_UNAVAILABLE`       |                 503 | Account storage is unavailable; anonymous routes remain usable |
-| `FORBIDDEN_ORIGIN`           |                 403 | Use a browser origin from the exact server allowlist           |
-| `INTERNAL_SERVER_ERROR`      |                 500 | Unexpected failure was safely recovered; report request ID     |
-| `REQUEST_TIMEOUT`            |                 504 | Caller cancelled or the bounded request deadline elapsed       |
+| Error code                      | Typical HTTP status | Meaning and caller action                                      |
+| ------------------------------- | ------------------: | -------------------------------------------------------------- |
+| `INVALID_REQUEST`               |                 400 | Fix request syntax, validation, or bounds                      |
+| `INVALID_AUTH_STATE`            |                 400 | Restart login; flow is invalid, expired, mismatched, or used   |
+| `GITHUB_AUTHORIZATION_REJECTED` |                 400 | Restart login; GitHub rejected code or public identity         |
+| `AUTHENTICATION_REQUIRED`       |                 401 | Bootstrap/login again; session is missing or inactive          |
+| `CSRF_REJECTED`                 |                 403 | Bootstrap again and use the current in-memory CSRF token       |
+| `GITHUB_USER_NOT_FOUND`         |                 404 | Check the public username                                      |
+| `NOT_FOUND`                     |                 404 | Check the route, repository, or issue reference                |
+| `GITHUB_RATE_LIMIT_EXCEEDED`    |                 429 | Wait for normalized rate-limit recovery                        |
+| `GITHUB_API_ERROR`              |                 502 | GitHub failed or returned unusable required data; retry later  |
+| `DATABASE_UNAVAILABLE`          |                 503 | Account storage is unavailable; anonymous routes remain usable |
+| `AUTH_UNAVAILABLE`              |             502/503 | OAuth/upstream/storage failed; anonymous routes remain usable  |
+| `FORBIDDEN_ORIGIN`              |                 403 | Use a browser origin from the exact server allowlist           |
+| `INTERNAL_SERVER_ERROR`         |                 500 | Unexpected failure was safely recovered; report request ID     |
+| `REQUEST_TIMEOUT`               |                 504 | Caller cancelled or the bounded request deadline elapsed       |
 
 Forbidden-origin responses use an error envelope without exposing allowlist
 details. Error messages never include tokens, raw upstream bodies, issue
@@ -127,6 +152,8 @@ five-minute cache. Page and effort do not change the upstream candidate key.
 
 The fixture test validates correct documents and proves that undocumented
 envelope/payload fields and missing metadata fail. The policy test rejects
-undocumented operational statuses, non-envelope JSON, missing request IDs,
-duplicate operation IDs, and default statuses. The route check compares Gin
-registration to every OpenAPI operation.
+undocumented operational statuses, non-envelope JSON, malformed redirect
+contracts, missing request IDs, duplicate operation IDs, and default statuses.
+A redirect operation must have exactly one explicit success, a required URI
+`Location`, and no body. The route check compares Gin registration to every
+OpenAPI operation.
