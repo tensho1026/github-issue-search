@@ -1,0 +1,4229 @@
+openapi: 3.1.0
+info:
+  title: IssueScout API
+  version: 0.8.0
+  description: |
+    API for analyzing a public GitHub profile and finding suitable open-source
+    repositories and issues. Core discovery remains anonymous and stateless.
+    Optional GitHub sign-in adds server-side sessions for account-owned
+    features; GitHub and database credentials always remain server-side.
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: http://127.0.0.1:8080
+    description: Local development
+security: []
+tags:
+  - name: System
+    description: Runtime health and operational endpoints.
+  - name: GitHub profiles
+    description: Normalized public GitHub profile and technology analysis.
+  - name: Issue discovery
+    description: Bounded, validated discovery of eligible public GitHub issues.
+  - name: Repository discovery
+    description: Bounded, evidence-oriented discovery of public OSS repositories.
+  - name: Issue recommendations
+    description: Explainable scoring and bounded repository-maintainer analysis.
+  - name: Authentication
+    description: |
+      Optional GitHub OAuth with PKCE, single-use state, rotating server
+      sessions, and CSRF-protected mutations. Authentication is never an
+      anonymous-feature access wall.
+  - name: Account workspace
+    description: |
+      Authenticated, account-owned bookmarks, saved searches, preferences,
+      privacy export, and irreversible account deletion. These routes never
+      accept an account identifier from the client.
+paths:
+  /api/health:
+    get:
+      operationId: getHealth
+      summary: Check API health
+      tags:
+        - System
+      responses:
+        "200":
+          description: The API process is ready to serve requests.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthEnvelope"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/health/database:
+    get:
+      operationId: getDatabaseHealth
+      summary: Check authenticated account storage readiness
+      description: |
+        Probes the optional PostgreSQL boundary used only by authenticated
+        account capabilities. A failure does not change `/api/health` and does
+        not prevent anonymous profile, repository, or issue journeys.
+        Connection parameters and driver errors are never returned.
+      tags:
+        - System
+      responses:
+        "200":
+          description: The configured database accepted a bounded readiness probe.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatabaseHealthEnvelope"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "503":
+          $ref: "#/components/responses/DatabaseUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/github/users/{username}:
+    parameters:
+      - $ref: "#/components/parameters/GitHubUsername"
+    get:
+      operationId: getGitHubUser
+      summary: Get a normalized public GitHub profile
+      tags:
+        - GitHub profiles
+      responses:
+        "200":
+          description: The public profile and bounded repository summaries.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitHubUserEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "404":
+          $ref: "#/components/responses/GitHubUserNotFound"
+        "429":
+          $ref: "#/components/responses/GitHubRateLimited"
+        "502":
+          $ref: "#/components/responses/GitHubUpstreamError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/github/users/{username}/profile-analysis:
+    parameters:
+      - $ref: "#/components/parameters/GitHubUsername"
+    get:
+      operationId: analyzeGitHubProfile
+      summary: Analyze bounded public technical and OSS evidence
+      description: |
+        Executes one bounded GitHub GraphQL snapshot over active public owned
+        repositories, public forks, public contributed repositories, visible
+        starred repositories, public authored issues and pull requests, and
+        sampled public commit and review activity. The analysis window is 365
+        days. Repository collections are capped at 20 and language edges at 10
+        per owned repository. Exact, sampled, and unavailable evidence are
+        distinct so zero is never used for missing data. Starred repositories
+        represent interest and never increase proficiency scores. Private and
+        restricted contribution totals are neither requested nor returned.
+        Anonymous requests do not use a database or persist the username,
+        upstream response, or derived profile.
+      tags:
+        - GitHub profiles
+      responses:
+        "200":
+          description: A bounded analysis with optional partial-data warnings.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileAnalysisEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "404":
+          $ref: "#/components/responses/GitHubUserNotFound"
+        "429":
+          $ref: "#/components/responses/GitHubRateLimited"
+        "502":
+          $ref: "#/components/responses/GitHubUpstreamError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/issues/search:
+    post:
+      operationId: searchGitHubIssues
+      summary: Find eligible public GitHub issue candidates
+      description: |
+        Searches one bounded, authenticated GitHub GraphQL Search window of at
+        most 50 candidates and retrieves the required repository fields in the
+        same request. It then applies repository and issue eligibility rules
+        before bounded detail enrichment, effort filtering, stable ranking,
+        and application pagination. Equivalent validated discovery filter
+        orderings share a five-minute in-memory candidate cache. At most 20
+        candidates are enriched with bounded concurrency, and effort-only
+        changes reuse the candidate window. The endpoint never follows
+        unbounded upstream pages or returns GitHub response objects directly.
+        The IssueScout endpoint is anonymous to browser clients, while the API
+        process requires a server-only GITHUB_TOKEN for upstream GraphQL
+        requests.
+      tags:
+        - Issue discovery
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: One-based page over eligible candidates.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          example: 1
+        - name: perPage
+          in: query
+          required: false
+          description: Maximum eligible candidates returned on this page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+          example: 20
+      requestBody:
+        required: true
+        description: |
+          Validated discovery filters. Omitted scalar filters receive the
+          documented MVP defaults. Unknown JSON fields are rejected.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssueSearchRequest"
+            examples:
+              profile-aligned:
+                summary: Search Go and TypeScript starter issues
+                value:
+                  username: tensho1026
+                  languages:
+                    - Go
+                    - TypeScript
+                  frameworks:
+                    - Gin
+                    - React
+                  labels:
+                    - good first issue
+                    - help wanted
+                  minimumStars: 10
+                  maximumDifficulty: 3
+                  maximumEffort: one_day
+                  updatedWithinDays: 180
+                  includeDocumentation: false
+                  includeEnglish: true
+                  excludeArchived: true
+      responses:
+        "200":
+          description: |
+            Eligible, normalized candidates and bounded pagination metadata.
+            A successful response can contain no items.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+            X-IssueScout-Cache:
+              description: Whether the canonical condition was served from cache.
+              schema:
+                type: string
+                enum:
+                  - HIT
+                  - MISS
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssueSearchEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "429":
+          $ref: "#/components/responses/GitHubRateLimited"
+        "502":
+          $ref: "#/components/responses/GitHubUpstreamError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/repositories/search:
+    post:
+      operationId: searchGitHubRepositories
+      summary: Find contribution-ready public OSS repositories
+      description: |
+        Executes one bounded GitHub REST repository search containing at most
+        50 normalized public candidates. Cheap language, SPDX license,
+        popularity, fork, issue-count, archive, and recency filters run before
+        a shortlist of at most 20 repositories receives one batched GraphQL
+        quality and documentation enrichment. README language and technology
+        detection are heuristics over at most 64 KiB of text and always expose
+        evidence status and confidence. The final order is deterministic:
+        readiness, stars, last push, then canonical full name. Equivalent
+        validated conditions share a five-minute bounded in-memory cache.
+        Anonymous requests never access a database or persist the query or
+        results.
+      tags:
+        - Repository discovery
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: One-based page over the bounded analyzed shortlist.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 1
+          example: 1
+        - name: perPage
+          in: query
+          required: false
+          description: Maximum analyzed repositories returned on this page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+          example: 20
+      requestBody:
+        required: true
+        description: |
+          Validated public repository filters. Unknown fields and unsupported
+          SPDX identifiers or range combinations are rejected before GitHub.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RepositoryDiscoveryRequest"
+            examples:
+              typed-japanese-projects:
+                summary: Active React or TypeScript projects with Japanese docs
+                value:
+                  languages:
+                    - TypeScript
+                  technologies:
+                    - React
+                  licenses:
+                    - MIT
+                    - Apache-2.0
+                  categories:
+                    - framework
+                    - tooling
+                  minimumStars: 50
+                  minimumForks: 2
+                  minimumOpenIssues: 1
+                  maximumOpenIssues: 500
+                  updatedWithinDays: 180
+                  maximumDifficulty: 3
+                  minimumReadiness: 50
+                  hasJapaneseReadme: true
+                  forkPolicy: exclude
+                  excludeArchived: true
+      responses:
+        "200":
+          description: |
+            Deterministically ordered normalized repositories with bounded
+            enrichment, evidence precision, and pagination metadata. A
+            successful partial or empty result is valid.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+            X-IssueScout-Cache:
+              description: Whether the canonical condition was served from cache.
+              schema:
+                type: string
+                enum:
+                  - HIT
+                  - MISS
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepositoryDiscoveryEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "429":
+          $ref: "#/components/responses/GitHubRateLimited"
+        "502":
+          $ref: "#/components/responses/GitHubUpstreamError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/issues/{owner}/{repository}/{issueNumber}:
+    parameters:
+      - $ref: "#/components/parameters/GitHubOwner"
+      - $ref: "#/components/parameters/GitHubRepository"
+      - $ref: "#/components/parameters/GitHubIssueNumber"
+    get:
+      operationId: getIssueRecommendation
+      summary: Get a complete explainable issue recommendation
+      description: |
+        Retrieves one bounded public GitHub GraphQL snapshot and returns the
+        normalized repository, full issue, rule analysis, 100-point score,
+        repository-readiness signals, and sampled maintainer activity. Commit,
+        issue, pull-request, review, and comment collections are bounded and
+        never paginated beyond the documented sample. Missing or partial
+        upstream evidence is `unknown` or `unavailable`, never a misleading
+        zero or absence. Equivalent owner/repository/number references share a
+        five-minute bounded LRU snapshot cache.
+      tags:
+        - Issue recommendations
+      parameters:
+        - name: skills
+          in: query
+          required: false
+          description: |
+            Repeatable contributor skill. Matching is case-insensitive and
+            deduplicated. Low-confidence requirements and a missing skill set
+            are excluded from the explicit percentage denominator.
+          schema:
+            type: array
+            maxItems: 20
+            items:
+              type: string
+              minLength: 1
+              maxLength: 64
+          style: form
+          explode: true
+          examples:
+            go-react:
+              value:
+                - Go
+                - React
+      responses:
+        "200":
+          description: Complete normalized issue recommendation.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+            X-IssueScout-Cache:
+              description: Whether the normalized detail snapshot came from cache.
+              schema:
+                type: string
+                enum:
+                  - HIT
+                  - MISS
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssueDetailEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "404":
+          $ref: "#/components/responses/GitHubIssueNotFound"
+        "429":
+          $ref: "#/components/responses/GitHubRateLimited"
+        "502":
+          $ref: "#/components/responses/GitHubUpstreamError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/auth/session:
+    get:
+      operationId: getAuthSession
+      summary: Read optional browser-session state
+      description: |
+        Returns `configured=false` when GitHub OAuth is intentionally disabled
+        and `authenticated=false` when both opaque browser cookies are absent
+        or malformed. Those anonymous outcomes do not query PostgreSQL.
+        An authenticated response contains only the retained public GitHub
+        identity and a CSRF token for in-memory use by the frontend. The opaque
+        session token is never returned in JSON.
+      tags:
+        - Authentication
+      responses:
+        "200":
+          description: Current optional authentication state.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+            Set-Cookie:
+              $ref: "#/components/headers/AuthSetCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSessionEnvelope"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "503":
+          $ref: "#/components/responses/AuthUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/auth/github/start:
+    get:
+      operationId: startGitHubOAuth
+      summary: Start GitHub authorization with PKCE
+      description: |
+        Creates a random single-use state record containing only a SHA-256
+        digest. The raw state, PKCE verifier, exact return path, and expiry are
+        sealed with AES-256-GCM in a short-lived HttpOnly SameSite=Lax cookie.
+        The response redirects to the configured GitHub authorization endpoint
+        with explicit `read:user`, the exact registered callback URL, and an
+        S256 PKCE challenge.
+      tags:
+        - Authentication
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          description: |
+            Bounded root-relative frontend path. Absolute URLs, scheme-relative
+            paths, backslashes, and fragments are rejected. Defaults to `/`.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 2048
+            pattern: "^/(?!/)(?!.*\\\\).*$"
+          example: /workspace?tab=saved
+      responses:
+        "302":
+          description: Redirect to GitHub's configured authorization endpoint.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+            Location:
+              $ref: "#/components/headers/RedirectLocation"
+            Set-Cookie:
+              $ref: "#/components/headers/AuthSetCookie"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "503":
+          $ref: "#/components/responses/AuthUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/auth/github/callback:
+    get:
+      operationId: completeGitHubOAuth
+      summary: Complete or deny one GitHub authorization
+      description: |
+        GitHub redirects the top-level browser navigation here. The API opens
+        and expires the encrypted flow cookie, constant-time compares query
+        state, atomically consumes the matching database state, exchanges the
+        one-time code with its PKCE verifier, fetches only `GET /user`, and
+        immediately discards the GitHub access token. Success writes rotating
+        opaque session and CSRF cookies whose SHA-256 digests are persisted.
+        Provider denial also consumes state. Every browser redirect is built
+        from the fixed configured frontend origin and the previously validated
+        relative return path; provider error descriptions are never reflected.
+      tags:
+        - Authentication
+      parameters:
+        - name: code
+          in: query
+          required: false
+          description: GitHub one-time authorization code; required on success.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 4096
+        - name: state
+          in: query
+          required: true
+          description: Unpadded base64url encoding of the random 256-bit state.
+          schema:
+            $ref: "#/components/schemas/OpaqueCredential"
+        - name: error
+          in: query
+          required: false
+          description: |
+            GitHub denial code. `access_denied` produces a safe `auth=denied`
+            frontend marker; other values produce `auth=error`.
+          schema:
+            type: string
+            maxLength: 255
+      responses:
+        "302":
+          description: |
+            Redirect to the fixed frontend origin with `auth=success`,
+            `auth=denied`, or `auth=error`.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+            Location:
+              $ref: "#/components/headers/RedirectLocation"
+            Set-Cookie:
+              $ref: "#/components/headers/AuthSetCookie"
+        "400":
+          $ref: "#/components/responses/InvalidAuthCallback"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "502":
+          $ref: "#/components/responses/OAuthUpstreamUnavailable"
+        "503":
+          $ref: "#/components/responses/AuthUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/auth/session/refresh:
+    post:
+      operationId: refreshAuthSession
+      summary: Rotate the current browser session
+      description: |
+        Requires both valid HttpOnly cookies and a constant-time matching
+        `X-CSRF-Token` header. The server revokes the current hashed session
+        token and inserts new session and CSRF digests in one transaction.
+        Concurrent reuse of the old session fails closed.
+      tags:
+        - Authentication
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      responses:
+        "200":
+          description: Rotated session state and the new in-memory CSRF token.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+            Set-Cookie:
+              $ref: "#/components/headers/AuthSetCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSessionEnvelope"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/AuthMutationForbidden"
+        "503":
+          $ref: "#/components/responses/AuthUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/auth/logout:
+    post:
+      operationId: logoutAuthSession
+      summary: Revoke the current browser session
+      description: |
+        Requires the same cookie and CSRF checks as refresh. Server-side
+        revocation completes before both browser cookies are expired. No
+        GitHub token is retained or revoked because it was discarded at login.
+      tags:
+        - Authentication
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      responses:
+        "200":
+          description: The server session was revoked and cookies were expired.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+            Set-Cookie:
+              $ref: "#/components/headers/AuthSetCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthLogoutEnvelope"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/AuthMutationForbidden"
+        "503":
+          $ref: "#/components/responses/AuthUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/account/bookmarks:
+    get:
+      operationId: listAccountBookmarks
+      summary: List owned bookmarks
+      description: |
+        Returns normalized GitHub references ordered by createdAt descending
+        and UUID descending. References are marked `unverified` because a
+        repository or issue can be renamed, made private, or deleted upstream;
+        use the anonymous public detail routes to revalidate when displaying
+        one. No GitHub response body is persisted.
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/AccountPage"
+        - $ref: "#/components/parameters/AccountPerPage"
+      responses:
+        "200":
+          description: A deterministic owned bookmark page.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookmarkListEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+    put:
+      operationId: upsertAccountBookmark
+      summary: Idempotently bookmark a GitHub reference
+      description: |
+        Requires a valid session and CSRF header. The account is selected only
+        from the server-side principal. A duplicate normalized reference
+        returns the existing row without incrementing version. Each account is
+        limited to 200 bookmarks.
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookmarkWriteRequest"
+      responses:
+        "200":
+          description: The newly inserted or existing owned bookmark.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookmarkEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/AuthMutationForbidden"
+        "409":
+          $ref: "#/components/responses/AccountConflict"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/account/bookmarks/{bookmarkID}:
+    parameters:
+      - $ref: "#/components/parameters/BookmarkID"
+    delete:
+      operationId: deleteAccountBookmark
+      summary: Delete an owned bookmark
+      description: |
+        Requires the current positive version. A resource owned by another
+        account is indistinguishable from a missing resource.
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceVersion"
+      responses:
+        "200":
+          description: The owned bookmark was deleted.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletionEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/AuthMutationForbidden"
+        "404":
+          $ref: "#/components/responses/AccountResourceNotFound"
+        "409":
+          $ref: "#/components/responses/AccountConflict"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/account/saved-searches:
+    get:
+      operationId: listAccountSavedSearches
+      summary: List owned saved searches
+      description: |
+        Returns normalized filter documents ordered by updatedAt descending
+        and UUID descending. Stored filters use the same validation and
+        defaults as the corresponding anonymous search endpoint.
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/AccountPage"
+        - $ref: "#/components/parameters/AccountPerPage"
+      responses:
+        "200":
+          description: A deterministic owned saved-search page.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedSearchListEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+    post:
+      operationId: createAccountSavedSearch
+      summary: Create a named saved search
+      description: |
+        Requires a valid session and CSRF header. Names are unique
+        case-insensitively per account, filter JSON is capped at 8192 bytes,
+        and each account is limited to 50 saved searches.
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavedSearchWriteRequest"
+      responses:
+        "201":
+          description: The normalized saved search was created.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedSearchEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/AuthMutationForbidden"
+        "409":
+          $ref: "#/components/responses/AccountConflict"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/account/saved-searches/{savedSearchID}:
+    parameters:
+      - $ref: "#/components/parameters/SavedSearchID"
+    put:
+      operationId: updateAccountSavedSearch
+      summary: Replace an owned saved search
+      description: |
+        Revalidates and canonicalizes the entire filter document. Update
+        succeeds only when version matches, and increments it atomically.
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavedSearchUpdateRequest"
+      responses:
+        "200":
+          description: The updated normalized saved search.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedSearchEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/AuthMutationForbidden"
+        "404":
+          $ref: "#/components/responses/AccountResourceNotFound"
+        "409":
+          $ref: "#/components/responses/AccountConflict"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+    delete:
+      operationId: deleteAccountSavedSearch
+      summary: Delete an owned saved search
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceVersion"
+      responses:
+        "200":
+          description: The owned saved search was deleted.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletionEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/AuthMutationForbidden"
+        "404":
+          $ref: "#/components/responses/AccountResourceNotFound"
+        "409":
+          $ref: "#/components/responses/AccountConflict"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/account/preferences:
+    get:
+      operationId: getAccountPreferences
+      summary: Read owned display preferences
+      description: |
+        Returns deterministic system/system/20 defaults at version zero until
+        the account persists a preference row.
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Persisted preferences or version-zero defaults.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreferencesEnvelope"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+    put:
+      operationId: updateAccountPreferences
+      summary: Create or update owned display preferences
+      description: |
+        Use version zero for the first write and the current positive version
+        thereafter. A stale version returns VERSION_CONFLICT.
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreferencesWriteRequest"
+      responses:
+        "200":
+          description: The current persisted preferences.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreferencesEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/AuthMutationForbidden"
+        "409":
+          $ref: "#/components/responses/AccountConflict"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/account/export:
+    get:
+      operationId: exportAccountData
+      summary: Export bounded account-owned feature data
+      description: |
+        Returns normalized bookmarks, saved filter definitions, and persisted
+        preferences. Sessions, credential hashes, audit identifiers, GitHub
+        payloads, anonymous searches, and click history are excluded.
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: A versioned privacy export generated at request time.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountExportEnvelope"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/account:
+    delete:
+      operationId: deleteAccount
+      summary: Permanently delete the authenticated account
+      description: |
+        Requires the literal confirmation `DELETE`, a valid session, and CSRF.
+        The account, identities, sessions, bookmarks, saved searches, and
+        preferences are deleted through foreign-key cascades. A content-free
+        account_deleted audit event remains without an account identifier.
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountDeleteRequest"
+      responses:
+        "200":
+          description: Account deletion completed and browser cookies expired.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+            Set-Cookie:
+              $ref: "#/components/headers/AuthSetCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDeleteEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/AuthMutationForbidden"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+components:
+  headers:
+    RequestID:
+      description: |
+        Request correlation identifier. A valid inbound X-Request-ID is echoed;
+        otherwise the API generates one. This value matches meta.requestId.
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+    RedirectLocation:
+      description: Validated absolute redirect destination.
+      required: true
+      schema:
+        type: string
+        format: uri
+    AuthSetCookie:
+      description: |
+        One or more HttpOnly Path=/ SameSite=Lax authentication cookies.
+        HTTPS deployments use Secure `__Host-issuescout_oauth_flow`,
+        `__Host-issuescout_session`, and `__Host-issuescout_csrf` names with no
+        Domain attribute. Loopback HTTP development uses the same names without
+        the `__Host-` prefix and is prohibited outside development/test.
+      required: false
+      schema:
+        type: string
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-issuescout_session
+      description: |
+        Opaque 256-bit rotating session credential. Only its SHA-256 digest is
+        persisted. Loopback development omits the `__Host-` prefix.
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: |
+        Opaque token read from `GET /api/auth/session` and retained only in
+        frontend memory. It must match both the HttpOnly CSRF cookie and the
+        server-side digest.
+  parameters:
+    GitHubUsername:
+      name: username
+      in: path
+      required: true
+      description: Public GitHub login, without a leading at-sign.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 39
+        pattern: "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?!-)){0,37}[A-Za-z0-9]$|^[A-Za-z0-9]$"
+      example: tensho1026
+    GitHubOwner:
+      name: owner
+      in: path
+      required: true
+      description: Public GitHub user or organization login.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 39
+        pattern: "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?!-)){0,37}[A-Za-z0-9]$|^[A-Za-z0-9]$"
+      example: openai
+    GitHubRepository:
+      name: repository
+      in: path
+      required: true
+      description: Public repository name.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 100
+        pattern: "^(?!\\.{1,2}$)[A-Za-z0-9._-]+$"
+      example: openai-go
+    GitHubIssueNumber:
+      name: issueNumber
+      in: path
+      required: true
+      description: Positive repository-local issue number.
+      schema:
+        type: integer
+        minimum: 1
+      example: 42
+    AccountPage:
+      name: page
+      in: query
+      required: false
+      description: One-based page over a quota-bounded owned collection.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 1
+    AccountPerPage:
+      name: perPage
+      in: query
+      required: false
+      description: Bounded number of account-owned rows per page.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
+    BookmarkID:
+      name: bookmarkID
+      in: path
+      required: true
+      description: Opaque account-owned bookmark identifier.
+      schema:
+        type: string
+        format: uuid
+    SavedSearchID:
+      name: savedSearchID
+      in: path
+      required: true
+      description: Opaque account-owned saved-search identifier.
+      schema:
+        type: string
+        format: uuid
+    ResourceVersion:
+      name: version
+      in: query
+      required: true
+      description: Current positive optimistic-concurrency version.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+  responses:
+    InvalidRequest:
+      description: A path or request value failed validation.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ForbiddenOrigin:
+      description: The browser Origin is not in the configured allowlist.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    GitHubUserNotFound:
+      description: The requested GitHub user does not exist.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    GitHubRateLimited:
+      description: GitHub refused the request because its rate limit was exhausted.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    GitHubUpstreamError:
+      description: Required public data could not be retrieved from GitHub.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    GitHubIssueNotFound:
+      description: The public repository or issue does not exist or is not visible.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    DatabaseUnavailable:
+      description: |
+        Authenticated account storage is not configured or did not accept the
+        bounded readiness probe. Anonymous capabilities remain available.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    AuthUnavailable:
+      description: |
+        GitHub sign-in is not configured, PostgreSQL is unavailable, or a
+        bounded authentication persistence operation failed. Anonymous
+        discovery capabilities remain available.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    InvalidAuthCallback:
+      description: |
+        State or encrypted browser binding is missing, malformed, modified,
+        expired, mismatched, or already consumed; alternatively GitHub rejected
+        the one-time authorization result. Details are intentionally collapsed.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    OAuthUpstreamUnavailable:
+      description: GitHub token exchange or public identity lookup failed safely.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    AuthenticationRequired:
+      description: |
+        Session cookies are missing, malformed, expired, revoked, or otherwise
+        unusable.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    AuthMutationForbidden:
+      description: |
+        The browser Origin is not allowed or the CSRF cookie/header/server
+        digest comparison failed.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    AccountStorageUnavailable:
+      description: |
+        Optional account storage or authentication is unavailable. Anonymous
+        profile, repository, and issue routes remain operational.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    AccountConflict:
+      description: |
+        The account quota was reached, the optimistic version was stale, or a
+        case-insensitive saved-search name already exists.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    AccountResourceNotFound:
+      description: |
+        The resource is missing or is owned by another account. Those cases
+        are intentionally indistinguishable.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    RequestTimeout:
+      description: The bounded request deadline elapsed or the client cancelled.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    InternalServerError:
+      description: An unexpected internal failure was recovered without exposing details.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+  schemas:
+    Meta:
+      type: object
+      additionalProperties: false
+      required:
+        - requestId
+        - timestamp
+      properties:
+        requestId:
+          type: string
+          minLength: 1
+          example: req_01JTEST123
+        timestamp:
+          type: string
+          format: date-time
+        rateLimitRemaining:
+          type: integer
+          minimum: 0
+          example: 4998
+    HealthEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - status
+          properties:
+            status:
+              type: string
+              const: ok
+        meta:
+          $ref: "#/components/schemas/Meta"
+    DatabaseHealthEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - configured
+            - status
+          properties:
+            configured:
+              type: boolean
+              const: true
+            status:
+              type: string
+              const: ready
+        meta:
+          $ref: "#/components/schemas/Meta"
+    OpaqueCredential:
+      type: string
+      minLength: 43
+      maxLength: 43
+      pattern: "^[A-Za-z0-9_-]{43}$"
+      description: Unpadded base64url encoding of exactly 256 random bits.
+    AuthSessionEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/AuthSession"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    AuthSession:
+      type: object
+      additionalProperties: false
+      required:
+        - authenticated
+        - configured
+      properties:
+        configured:
+          type: boolean
+          description: Whether the server has a complete validated OAuth setup.
+        authenticated:
+          type: boolean
+          description: Whether both cookies resolved to one active server session.
+        user:
+          $ref: "#/components/schemas/AuthUser"
+        expiresAt:
+          type: string
+          format: date-time
+        csrfToken:
+          allOf:
+            - $ref: "#/components/schemas/OpaqueCredential"
+          description: |
+            Returned only for an authenticated session. Keep this value in
+            memory and send it as X-CSRF-Token on authenticated mutations.
+    AuthUser:
+      type: object
+      additionalProperties: false
+      required:
+        - accountId
+        - avatarUrl
+        - login
+        - profileUrl
+      properties:
+        accountId:
+          type: string
+          format: uuid
+          description: Opaque IssueScout account ownership identifier.
+        login:
+          type: string
+          minLength: 1
+          maxLength: 39
+        avatarUrl:
+          type: string
+          format: uri
+          pattern: "^https://"
+        profileUrl:
+          type: string
+          format: uri
+          pattern: "^https://"
+    AuthLogoutEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - loggedOut
+          properties:
+            loggedOut:
+              type: boolean
+              const: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+    BookmarkWriteRequest:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - issueNumber
+            - repositoryName
+            - repositoryOwner
+            - targetType
+          properties:
+            targetType:
+              type: string
+              const: issue
+            repositoryOwner:
+              $ref: "#/components/schemas/GitHubOwnerValue"
+            repositoryName:
+              $ref: "#/components/schemas/GitHubRepositoryValue"
+            issueNumber:
+              type: integer
+              minimum: 1
+        - type: object
+          additionalProperties: false
+          required:
+            - repositoryName
+            - repositoryOwner
+            - targetType
+          properties:
+            targetType:
+              type: string
+              const: repository
+            repositoryOwner:
+              $ref: "#/components/schemas/GitHubOwnerValue"
+            repositoryName:
+              $ref: "#/components/schemas/GitHubRepositoryValue"
+    GitHubOwnerValue:
+      type: string
+      minLength: 1
+      maxLength: 39
+      pattern: "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?!-)){0,37}[A-Za-z0-9]$|^[A-Za-z0-9]$"
+    GitHubRepositoryValue:
+      type: string
+      minLength: 1
+      maxLength: 100
+      pattern: "^(?!\\.{1,2}$)[A-Za-z0-9._-]+$"
+    Bookmark:
+      type: object
+      additionalProperties: false
+      required:
+        - createdAt
+        - id
+        - repositoryName
+        - repositoryOwner
+        - targetType
+        - updatedAt
+        - upstreamState
+        - version
+      properties:
+        id:
+          type: string
+          format: uuid
+        targetType:
+          type: string
+          enum:
+            - issue
+            - repository
+        repositoryOwner:
+          $ref: "#/components/schemas/GitHubOwnerValue"
+        repositoryName:
+          $ref: "#/components/schemas/GitHubRepositoryValue"
+        issueNumber:
+          type: integer
+          minimum: 1
+        upstreamState:
+          type: string
+          const: unverified
+          description: |
+            The reference is stored without a GitHub payload and may be stale.
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    BookmarkEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/Bookmark"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    AccountPagination:
+      type: object
+      additionalProperties: false
+      required:
+        - page
+        - perPage
+        - total
+        - totalPages
+      properties:
+        page:
+          type: integer
+          minimum: 1
+          maximum: 100
+        perPage:
+          type: integer
+          minimum: 1
+          maximum: 50
+        total:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+    BookmarkListEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - items
+            - pagination
+          properties:
+            items:
+              type: array
+              maxItems: 50
+              items:
+                $ref: "#/components/schemas/Bookmark"
+            pagination:
+              $ref: "#/components/schemas/AccountPagination"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    SavedSearchWriteRequest:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - filters
+            - name
+            - searchType
+          properties:
+            searchType:
+              type: string
+              const: issue
+            name:
+              $ref: "#/components/schemas/SavedSearchName"
+            filters:
+              $ref: "#/components/schemas/IssueSearchRequest"
+        - type: object
+          additionalProperties: false
+          required:
+            - filters
+            - name
+            - searchType
+          properties:
+            searchType:
+              type: string
+              const: repository
+            name:
+              $ref: "#/components/schemas/SavedSearchName"
+            filters:
+              $ref: "#/components/schemas/RepositoryDiscoveryRequest"
+    SavedSearchUpdateRequest:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - filters
+            - name
+            - searchType
+            - version
+          properties:
+            searchType:
+              type: string
+              const: issue
+            name:
+              $ref: "#/components/schemas/SavedSearchName"
+            filters:
+              $ref: "#/components/schemas/IssueSearchRequest"
+            version:
+              type: integer
+              format: int64
+              minimum: 1
+        - type: object
+          additionalProperties: false
+          required:
+            - filters
+            - name
+            - searchType
+            - version
+          properties:
+            searchType:
+              type: string
+              const: repository
+            name:
+              $ref: "#/components/schemas/SavedSearchName"
+            filters:
+              $ref: "#/components/schemas/RepositoryDiscoveryRequest"
+            version:
+              type: integer
+              format: int64
+              minimum: 1
+    SavedSearchName:
+      type: string
+      minLength: 1
+      maxLength: 80
+    SavedSearch:
+      type: object
+      additionalProperties: false
+      required:
+        - createdAt
+        - filters
+        - id
+        - name
+        - searchType
+        - updatedAt
+        - version
+      properties:
+        id:
+          type: string
+          format: uuid
+        searchType:
+          type: string
+          enum:
+            - issue
+            - repository
+        name:
+          $ref: "#/components/schemas/SavedSearchName"
+        filters:
+          oneOf:
+            - $ref: "#/components/schemas/IssueSearchRequest"
+            - $ref: "#/components/schemas/RepositoryDiscoveryRequest"
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SavedSearchEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/SavedSearch"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    SavedSearchListEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - items
+            - pagination
+          properties:
+            items:
+              type: array
+              maxItems: 50
+              items:
+                $ref: "#/components/schemas/SavedSearch"
+            pagination:
+              $ref: "#/components/schemas/AccountPagination"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    PreferencesWriteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - reducedMotion
+        - resultsPerPage
+        - theme
+        - version
+      properties:
+        theme:
+          $ref: "#/components/schemas/ThemePreference"
+        reducedMotion:
+          $ref: "#/components/schemas/ReducedMotionPreference"
+        resultsPerPage:
+          type: integer
+          enum:
+            - 10
+            - 20
+            - 50
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    ThemePreference:
+      type: string
+      enum:
+        - light
+        - dark
+        - system
+    ReducedMotionPreference:
+      type: string
+      enum:
+        - reduce
+        - no-preference
+        - system
+    Preferences:
+      type: object
+      additionalProperties: false
+      required:
+        - reducedMotion
+        - resultsPerPage
+        - theme
+        - version
+      properties:
+        theme:
+          $ref: "#/components/schemas/ThemePreference"
+        reducedMotion:
+          $ref: "#/components/schemas/ReducedMotionPreference"
+        resultsPerPage:
+          type: integer
+          enum:
+            - 10
+            - 20
+            - 50
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PreferencesEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/Preferences"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    DeletionEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - deleted
+          properties:
+            deleted:
+              type: boolean
+              const: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+    AccountExportEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - bookmarks
+            - generatedAt
+            - preferences
+            - savedSearches
+            - schemaVersion
+          properties:
+            schemaVersion:
+              type: integer
+              const: 1
+            generatedAt:
+              type: string
+              format: date-time
+            bookmarks:
+              type: array
+              maxItems: 200
+              items:
+                $ref: "#/components/schemas/Bookmark"
+            savedSearches:
+              type: array
+              maxItems: 50
+              items:
+                $ref: "#/components/schemas/SavedSearch"
+            preferences:
+              oneOf:
+                - $ref: "#/components/schemas/Preferences"
+                - type: "null"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    AccountDeleteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - confirmation
+      properties:
+        confirmation:
+          type: string
+          const: DELETE
+    AccountDeleteEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - deleted
+            - removed
+          properties:
+            deleted:
+              type: boolean
+              const: true
+            removed:
+              $ref: "#/components/schemas/OwnedDataSummary"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    OwnedDataSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - bookmarks
+        - identities
+        - preferences
+        - savedSearches
+        - sessions
+      properties:
+        bookmarks:
+          type: integer
+          format: int64
+          minimum: 0
+        identities:
+          type: integer
+          format: int64
+          minimum: 0
+        preferences:
+          type: integer
+          format: int64
+          minimum: 0
+        savedSearches:
+          type: integer
+          format: int64
+          minimum: 0
+        sessions:
+          type: integer
+          format: int64
+          minimum: 0
+    GitHubUserEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/GitHubUser"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    GitHubUser:
+      type: object
+      additionalProperties: false
+      required:
+        - avatarUrl
+        - bio
+        - followers
+        - following
+        - login
+        - name
+        - publicRepos
+        - repositories
+      properties:
+        login:
+          type: string
+        name:
+          type: string
+        avatarUrl:
+          type: string
+          format: uri
+        bio:
+          type: string
+        publicRepos:
+          type: integer
+          minimum: 0
+        followers:
+          type: integer
+          minimum: 0
+        following:
+          type: integer
+          minimum: 0
+        repositories:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/RepositorySummary"
+    RepositorySummary:
+      type: object
+      additionalProperties: false
+      required:
+        - defaultBranch
+        - description
+        - forks
+        - fullName
+        - isArchived
+        - isFork
+        - mainLanguage
+        - name
+        - openIssues
+        - owner
+        - pushedAt
+        - stars
+        - updatedAt
+        - url
+      properties:
+        owner:
+          type: string
+        name:
+          type: string
+        fullName:
+          type: string
+        description:
+          type: string
+        url:
+          type: string
+          format: uri
+        mainLanguage:
+          type: string
+        stars:
+          type: integer
+          minimum: 0
+        forks:
+          type: integer
+          minimum: 0
+        openIssues:
+          type: integer
+          minimum: 0
+        isFork:
+          type: boolean
+        isArchived:
+          type: boolean
+        defaultBranch:
+          type: string
+        updatedAt:
+          type: string
+        pushedAt:
+          type: string
+    ProfileAnalysisEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/ProfileAnalysis"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    ProfileAnalysis:
+      type: object
+      additionalProperties: false
+      required:
+        - analysisWindow
+        - contributions
+        - frameworks
+        - languageStatus
+        - languages
+        - ossExperience
+        - proficiency
+        - recentTechnologies
+        - repositoryEvidence
+        - repositoriesAnalyzed
+        - username
+        - warnings
+      properties:
+        username:
+          type: string
+        languages:
+          type: array
+          items:
+            $ref: "#/components/schemas/LanguageShare"
+        languageStatus:
+          allOf:
+            - $ref: "#/components/schemas/EvidenceStatus"
+          description: |
+            Completeness of the aggregate language percentages. `sampled`
+            indicates that at least one repository had languages outside its
+            ten-edge GraphQL sample or the owned repository collection was
+            capped.
+        frameworks:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+        recentTechnologies:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/RecentTechnology"
+        contributions:
+          $ref: "#/components/schemas/ContributionAnalysis"
+        ossExperience:
+          $ref: "#/components/schemas/OSSExperience"
+        repositoryEvidence:
+          $ref: "#/components/schemas/ProfileRepositoryEvidence"
+        proficiency:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/TechnologyProficiency"
+        analysisWindow:
+          $ref: "#/components/schemas/ProfileAnalysisWindow"
+        repositoriesAnalyzed:
+          type: integer
+          minimum: 0
+          maximum: 20
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnalysisWarning"
+    EvidenceStatus:
+      type: string
+      enum:
+        - exact
+        - sampled
+        - unavailable
+      description: |
+        `exact` is a complete public count for the documented scope. `sampled`
+        is a bounded observation and must not be presented as a total.
+        `unavailable` means GitHub did not provide the segment; its value is
+        not evidence of zero activity.
+    EvidenceConfidence:
+      type: string
+      enum:
+        - high
+        - medium
+        - low
+        - unavailable
+    TechnologyKind:
+      type: string
+      enum:
+        - language
+        - framework
+    RepositoryEvidenceSource:
+      type: string
+      enum:
+        - contributed
+        - forked
+        - owned
+        - starred
+    ProfileAnalysisWindow:
+      type: object
+      additionalProperties: false
+      required:
+        - days
+        - from
+        - publicOnly
+        - to
+      properties:
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        days:
+          type: integer
+          enum:
+            - 365
+        publicOnly:
+          type: boolean
+          const: true
+    EvidenceCount:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - value
+      properties:
+        value:
+          type: integer
+          minimum: 0
+          description: |
+            Complete count when status is `exact`, bounded observed count when
+            status is `sampled`, and zero placeholder when status is
+            `unavailable`. Always interpret this together with `status`.
+        status:
+          $ref: "#/components/schemas/EvidenceStatus"
+    ContributionAnalysis:
+      type: object
+      additionalProperties: false
+      required:
+        - commits
+        - issuesOpened
+        - pullRequestReviews
+        - pullRequestsOpened
+        - repositoriesTouched
+        - windowDays
+      properties:
+        windowDays:
+          type: integer
+          enum:
+            - 365
+        commits:
+          allOf:
+            - $ref: "#/components/schemas/EvidenceCount"
+          description: |
+            Observed commits across at most 20 public repository contribution
+            groups. This metric is sampled.
+        issuesOpened:
+          allOf:
+            - $ref: "#/components/schemas/EvidenceCount"
+          description: Exact public authored issue search count in the window.
+        pullRequestsOpened:
+          allOf:
+            - $ref: "#/components/schemas/EvidenceCount"
+          description: |
+            Exact public authored pull-request search count in the window.
+        pullRequestReviews:
+          allOf:
+            - $ref: "#/components/schemas/EvidenceCount"
+          description: |
+            Observed reviews across at most 20 public repository contribution
+            groups. This metric is sampled.
+        repositoriesTouched:
+          allOf:
+            - $ref: "#/components/schemas/EvidenceCount"
+          description: |
+            Observed unique public repositories across at most 20 commit,
+            issue, pull-request, and review contribution groups. This metric
+            is sampled.
+    TechnologyEvidence:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - status
+        - value
+      properties:
+        kind:
+          type: string
+          enum:
+            - authored_pull_requests
+            - contributed_repositories
+            - forked_repositories
+            - framework_manifests
+            - language_share_percentage
+            - owned_repositories
+            - pull_request_reviews
+            - recent_repositories
+        value:
+          type: integer
+          minimum: 0
+        status:
+          $ref: "#/components/schemas/EvidenceStatus"
+    OSSExperience:
+      type: object
+      additionalProperties: false
+      required:
+        - confidence
+        - evidence
+        - level
+        - publicOnly
+      properties:
+        level:
+          type: string
+          enum:
+            - no_public_evidence
+            - emerging
+            - contributing
+            - active
+            - sustained
+            - unavailable
+          description: |
+            Rule-based summary of public authored pull requests, public
+            contributed repositories, and sampled public review activity.
+        confidence:
+          $ref: "#/components/schemas/EvidenceConfidence"
+        publicOnly:
+          type: boolean
+          const: true
+        evidence:
+          type: array
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/TechnologyEvidence"
+    RecentTechnology:
+      type: object
+      additionalProperties: false
+      required:
+        - confidence
+        - kind
+        - lastUsedAt
+        - name
+        - repositoryCount
+        - repositorySources
+      properties:
+        name:
+          type: string
+          minLength: 1
+        kind:
+          $ref: "#/components/schemas/TechnologyKind"
+        lastUsedAt:
+          type: string
+          format: date-time
+        repositoryCount:
+          type: integer
+          minimum: 1
+          maximum: 60
+        repositorySources:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/RepositoryEvidenceSource"
+        confidence:
+          $ref: "#/components/schemas/EvidenceConfidence"
+    ProfileRepositorySample:
+      type: object
+      additionalProperties: false
+      required:
+        - activeInWindow
+        - limit
+        - observed
+        - primaryTechnologies
+        - status
+        - total
+      properties:
+        status:
+          $ref: "#/components/schemas/EvidenceStatus"
+        observed:
+          type: integer
+          minimum: 0
+          maximum: 20
+        total:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+          description: |
+            Exact public collection total when GitHub supports a public filter.
+            Null for starred evidence because the upstream total can be
+            privacy-ambiguous for the authenticated API viewer.
+        limit:
+          type: integer
+          minimum: 0
+          maximum: 20
+        activeInWindow:
+          type: integer
+          minimum: 0
+          maximum: 20
+        primaryTechnologies:
+          type: array
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/LanguageShare"
+    ProfileRepositoryEvidence:
+      type: object
+      additionalProperties: false
+      required:
+        - contributed
+        - forked
+        - owned
+        - starred
+      properties:
+        owned:
+          $ref: "#/components/schemas/ProfileRepositorySample"
+        contributed:
+          $ref: "#/components/schemas/ProfileRepositorySample"
+        starred:
+          $ref: "#/components/schemas/ProfileRepositorySample"
+        forked:
+          $ref: "#/components/schemas/ProfileRepositorySample"
+    TechnologyProficiency:
+      type: object
+      additionalProperties: false
+      required:
+        - confidence
+        - evidence
+        - kind
+        - label
+        - level
+        - name
+        - score
+      properties:
+        name:
+          type: string
+          minLength: 1
+        kind:
+          $ref: "#/components/schemas/TechnologyKind"
+        level:
+          type: integer
+          minimum: 1
+          maximum: 5
+        label:
+          type: string
+          enum:
+            - exploring
+            - developing
+            - intermediate
+            - advanced
+            - expert
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: |
+            Deterministic evidence score used only to select the five-level
+            diagnostic. It is not a certification or comprehensive skill
+            measurement.
+        confidence:
+          $ref: "#/components/schemas/EvidenceConfidence"
+        evidence:
+          type: array
+          maxItems: 6
+          items:
+            $ref: "#/components/schemas/TechnologyEvidence"
+    RepositoryDiscoveryRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        languages:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          description: |
+            Accepted primary languages. Matching is case-insensitive logical
+            OR. An omitted or empty array accepts every language.
+          items:
+            $ref: "#/components/schemas/SearchFilterValue"
+        technologies:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          description: |
+            Framework or technology terms matched as complete terms in public
+            topics or bounded README text. If enrichment is unavailable, a
+            configured technology filter conservatively excludes that item.
+          items:
+            $ref: "#/components/schemas/SearchFilterValue"
+        licenses:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          description: |
+            Supported SPDX identifiers. License matching is logical OR.
+            Repositories without a recognized SPDX identifier do not match.
+          items:
+            $ref: "#/components/schemas/SupportedSPDXLicense"
+        categories:
+          type: array
+          maxItems: 9
+          uniqueItems: true
+          description: Explainable topic-and-description category, matched by OR.
+          items:
+            $ref: "#/components/schemas/OSSCategory"
+        minimumStars:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+          default: 10
+        minimumForks:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+          default: 0
+        minimumOpenIssues:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+          default: 0
+        maximumOpenIssues:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+          description: |
+            Inclusive maximum. It must be greater than or equal to
+            minimumOpenIssues when both are present.
+        updatedWithinDays:
+          type: integer
+          minimum: 1
+          maximum: 3650
+          default: 365
+          description: Maximum age of the repository's last public push.
+        maximumDifficulty:
+          type: integer
+          minimum: 1
+          maximum: 5
+          default: 5
+          description: |
+            Inclusive preliminary contribution difficulty. This rule-based
+            value evaluates documentation and starter-issue availability; it
+            does not estimate a specific issue.
+        minimumReadiness:
+          type: integer
+          minimum: 0
+          maximum: 100
+          default: 0
+          description: Inclusive explainable contribution-readiness score.
+        hasJapaneseReadme:
+          type: boolean
+          description: |
+            When true, requires Japanese-script README evidence. When false,
+            requires analyzed README evidence without detected Japanese text.
+            Unavailable evidence matches neither value.
+        forkPolicy:
+          type: string
+          enum:
+            - exclude
+            - include
+            - only
+          default: exclude
+        excludeArchived:
+          type: boolean
+          default: true
+    SupportedSPDXLicense:
+      type: string
+      enum:
+        - 0BSD
+        - AGPL-3.0
+        - Apache-2.0
+        - BSD-2-Clause
+        - BSD-3-Clause
+        - BSL-1.0
+        - CC0-1.0
+        - EPL-2.0
+        - GPL-2.0
+        - GPL-3.0
+        - ISC
+        - LGPL-2.1
+        - LGPL-3.0
+        - MIT
+        - MPL-2.0
+        - Unlicense
+    OSSCategory:
+      type: string
+      enum:
+        - application
+        - data
+        - documentation
+        - education
+        - framework
+        - infrastructure
+        - library
+        - security
+        - tooling
+    RepositoryDiscoveryEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/RepositoryDiscoveryResult"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    RepositoryDiscoveryResult:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - pagination
+        - searchSummary
+        - warnings
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/RepositoryDiscoveryItem"
+        pagination:
+          $ref: "#/components/schemas/SearchPagination"
+        searchSummary:
+          $ref: "#/components/schemas/RepositoryDiscoverySummary"
+        warnings:
+          type: array
+          maxItems: 2
+          items:
+            $ref: "#/components/schemas/RepositoryDiscoveryWarning"
+    RepositoryDiscoveryItem:
+      type: object
+      additionalProperties: false
+      required:
+        - activity
+        - category
+        - difficulty
+        - documentation
+        - language
+        - license
+        - popularity
+        - readiness
+        - repository
+        - technologies
+        - topics
+        - warnings
+      properties:
+        repository:
+          $ref: "#/components/schemas/RepositoryDiscoveryIdentity"
+        topics:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+        technologies:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          description: Requested technology terms found in topics or README.
+          items:
+            type: string
+            minLength: 1
+        language:
+          type: string
+          description: Empty when GitHub has no primary-language evidence.
+        category:
+          $ref: "#/components/schemas/OSSCategory"
+        license:
+          $ref: "#/components/schemas/RepositoryDiscoveryLicense"
+        popularity:
+          $ref: "#/components/schemas/RepositoryDiscoveryPopularity"
+        activity:
+          $ref: "#/components/schemas/RepositoryDiscoveryActivity"
+        readiness:
+          $ref: "#/components/schemas/RepositoryDiscoveryReadiness"
+        documentation:
+          $ref: "#/components/schemas/RepositoryDiscoveryDocumentation"
+        difficulty:
+          $ref: "#/components/schemas/RepositoryDiscoveryDifficulty"
+        warnings:
+          type: array
+          maxItems: 2
+          items:
+            $ref: "#/components/schemas/RepositoryDiscoveryWarning"
+    RepositoryDiscoveryIdentity:
+      type: object
+      additionalProperties: false
+      required:
+        - description
+        - fullName
+        - isArchived
+        - isFork
+        - name
+        - owner
+        - url
+      properties:
+        owner:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        fullName:
+          type: string
+          minLength: 3
+        description:
+          type: string
+        url:
+          type: string
+          format: uri
+        isFork:
+          type: boolean
+        isArchived:
+          type: boolean
+    RepositoryDiscoveryLicense:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - spdxId
+        - status
+      properties:
+        spdxId:
+          type:
+            - string
+            - "null"
+          enum:
+            - 0BSD
+            - AGPL-3.0
+            - Apache-2.0
+            - BSD-2-Clause
+            - BSD-3-Clause
+            - BSL-1.0
+            - CC0-1.0
+            - EPL-2.0
+            - GPL-2.0
+            - GPL-3.0
+            - ISC
+            - LGPL-2.1
+            - LGPL-3.0
+            - MIT
+            - MPL-2.0
+            - Unlicense
+            - null
+        name:
+          type: string
+        status:
+          $ref: "#/components/schemas/EvidenceStatus"
+    RepositoryDiscoveryPopularity:
+      type: object
+      additionalProperties: false
+      required:
+        - forks
+        - openIssues
+        - stars
+        - watchers
+      properties:
+        stars:
+          type: integer
+          minimum: 0
+        forks:
+          type: integer
+          minimum: 0
+        watchers:
+          type: integer
+          minimum: 0
+        openIssues:
+          type: integer
+          minimum: 0
+    RepositoryDiscoveryActivity:
+      type: object
+      additionalProperties: false
+      required:
+        - pushedAt
+        - updatedAt
+      properties:
+        updatedAt:
+          type: string
+          format: date-time
+        pushedAt:
+          type: string
+          format: date-time
+    RepositoryDiscoveryReadiness:
+      type: object
+      additionalProperties: false
+      required:
+        - band
+        - discussionsEnabled
+        - goodFirstIssues
+        - helpWantedIssues
+        - issuesEnabled
+        - reasons
+        - score
+      properties:
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: |
+            Deterministic sum of bounded activity, documentation, community
+            files, starter issues, and public discussion signals.
+        band:
+          type: string
+          enum:
+            - needs_work
+            - promising
+            - ready
+        reasons:
+          type: array
+          maxItems: 8
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+        goodFirstIssues:
+          type: integer
+          minimum: 0
+        helpWantedIssues:
+          type: integer
+          minimum: 0
+        issuesEnabled:
+          type: boolean
+        discussionsEnabled:
+          type: boolean
+    RepositoryDiscoveryDocumentation:
+      type: object
+      additionalProperties: false
+      required:
+        - codeOfConduct
+        - contributingGuide
+        - japaneseReadme
+        - readmeAvailable
+        - securityPolicy
+        - status
+      properties:
+        status:
+          $ref: "#/components/schemas/EvidenceStatus"
+        readmeAvailable:
+          type: boolean
+        contributingGuide:
+          type: boolean
+        codeOfConduct:
+          type: boolean
+        securityPolicy:
+          type: boolean
+        japaneseReadme:
+          $ref: "#/components/schemas/JapaneseREADMEEvidence"
+    JapaneseREADMEEvidence:
+      type: object
+      additionalProperties: false
+      required:
+        - analyzedBytes
+        - confidence
+        - detected
+        - japaneseRunes
+        - letterRunes
+        - status
+      properties:
+        detected:
+          type: boolean
+          description: |
+            True only when at least 20 Japanese-script runes comprise at least
+            five percent of analyzed letters. This is heuristic evidence.
+        status:
+          $ref: "#/components/schemas/EvidenceStatus"
+        confidence:
+          $ref: "#/components/schemas/EvidenceConfidence"
+        japaneseRunes:
+          type: integer
+          minimum: 0
+        letterRunes:
+          type: integer
+          minimum: 0
+        analyzedBytes:
+          type: integer
+          minimum: 0
+          maximum: 65536
+    RepositoryDiscoveryDifficulty:
+      type: object
+      additionalProperties: false
+      required:
+        - label
+        - level
+        - reasons
+      properties:
+        level:
+          type: integer
+          minimum: 1
+          maximum: 5
+        label:
+          type: string
+          enum:
+            - very_low
+            - low
+            - medium
+            - high
+            - very_high
+        reasons:
+          type: array
+          maxItems: 4
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+    RepositoryDiscoverySummary:
+      type: object
+      additionalProperties: false
+      required:
+        - candidatesChecked
+        - enrichmentAttempted
+        - enrichmentFailed
+        - enrichmentIncomplete
+        - githubIncomplete
+        - upstreamTotal
+      properties:
+        candidatesChecked:
+          type: integer
+          minimum: 0
+          maximum: 50
+        upstreamTotal:
+          type: integer
+          minimum: 0
+          description: GitHub total before the bounded candidate window.
+        enrichmentAttempted:
+          type: integer
+          minimum: 0
+          maximum: 20
+        enrichmentFailed:
+          type: integer
+          minimum: 0
+          maximum: 20
+        githubIncomplete:
+          type: boolean
+        enrichmentIncomplete:
+          type: boolean
+    RepositoryDiscoveryWarning:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          enum:
+            - enrichment_unavailable
+            - github_results_incomplete
+            - readme_content_sampled
+            - repository_enrichment_incomplete
+        message:
+          type: string
+          minLength: 1
+    IssueSearchRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - username
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 39
+          pattern: "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?!-)){0,37}[A-Za-z0-9]$|^[A-Za-z0-9]$"
+          description: |
+            The profile whose preferences will be used by later recommendation
+            stages. It is included in the canonical cache condition.
+          example: tensho1026
+        languages:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          description: |
+            Repository primary languages matched with GitHub language
+            qualifiers. An empty array accepts every language.
+          items:
+            $ref: "#/components/schemas/SearchFilterValue"
+          example:
+            - Go
+            - TypeScript
+        frameworks:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          description: |
+            Framework terms that must appear as a complete term in issue or
+            repository discovery text. An empty array accepts every framework.
+          items:
+            $ref: "#/components/schemas/SearchFilterValue"
+          example:
+            - Gin
+            - React
+        labels:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          description: |
+            Labels matched using logical OR. If omitted or empty, IssueScout
+            uses `good first issue` and `help wanted`.
+          items:
+            $ref: "#/components/schemas/SearchFilterValue"
+          example:
+            - good first issue
+            - help wanted
+        minimumStars:
+          type: integer
+          minimum: 0
+          default: 10
+          description: Minimum repository star count applied after normalization.
+        maximumDifficulty:
+          type: integer
+          minimum: 1
+          maximum: 5
+          default: 3
+          description: |
+            Maximum preliminary label-derived difficulty. Full rule-based
+            analysis is performed by the recommendation stage.
+        maximumEffort:
+          type: string
+          enum:
+            - thirty_minutes
+            - two_hours
+            - half_day
+            - one_day
+            - three_days
+          description: |
+            Inclusive maximum rule-derived effort applied after bounded
+            recommendation analysis and before pagination. When omitted, every
+            effort band is allowed.
+        updatedWithinDays:
+          type: integer
+          minimum: 1
+          maximum: 3650
+          default: 180
+          description: |
+            Maximum age for both the issue update and repository update.
+        includeDocumentation:
+          type: boolean
+          default: false
+          description: Adds `documentation` to the logical-OR label condition.
+        includeEnglish:
+          type: boolean
+          default: true
+          description: |
+            Allows predominantly Latin-script issue text. When false, a local
+            deterministic script heuristic removes likely English issues.
+        excludeArchived:
+          type: boolean
+          default: true
+          description: Excludes issues from archived repositories.
+    SearchFilterValue:
+      type: string
+      minLength: 1
+      maxLength: 64
+      description: |
+        A trimmed search value. Quotes, backslashes, and control characters are
+        invalid so values cannot inject GitHub search qualifiers.
+      examples:
+        - good first issue
+    IssueSearchEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/IssueSearchResult"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    IssueSearchResult:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - pagination
+        - searchSummary
+        - warnings
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/IssueSearchItem"
+        pagination:
+          $ref: "#/components/schemas/SearchPagination"
+        searchSummary:
+          $ref: "#/components/schemas/SearchSummary"
+        warnings:
+          type: array
+          maxItems: 2
+          items:
+            $ref: "#/components/schemas/SearchWarning"
+    IssueSearchItem:
+      type: object
+      additionalProperties: false
+      required:
+        - difficulty
+        - effort
+        - issue
+        - recommendation
+        - repository
+      properties:
+        repository:
+          $ref: "#/components/schemas/IssueSearchRepository"
+        issue:
+          $ref: "#/components/schemas/IssueSearchIssue"
+        difficulty:
+          $ref: "#/components/schemas/IssueSearchDifficultySummary"
+        effort:
+          $ref: "#/components/schemas/IssueSearchEffortSummary"
+        recommendation:
+          $ref: "#/components/schemas/Recommendation"
+    IssueSearchDifficultySummary:
+      type: object
+      additionalProperties: false
+      required:
+        - confidence
+        - label
+        - level
+      properties:
+        level:
+          type: integer
+          minimum: 1
+          maximum: 5
+        label:
+          type: string
+          minLength: 1
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+    IssueSearchEffortSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - band
+        - confidence
+        - label
+      properties:
+        band:
+          type: string
+          enum:
+            - thirty_minutes
+            - two_hours
+            - half_day
+            - one_day
+            - three_days
+        label:
+          type: string
+          minLength: 1
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+    IssueSearchRepository:
+      type: object
+      additionalProperties: false
+      required:
+        - description
+        - fullName
+        - isArchived
+        - lastUpdatedAt
+        - mainLanguage
+        - name
+        - owner
+        - stars
+        - url
+      properties:
+        owner:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        fullName:
+          type: string
+          minLength: 3
+        description:
+          type: string
+        url:
+          type: string
+          format: uri
+        stars:
+          type: integer
+          minimum: 0
+        mainLanguage:
+          type: string
+        isArchived:
+          type: boolean
+        lastUpdatedAt:
+          type: string
+          format: date-time
+    IssueSearchIssue:
+      type: object
+      additionalProperties: false
+      required:
+        - comments
+        - createdAt
+        - estimatedDifficulty
+        - labels
+        - number
+        - title
+        - updatedAt
+        - url
+      properties:
+        number:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+          minLength: 1
+        url:
+          type: string
+          format: uri
+        labels:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        comments:
+          type: integer
+          minimum: 0
+        estimatedDifficulty:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Full rule-derived difficulty.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SearchPagination:
+      type: object
+      additionalProperties: false
+      required:
+        - hasNext
+        - page
+        - perPage
+        - total
+        - totalPages
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        perPage:
+          type: integer
+          minimum: 1
+          maximum: 50
+        total:
+          type: integer
+          minimum: 0
+          maximum: 50
+        totalPages:
+          type: integer
+          minimum: 0
+          maximum: 50
+        hasNext:
+          type: boolean
+    SearchSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - candidatesChecked
+        - enrichmentAttempted
+        - enrichmentFailed
+        - excludedByReason
+        - upstreamTotal
+      properties:
+        candidatesChecked:
+          type: integer
+          minimum: 0
+          maximum: 50
+          description: Candidates evaluated from the bounded upstream window.
+        upstreamTotal:
+          type: integer
+          minimum: 0
+          description: |
+            GitHub's reported total before the 50-candidate window and local
+            eligibility filters. This is not the pagination total.
+        enrichmentAttempted:
+          type: integer
+          minimum: 0
+          maximum: 20
+          description: |
+            Distinct repository leaders selected from the at-most-20-candidate
+            analysis window. Sibling issues reuse normalized repository
+            evidence without reusing issue-comment claim evidence.
+        enrichmentFailed:
+          type: integer
+          minimum: 0
+          maximum: 20
+          description: |
+            Distinct repository inspections that fell back to candidate
+            metadata.
+        excludedByReason:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/ExclusionCount"
+    ExclusionCount:
+      type: object
+      additionalProperties: false
+      required:
+        - count
+        - reason
+      properties:
+        reason:
+          type: string
+          enum:
+            - above_maximum_difficulty
+            - already_assigned
+            - archived_repository
+            - below_minimum_stars
+            - bot_generated
+            - english_not_allowed
+            - framework_mismatch
+            - insufficient_description
+            - label_mismatch
+            - language_mismatch
+            - not_open
+            - pull_request
+            - stale
+            - suspected_sensitive_content
+        count:
+          type: integer
+          minimum: 1
+          maximum: 50
+    SearchWarning:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          enum:
+            - github_search_incomplete
+            - issue_enrichment_incomplete
+        message:
+          type: string
+          minLength: 1
+    Recommendation:
+      type: object
+      additionalProperties: false
+      required:
+        - breakdown
+        - claim
+        - reasons
+        - score
+        - skillMatch
+        - warnings
+      properties:
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        breakdown:
+          type: array
+          minItems: 6
+          maxItems: 6
+          items:
+            $ref: "#/components/schemas/ScoreComponent"
+        skillMatch:
+          $ref: "#/components/schemas/SkillMatch"
+        reasons:
+          type: array
+          maxItems: 30
+          items:
+            type: string
+            minLength: 1
+        warnings:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/RecommendationWarning"
+        claim:
+          $ref: "#/components/schemas/ClaimEvidence"
+    ScoreComponent:
+      type: object
+      additionalProperties: false
+      required:
+        - maximum
+        - name
+        - reasons
+        - score
+      properties:
+        name:
+          type: string
+          enum:
+            - activity
+            - availability
+            - issue_quality
+            - maintainer_responsiveness
+            - repository_quality
+            - skill_match
+        score:
+          type: integer
+          minimum: 0
+          maximum: 30
+        maximum:
+          type: integer
+          enum:
+            - 10
+            - 15
+            - 20
+            - 30
+        reasons:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            minLength: 1
+    SkillMatch:
+      type: object
+      additionalProperties: false
+      required:
+        - denominator
+        - matched
+        - percentage
+        - skills
+      properties:
+        percentage:
+          type: integer
+          minimum: 0
+          maximum: 100
+        matched:
+          type: integer
+          minimum: 0
+        denominator:
+          type: integer
+          minimum: 0
+        skills:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/SkillMatchItem"
+    SkillMatchItem:
+      type: object
+      additionalProperties: false
+      required:
+        - evidence
+        - status
+        - technology
+      properties:
+        technology:
+          type: string
+          minLength: 1
+        status:
+          type: string
+          enum:
+            - matched
+            - unmatched
+            - unknown
+        evidence:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/Evidence"
+    RecommendationWarning:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - evidence
+        - message
+        - severity
+      properties:
+        code:
+          type: string
+          minLength: 1
+        severity:
+          type: string
+          enum:
+            - info
+            - warning
+            - critical
+        message:
+          type: string
+          minLength: 1
+        evidence:
+          type: array
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/Evidence"
+    ClaimEvidence:
+      type: object
+      additionalProperties: false
+      required:
+        - claimed
+        - confidence
+        - evidence
+      properties:
+        claimed:
+          type: boolean
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+        evidence:
+          type: array
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/Evidence"
+    Evidence:
+      type: object
+      additionalProperties: false
+      required:
+        - description
+        - ruleId
+        - source
+      properties:
+        ruleId:
+          type: string
+          minLength: 1
+        source:
+          type: string
+          enum:
+            - body
+            - dependency
+            - derived
+            - issue_metadata
+            - label
+            - repository_language
+            - title
+        description:
+          type: string
+          minLength: 1
+    Confidence:
+      type: string
+      enum:
+        - low
+        - medium
+        - high
+    SignalState:
+      type: string
+      enum:
+        - present
+        - absent
+        - not_applicable
+        - unknown
+    IssueDetailEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/IssueDetail"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    IssueDetail:
+      type: object
+      additionalProperties: false
+      required:
+        - activity
+        - analysis
+        - inspection
+        - issue
+        - recommendation
+        - repository
+        - repositoryHealth
+      properties:
+        repository:
+          $ref: "#/components/schemas/IssueDetailRepository"
+        issue:
+          $ref: "#/components/schemas/IssueDetailIssue"
+        analysis:
+          $ref: "#/components/schemas/IssueAnalysis"
+        recommendation:
+          $ref: "#/components/schemas/Recommendation"
+        repositoryHealth:
+          type: array
+          minItems: 5
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/RepositorySignal"
+        activity:
+          $ref: "#/components/schemas/ActivityMetrics"
+        inspection:
+          type: object
+          additionalProperties: false
+          required:
+            - incomplete
+          properties:
+            incomplete:
+              type: boolean
+              description: |
+                True when optional upstream fields were partial. Unknown
+                signals and truncated samples preserve that uncertainty.
+    IssueDetailRepository:
+      type: object
+      additionalProperties: false
+      required:
+        - defaultBranch
+        - description
+        - forks
+        - fullName
+        - id
+        - isArchived
+        - isFork
+        - mainLanguage
+        - name
+        - openIssues
+        - owner
+        - pushedAt
+        - stars
+        - updatedAt
+        - url
+      properties:
+        id:
+          type: integer
+          minimum: 0
+        owner:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        fullName:
+          type: string
+          minLength: 3
+        description:
+          type: string
+        url:
+          type: string
+          format: uri
+        mainLanguage:
+          type: string
+        stars:
+          type: integer
+          minimum: 0
+        forks:
+          type: integer
+          minimum: 0
+        openIssues:
+          type: integer
+          minimum: 0
+        isFork:
+          type: boolean
+        isArchived:
+          type: boolean
+        defaultBranch:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        pushedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+    IssueDetailIssue:
+      type: object
+      additionalProperties: false
+      required:
+        - assignees
+        - author
+        - body
+        - comments
+        - createdAt
+        - labels
+        - locked
+        - number
+        - state
+        - title
+        - updatedAt
+        - url
+      properties:
+        number:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+          minLength: 1
+        body:
+          type: string
+          maxLength: 65536
+        url:
+          type: string
+          format: uri
+        state:
+          type: string
+          enum:
+            - open
+            - closed
+        labels:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            minLength: 1
+        assignees:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            minLength: 1
+        author:
+          $ref: "#/components/schemas/GitHubActor"
+        comments:
+          type: integer
+          minimum: 0
+        locked:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    GitHubActor:
+      type: object
+      additionalProperties: false
+      required:
+        - login
+        - type
+      properties:
+        login:
+          type: string
+        type:
+          type: string
+    IssueAnalysis:
+      type: object
+      additionalProperties: false
+      required:
+        - category
+        - confidence
+        - difficulty
+        - effort
+        - quality
+        - requiredTechnologies
+        - scope
+      properties:
+        quality:
+          $ref: "#/components/schemas/QualityAssessment"
+        requiredTechnologies:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/RequiredTechnology"
+        category:
+          $ref: "#/components/schemas/CategoryAssessment"
+        difficulty:
+          $ref: "#/components/schemas/DifficultyAssessment"
+        scope:
+          $ref: "#/components/schemas/ChangeScope"
+        effort:
+          $ref: "#/components/schemas/EffortEstimate"
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+    QualityAssessment:
+      type: object
+      additionalProperties: false
+      required:
+        - confidence
+        - score
+        - signals
+      properties:
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+        signals:
+          type: array
+          minItems: 9
+          maxItems: 9
+          items:
+            $ref: "#/components/schemas/QualitySignal"
+    QualitySignal:
+      type: object
+      additionalProperties: false
+      required:
+        - evidence
+        - key
+        - state
+      properties:
+        key:
+          type: string
+          enum:
+            - acceptance_criteria
+            - current_behavior
+            - expected_behavior
+            - implementation_guidance
+            - problem_description
+            - related_files
+            - reproduction_steps
+            - screenshot
+            - test_method
+        state:
+          $ref: "#/components/schemas/SignalState"
+        evidence:
+          type: array
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/Evidence"
+    RequiredTechnology:
+      type: object
+      additionalProperties: false
+      required:
+        - confidence
+        - evidence
+        - kind
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+        kind:
+          type: string
+          enum:
+            - capability
+            - database
+            - framework
+            - language
+            - platform
+            - practice
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+        evidence:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/Evidence"
+    CategoryAssessment:
+      type: object
+      additionalProperties: false
+      required:
+        - confidence
+        - evidence
+        - matches
+        - primary
+      properties:
+        primary:
+          $ref: "#/components/schemas/IssueCategory"
+        matches:
+          type: array
+          minItems: 1
+          maxItems: 11
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/IssueCategory"
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+        evidence:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/Evidence"
+    IssueCategory:
+      type: string
+      enum:
+        - accessibility
+        - backend
+        - bug
+        - devops
+        - documentation
+        - feature
+        - localization
+        - performance
+        - refactoring
+        - testing
+        - ui
+    DifficultyAssessment:
+      type: object
+      additionalProperties: false
+      required:
+        - confidence
+        - evidence
+        - label
+        - level
+      properties:
+        level:
+          type: integer
+          minimum: 1
+          maximum: 5
+        label:
+          type: string
+          minLength: 1
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+        evidence:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/Evidence"
+    ChangeScope:
+      type: object
+      additionalProperties: false
+      required:
+        - areas
+        - confidence
+        - databaseChange
+        - evidence
+        - fileCount
+      properties:
+        areas:
+          type: array
+          minItems: 1
+          maxItems: 6
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - backend
+              - documentation
+              - frontend
+              - infrastructure
+              - migration
+              - tests
+        fileCount:
+          type: object
+          additionalProperties: false
+          required:
+            - label
+            - maximum
+            - minimum
+          properties:
+            minimum:
+              type: integer
+              minimum: 1
+            maximum:
+              type:
+                - integer
+                - "null"
+              minimum: 1
+              description: Null for the open-ended 9+ band.
+            label:
+              type: string
+              minLength: 1
+        databaseChange:
+          $ref: "#/components/schemas/SignalState"
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+        evidence:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/Evidence"
+    EffortEstimate:
+      type: object
+      additionalProperties: false
+      required:
+        - band
+        - confidence
+        - evidence
+        - label
+      properties:
+        band:
+          type: string
+          enum:
+            - thirty_minutes
+            - two_hours
+            - half_day
+            - one_day
+            - three_days
+        label:
+          type: string
+          minLength: 1
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+        evidence:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/Evidence"
+    RepositorySignal:
+      type: object
+      additionalProperties: false
+      required:
+        - evidence
+        - key
+        - state
+      properties:
+        key:
+          type: string
+          enum:
+            - ci
+            - code_of_conduct
+            - contributing
+            - readme
+            - tests
+        state:
+          $ref: "#/components/schemas/SignalState"
+        evidence:
+          type: array
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/Evidence"
+    ActivityMetrics:
+      type: object
+      additionalProperties: false
+      required:
+        - ci
+        - contributors
+        - issueResponse
+        - lastMeaningfulUpdate
+        - pullRequestMerge
+        - pullRequestMergeTime
+        - pullRequestReview
+        - pullRequestsOpened
+        - staleOpenPullRequests
+        - unansweredIssues
+      properties:
+        lastMeaningfulUpdate:
+          type:
+            - string
+            - "null"
+          format: date-time
+        ci:
+          type: string
+          enum:
+            - success
+            - failure
+            - pending
+            - unknown
+        contributors:
+          $ref: "#/components/schemas/CountAggregate"
+        pullRequestsOpened:
+          $ref: "#/components/schemas/CountAggregate"
+        staleOpenPullRequests:
+          $ref: "#/components/schemas/CountAggregate"
+        unansweredIssues:
+          $ref: "#/components/schemas/CountAggregate"
+        pullRequestMerge:
+          $ref: "#/components/schemas/RatioAggregate"
+        issueResponse:
+          $ref: "#/components/schemas/DurationAggregate"
+        pullRequestReview:
+          $ref: "#/components/schemas/DurationAggregate"
+        pullRequestMergeTime:
+          $ref: "#/components/schemas/DurationAggregate"
+    CountAggregate:
+      type: object
+      additionalProperties: false
+      required:
+        - confidence
+        - sampleSize
+        - status
+        - truncated
+        - value
+        - windowDays
+      properties:
+        status:
+          $ref: "#/components/schemas/AggregateStatus"
+        value:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        sampleSize:
+          type: integer
+          minimum: 0
+          maximum: 100
+        windowDays:
+          type: integer
+          minimum: 0
+          maximum: 180
+        truncated:
+          type: boolean
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+    RatioAggregate:
+      type: object
+      additionalProperties: false
+      required:
+        - confidence
+        - denominator
+        - numerator
+        - percentage
+        - sampleSize
+        - status
+        - truncated
+        - windowDays
+      properties:
+        status:
+          $ref: "#/components/schemas/AggregateStatus"
+        numerator:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        denominator:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        percentage:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+          maximum: 100
+        sampleSize:
+          type: integer
+          minimum: 0
+          maximum: 100
+        windowDays:
+          type: integer
+          minimum: 0
+          maximum: 180
+        truncated:
+          type: boolean
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+    DurationAggregate:
+      type: object
+      additionalProperties: false
+      required:
+        - confidence
+        - medianSeconds
+        - percentile90Seconds
+        - sampleSize
+        - status
+        - truncated
+        - windowDays
+      properties:
+        status:
+          $ref: "#/components/schemas/AggregateStatus"
+        medianSeconds:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        percentile90Seconds:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        sampleSize:
+          type: integer
+          minimum: 0
+          maximum: 100
+        windowDays:
+          type: integer
+          minimum: 0
+          maximum: 180
+        truncated:
+          type: boolean
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+    AggregateStatus:
+      type: string
+      enum:
+        - available
+        - unavailable
+    LanguageShare:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - percentage
+      properties:
+        name:
+          type: string
+          minLength: 1
+        percentage:
+          type: integer
+          minimum: 0
+          maximum: 100
+    AnalysisWarning:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        repository:
+          type: string
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+        - meta
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              enum:
+                - ACCOUNT_QUOTA_EXCEEDED
+                - AUTHENTICATION_REQUIRED
+                - AUTH_UNAVAILABLE
+                - CSRF_REJECTED
+                - DATABASE_UNAVAILABLE
+                - DUPLICATE_SAVED_SEARCH
+                - FORBIDDEN_ORIGIN
+                - GITHUB_AUTHORIZATION_REJECTED
+                - GITHUB_API_ERROR
+                - GITHUB_RATE_LIMIT_EXCEEDED
+                - GITHUB_USER_NOT_FOUND
+                - INTERNAL_SERVER_ERROR
+                - INVALID_AUTH_STATE
+                - INVALID_REQUEST
+                - NOT_FOUND
+                - REQUEST_TIMEOUT
+                - VERSION_CONFLICT
+            message:
+              type: string
+        meta:
+          $ref: "#/components/schemas/Meta"

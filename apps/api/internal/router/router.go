@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/config"
+	apidocs "github.com/tensho1026/github-issue-search/apps/api/internal/documentation"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/handler"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/middleware"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/platform/authcrypto"
@@ -23,6 +24,7 @@ type Dependencies struct {
 	Config               config.Config
 	Logger               *slog.Logger
 	Responder            response.Responder
+	Documentation        http.Handler
 	GetGitHubUser        usecase.GetGitHubUser
 	AnalyzeGitHubProfile usecase.AnalyzeGitHubProfile
 	SearchIssues         usecase.SearchIssues
@@ -40,6 +42,12 @@ type Dependencies struct {
 func New(dependencies Dependencies) (http.Handler, error) {
 	if dependencies.Logger == nil {
 		return nil, fmt.Errorf("compose router: logger is required")
+	}
+	if dependencies.Config.APIDocumentationEnabled &&
+		dependencies.Documentation == nil {
+		return nil, fmt.Errorf(
+			"compose router: enabled API documentation handler is required",
+		)
 	}
 	if dependencies.GetGitHubUser == nil {
 		return nil, fmt.Errorf("compose router: get GitHub user usecase is required")
@@ -90,6 +98,16 @@ func New(dependencies Dependencies) (http.Handler, error) {
 		middleware.RequestLogger(dependencies.Logger),
 		middleware.Recovery(dependencies.Logger, dependencies.Responder),
 	)
+
+	if dependencies.Config.APIDocumentationEnabled {
+		documentationHandler := gin.WrapH(dependencies.Documentation)
+		engine.GET(apidocs.RootPath, documentationHandler)
+		engine.HEAD(apidocs.RootPath, documentationHandler)
+		engine.GET(apidocs.RootPath+"/*asset", documentationHandler)
+		engine.HEAD(apidocs.RootPath+"/*asset", documentationHandler)
+		engine.GET(apidocs.OpenAPIPath, documentationHandler)
+		engine.HEAD(apidocs.OpenAPIPath, documentationHandler)
+	}
 
 	healthHandler := handler.NewHealthHandler(dependencies.Responder)
 	databaseHealthHandler := handler.NewDatabaseHealthHandler(
