@@ -2,13 +2,11 @@ package usecase
 
 import (
 	"context"
-	"errors"
 	"strings"
-
-	"golang.org/x/sync/singleflight"
 
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/profile"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/user"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/platform/coalesce"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
 )
 
@@ -17,6 +15,7 @@ import (
 type AnalyzeGitHubProfileOutput struct {
 	Analysis  profile.Analysis
 	RateLimit port.RateLimit
+	CacheHit  bool
 }
 
 // AnalyzeGitHubProfile returns cached or freshly derived public profile
@@ -36,7 +35,7 @@ type analyzeGitHubProfile struct {
 	cache           port.ProfileAnalysisCache
 	repositoryLimit int
 	manifestLimit   int
-	requests        singleflight.Group
+	requests        coalesce.Group[string, AnalyzeGitHubProfileOutput]
 }
 
 // NewAnalyzeGitHubProfile composes a bounded reader and ownership-isolating
@@ -60,36 +59,29 @@ func (u *analyzeGitHubProfile) Execute(
 	username user.Username,
 ) (AnalyzeGitHubProfileOutput, error) {
 	if cached, found, err := u.cache.Get(ctx, username); err == nil && found {
-		return outputFromCache(cached), nil
+		return outputFromCache(cached, true), nil
 	} else if err != nil && ctx.Err() != nil {
 		return AnalyzeGitHubProfileOutput{}, mapGitHubUserError(err)
 	}
 
 	key := strings.ToLower(username.String())
-	resultChannel := u.requests.DoChan(key, func() (any, error) {
-		if cached, found, err := u.cache.Get(ctx, username); err == nil && found {
-			return outputFromCache(cached), nil
-		} else if err != nil && ctx.Err() != nil {
+	output, err := u.requests.Do(ctx, key, func(
+		sharedContext context.Context,
+	) (AnalyzeGitHubProfileOutput, error) {
+		if cached, found, err := u.cache.Get(
+			sharedContext,
+			username,
+		); err == nil && found {
+			return outputFromCache(cached, true), nil
+		} else if err != nil && sharedContext.Err() != nil {
 			return AnalyzeGitHubProfileOutput{}, mapGitHubUserError(err)
 		}
-		return u.analyze(ctx, username)
+		return u.analyze(sharedContext, username)
 	})
-
-	select {
-	case <-ctx.Done():
-		return AnalyzeGitHubProfileOutput{}, mapGitHubUserError(ctx.Err())
-	case result := <-resultChannel:
-		if result.Err != nil {
-			return AnalyzeGitHubProfileOutput{}, result.Err
-		}
-		output, ok := result.Val.(AnalyzeGitHubProfileOutput)
-		if !ok {
-			return AnalyzeGitHubProfileOutput{}, errors.New(
-				"invalid profile analysis result",
-			)
-		}
-		return output, nil
+	if err != nil {
+		return AnalyzeGitHubProfileOutput{}, mapGitHubUserError(err)
 	}
+	return output, nil
 }
 
 func (u *analyzeGitHubProfile) analyze(
@@ -111,7 +103,7 @@ func (u *analyzeGitHubProfile) analyze(
 	}
 	_ = u.cache.Set(ctx, username, entry)
 
-	return outputFromCache(entry), nil
+	return outputFromCache(entry, false), nil
 }
 
 func mergeRateLimits(left, right port.RateLimit) port.RateLimit {
@@ -129,10 +121,12 @@ func mergeRateLimits(left, right port.RateLimit) port.RateLimit {
 
 func outputFromCache(
 	entry port.ProfileAnalysisCacheEntry,
+	cacheHit bool,
 ) AnalyzeGitHubProfileOutput {
 	return AnalyzeGitHubProfileOutput{
 		Analysis:  entry.Analysis,
 		RateLimit: entry.RateLimit,
+		CacheHit:  cacheHit,
 	}
 }
 

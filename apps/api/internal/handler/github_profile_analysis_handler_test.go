@@ -132,6 +132,7 @@ func TestGitHubProfileAnalysisHandlerGet(t *testing.T) {
 				}},
 			},
 			RateLimit: port.RateLimit{Known: true, Remaining: 37},
+			CacheHit:  true,
 		},
 	}
 	recorder := httptest.NewRecorder()
@@ -176,6 +177,13 @@ func TestGitHubProfileAnalysisHandlerGet(t *testing.T) {
 	}
 	if analyze.username != "octocat" {
 		t.Fatalf("usecase username = %q", analyze.username)
+	}
+	if recorder.Header().Get(issueSearchCacheHeader) != issueSearchCacheHit {
+		t.Fatalf(
+			"%s = %q",
+			issueSearchCacheHeader,
+			recorder.Header().Get(issueSearchCacheHeader),
+		)
 	}
 }
 

@@ -64,8 +64,8 @@ Every documented response includes `X-Request-ID`; it matches
 `meta.requestId`. A valid inbound value of 1–64 ASCII letters, numbers, `_`,
 `-`, or `.` is echoed. Invalid or absent values are replaced.
 
-Search and detail success responses also expose `X-IssueScout-Cache` as `HIT`
-or `MISS`.
+Profile analysis, search, and detail success responses also expose
+`X-IssueScout-Cache` as `HIT` or `MISS`.
 
 ## Endpoints
 

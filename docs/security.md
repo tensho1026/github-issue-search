@@ -92,6 +92,10 @@ protected environments are never entered from pull request events.
   fixtures, frontend assets, migration output, or release artifacts.
 - Release archives reject `.env`, source-map, and private-key files plus
   credential-shaped GitHub, PostgreSQL/Neon, and AWS content.
+- HTTPYAC keeps only inert examples in its tracked environment. Real session,
+  CSRF, OAuth, and account values belong in the ignored
+  `http/http-client.private.env.json`; CI rejects literal Cookie values,
+  credential shapes, and credentials on anonymous request definitions.
 
 The complete authentication threat model and lifecycle are in
 [Optional GitHub authentication](authentication.md).

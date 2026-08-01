@@ -1,0 +1,17 @@
+### Open the accessible self-contained Swagger UI
+# @name getSwaggerUI
+GET {{apiBaseUrl}}/docs/
+Accept: text/html
+X-Request-ID: httpyac-swagger-ui
+
+### Download the byte-identical OpenAPI source
+# @name getOpenAPI
+GET {{apiBaseUrl}}/openapi.yaml
+Accept: application/yaml
+X-Request-ID: httpyac-openapi
+
+### [negative] Reject an unknown documentation asset
+# @name rejectUnknownDocumentationAsset
+GET {{apiBaseUrl}}/docs/not-an-asset.js
+Accept: application/javascript
+X-Request-ID: httpyac-docs-unknown-asset

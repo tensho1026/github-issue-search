@@ -33,9 +33,9 @@ Change detection avoids unrelated expensive work, but `CI required` always runs.
 | Repository quality | Formatting, architecture, migration and Docker-free policies, Actions/Shell/Markdown lint, commit/PR metadata |
 | Frontend           | Type-aware ESLint, strict TypeScript, Vitest coverage, production build, gzip bundle budget                   |
 | Backend            | GoDoc AST policy, golangci-lint, race/Example tests, coverage, fuzzing, performance budgets, production build |
-| API contracts      | Redocly, strict status/envelope/header policy, negative fixtures, generated types, bidirectional route drift  |
+| API contracts      | Redocly, status/envelope/header policy, fixtures, generated types, route drift, complete executable HTTPYAC   |
 | Release artifacts  | Two independent builds, byte comparison, secret-surface scan, checksums, manifests, native lifecycle smoke    |
-| Documentation      | markdownlint plus links and complete command/configuration/API coverage                                       |
+| Documentation      | markdownlint, links, Mermaid parsing, and complete command/configuration/API coverage                         |
 | End-to-end         | Native process lifecycle/smoke plus production Vite and compiled Go API in Chromium                           |
 
 The workflow does not use pull request secrets. Failure evidence is retained for seven days; the validated OpenAPI contract is retained for 14 days. E2E evidence includes the HTML report, trace, screenshot, and video when Playwright produces them.
@@ -64,6 +64,7 @@ pnpm run docs:go:check
 pnpm run coverage:web
 pnpm run bundle:check
 pnpm run contracts:check
+pnpm run http:check
 pnpm run migrations:check
 pnpm run lint:docs
 pnpm run lint:workflows
@@ -95,6 +96,12 @@ workspace, while the 75 KiB per-asset ceiling keeps shared and anonymous route
 chunks tightly bounded. Raise coverage expectations as features gain tests.
 Any budget change requires measured justification in the pull request and must
 not conceal a regression.
+
+The API-contract job also executes all tracked HTTPYAC requests against an
+ephemeral loopback server. It checks complete operation coverage, negative
+boundaries, anonymous credential isolation, inert environments, and real
+HTTPYAC syntax without contacting GitHub, OAuth, PostgreSQL, or a developer
+process.
 
 ## Pull request policy
 

@@ -1,0 +1,23 @@
+### Get one normalized public GitHub profile
+# @name getGitHubUser
+GET {{apiBaseUrl}}/api/github/users/{{username}}
+Accept: application/json
+X-Request-ID: httpyac-profile-user
+
+### Analyze bounded public technology and OSS evidence
+# @name analyzeGitHubProfile
+GET {{apiBaseUrl}}/api/github/users/{{username}}/profile-analysis
+Accept: application/json
+X-Request-ID: httpyac-profile-analysis
+
+### Repeat profile analysis to observe X-IssueScout-Cache
+# @name analyzeGitHubProfileCached
+GET {{apiBaseUrl}}/api/github/users/{{username}}/profile-analysis
+Accept: application/json
+X-Request-ID: httpyac-profile-analysis-cache-repeat
+
+### [negative] Reject an invalid GitHub login before upstream I/O
+# @name rejectInvalidGitHubUser
+GET {{apiBaseUrl}}/api/github/users/invalid--login
+Accept: application/json
+X-Request-ID: httpyac-profile-invalid-login

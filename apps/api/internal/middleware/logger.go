@@ -10,8 +10,9 @@ import (
 )
 
 // RequestLogger emits one structured completion event per request with
-// request ID, method, route template, status, duration, and safe error code.
-// It never records query strings, bodies, cookies, authorization, or CSRF data.
+// request ID, method, route template, status, duration, response size, cache
+// state, and safe error code. It never records addresses, user agents, query
+// strings, bodies, cookies, authorization, or CSRF data.
 func RequestLogger(logger *slog.Logger) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		startedAt := time.Now()
@@ -21,14 +22,18 @@ func RequestLogger(logger *slog.Logger) gin.HandlerFunc {
 		if path == "" {
 			path = ctx.Request.URL.Path
 		}
+		responseBytes := max(ctx.Writer.Size(), 0)
 		attributes := []any{
 			"requestId", requestcontext.RequestID(ctx.Request.Context()),
 			"method", ctx.Request.Method,
 			"path", path,
 			"status", ctx.Writer.Status(),
 			"latencyMs", time.Since(startedAt).Milliseconds(),
-			"userAgent", ctx.Request.UserAgent(),
-			"clientIP", ctx.ClientIP(),
+			"responseBytes", responseBytes,
+		}
+		cacheStatus := ctx.Writer.Header().Get("X-IssueScout-Cache")
+		if cacheStatus == "HIT" || cacheStatus == "MISS" {
+			attributes = append(attributes, "cacheStatus", cacheStatus)
 		}
 		if errorCode := response.ErrorCode(ctx); errorCode != "" {
 			attributes = append(attributes, "errorCode", errorCode)

@@ -252,11 +252,14 @@ AES-256-GCM flow sealing, randomness, and parameterized PostgreSQL operations.
 ## Quality principles
 
 - Strict TypeScript and idiomatic, formatted Go are mandatory.
-- Each feature includes focused tests; systemic contract and E2E coverage is
-  completed by issue #11.
+- Each feature includes focused tests plus systemic contract, HTTPYAC, and E2E
+  coverage.
 - Root commands are the local source of truth for CI.
 - Refactoring follows passing characterization tests and preserves layer
   boundaries.
 - Each pull request receives an explicit self-review for architecture,
   correctness, performance, security, test quality, accessibility, and
   operational impact before it is marked ready.
+
+The final bound, latency, privacy, frontend, security, and delivery audit is in
+[Production readiness](production-readiness.md).

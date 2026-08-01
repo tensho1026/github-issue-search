@@ -30,6 +30,7 @@ const operationsRequiringExamples = new Set([
   "searchGitHubRepositories",
 ]);
 const cacheAwareOperations = new Set([
+  "analyzeGitHubProfile",
   "getIssueRecommendation",
   "searchGitHubIssues",
   "searchGitHubRepositories",

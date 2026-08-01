@@ -20,10 +20,11 @@ API calls GitHub, and bounded public snapshots may be cached only in process
 memory. Anonymous handlers do not access or write a database. A GitHub token
 used for upstream capacity remains server-side.
 
-Optional GitHub OAuth, saved searches, favorites, notes, and account deletion
-are separate authenticated capabilities. Their future Neon adapter must remain
-behind authentication and persistence ports so account behavior cannot become
-a hidden dependency of public analysis.
+Optional GitHub OAuth, bookmarks, saved searches, preferences, export, and
+account deletion are separate authenticated capabilities. Their
+Neon-compatible PostgreSQL adapter remains behind authentication and
+persistence ports so account behavior cannot become a hidden dependency of
+public analysis.
 
 IssueScout deliberately does not:
 
@@ -99,7 +100,7 @@ not silently converted to zero.
 | Candidate cache            | Five-minute canonical search window cache, independent of pagination and effort            |
 | Detail cache               | Five-minute canonical issue/repository snapshot cache                                      |
 | Anonymous core             | Public profile, search, and recommendation behavior that never requires OAuth or DB access |
-| Authenticated workspace    | Future opt-in account behavior for saved data, isolated from the anonymous core            |
+| Authenticated workspace    | Opt-in account behavior for saved data, isolated from the anonymous core                   |
 
 ## Success and safety measures
 

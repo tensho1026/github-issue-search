@@ -2,10 +2,7 @@ package handler
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"mime"
 	"net/http"
 	"strconv"
 	"time"
@@ -599,49 +596,20 @@ type accountDeleteResponse struct {
 }
 
 func decodeAccountBody[T any](ctx *gin.Context) (T, error) {
-	var result T
-	contentType, _, err := mime.ParseMediaType(ctx.GetHeader("Content-Type"))
-	if err != nil || contentType != "application/json" {
-		return result, fmt.Errorf("Content-Type must be application/json")
-	}
-	body := http.MaxBytesReader(
-		ctx.Writer,
-		ctx.Request.Body,
-		maximumAccountRequestBytes,
-	)
-	defer body.Close()
-	decoder := json.NewDecoder(body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&result); err != nil {
-		return result, fmt.Errorf("decode account request: %w", err)
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return result, fmt.Errorf("account request must contain one JSON object")
-	}
-	return result, nil
+	return decodeStrictJSONBody[T](ctx, strictJSONOptions{
+		description:  "account request",
+		maximumBytes: maximumAccountRequestBytes,
+	})
 }
 
 func parseAccountPage(ctx *gin.Context) (account.Page, error) {
-	query := ctx.Request.URL.Query()
-	for key := range query {
-		if key != "page" && key != "perPage" {
-			return account.Page{}, fmt.Errorf(
-				"unsupported query parameter %q",
-				key,
-			)
-		}
-	}
-	page, err := parseSingleQueryInteger(query["page"], 1)
-	if err != nil {
-		return account.Page{}, fmt.Errorf("page: %w", err)
-	}
-	perPage, err := parseSingleQueryInteger(
-		query["perPage"],
+	page, perPage, err := parsePaginationQuery(
+		ctx,
+		1,
 		account.DefaultPageSize,
 	)
 	if err != nil {
-		return account.Page{}, fmt.Errorf("perPage: %w", err)
+		return account.Page{}, err
 	}
 	return account.NewPage(page, perPage)
 }

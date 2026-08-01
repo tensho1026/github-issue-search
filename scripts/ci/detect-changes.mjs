@@ -35,10 +35,12 @@ const outputs = {
   contracts: matches([
     /^packages\/contracts\//,
     /^apps\/(?:api|web)\//,
+    /^http\//,
     ...shared,
   ]),
   docs: matches([
     /^docs\//,
+    /^http\//,
     /^README\.md$/,
     /^CONTRIBUTING\.md$/,
     /^\.github\/(?:ISSUE_TEMPLATE|PULL_REQUEST_TEMPLATE|CODEOWNERS)/,

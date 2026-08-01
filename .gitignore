@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 !.env.*.example
+http/http-client.private.env.json
 
 # JavaScript
 node_modules/

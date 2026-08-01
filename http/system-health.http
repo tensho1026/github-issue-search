@@ -1,5 +1,3 @@
-@apiBaseUrl = http://127.0.0.1:8080
-
 ### Check process health without GitHub or database I/O
 # @name getProcessHealth
 GET {{apiBaseUrl}}/api/health
@@ -9,3 +7,9 @@ X-Request-ID: httpyac-process-health
 # @name getDatabaseHealth
 GET {{apiBaseUrl}}/api/health/database
 X-Request-ID: httpyac-database-health
+
+### [negative] Reject an untrusted browser origin
+# @name rejectUntrustedHealthOrigin
+GET {{apiBaseUrl}}/api/health
+Origin: https://untrusted.example
+X-Request-ID: httpyac-health-reject-origin

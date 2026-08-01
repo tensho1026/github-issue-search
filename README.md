@@ -72,7 +72,12 @@ The [GoDoc guide](docs/godoc.md) explains internal package contracts, runnable
 examples, local browsing, and the exported-documentation CI policy.
 The [interactive API reference guide](docs/api-reference.md) explains Swagger
 try-outs, machine-contract downloads, generated examples, and the CDN-free
-security boundary.
+security boundary. The [HTTPYAC guide](docs/httpyac.md) maps executable
+requests for every API capability and explains secret-safe local overrides.
+The [MVP compliance matrix](docs/mvp-compliance.md) traces every original
+completion condition, while [production readiness](docs/production-readiness.md),
+the [operations runbook](docs/operations.md), and the
+[handover walkthrough](docs/handover.md) cover release ownership.
 
 ## Prerequisites
 
@@ -187,6 +192,8 @@ OAuth; they never force a login or store credentials in browser storage.
 | `pnpm run docs:go`          | Browse all internal Go package documentation          |
 | `pnpm run docs:go:check`    | Enforce canonical GoDoc coverage                      |
 | `pnpm run contracts:sync`   | Refresh fixture examples and embedded OpenAPI         |
+| `pnpm run http:check`       | Parse and execute every HTTPYAC request safely        |
+| `pnpm run http:run -- ...`  | Run selected HTTPYAC requests against an environment  |
 
 Database commands load `apps/api/.env` without printing it. Leave
 `DATABASE_URL` empty for anonymous-only development. See
@@ -247,8 +254,13 @@ See the issue recommendation guide for the staged analysis and caching model.
 
 ## Current status
 
-The repository is being delivered through the scoped GitHub issues in the
-[MVP implementation backlog](https://github.com/tensho1026/github-issue-search/issues).
-Features, recommendation logic, and production UI continue to land through
-their own issue-linked branches. CI, security, and Docker-free release
-automation are maintained as executable repository policy.
+The original anonymous MVP completion conditions are implemented and traced in
+the [compliance matrix](docs/mvp-compliance.md). Optional OAuth, Neon-compatible
+PostgreSQL account persistence, bookmarks, saved searches, preferences, export,
+and deletion are isolated extensions. AI analysis, notifications, automatic
+GitHub mutation, distributed caches, and a concrete hosting-provider adapter
+remain explicit [known limitations](docs/limitations.md).
+
+Every change continues through an English scoped issue, issue branch, small
+Conventional Commits, a closing PR, self-review, and the stable `CI required`
+and `Security required` gates.

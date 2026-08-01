@@ -1,10 +1,7 @@
 package handler
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"mime"
 	"net/http"
 	"slices"
 	"strconv"
@@ -83,11 +80,7 @@ func (handler IssueSearchHandler) Search(ctx *gin.Context) {
 		return
 	}
 
-	cacheStatus := issueSearchCacheMiss
-	if output.CacheHit {
-		cacheStatus = issueSearchCacheHit
-	}
-	ctx.Header(issueSearchCacheHeader, cacheStatus)
+	writeCacheStatus(ctx, output.CacheHit)
 
 	var remaining *int
 	if output.RateLimit.Known {
@@ -99,6 +92,14 @@ func (handler IssueSearchHandler) Search(ctx *gin.Context) {
 		newIssueSearchResponse(output),
 		response.MetaOptions{RateLimitRemaining: remaining},
 	)
+}
+
+func writeCacheStatus(ctx *gin.Context, cacheHit bool) {
+	cacheStatus := issueSearchCacheMiss
+	if cacheHit {
+		cacheStatus = issueSearchCacheHit
+	}
+	ctx.Header(issueSearchCacheHeader, cacheStatus)
 }
 
 func (handler IssueSearchHandler) invalidRequest(
@@ -128,63 +129,23 @@ type issueSearchRequest struct {
 }
 
 func decodeIssueSearchRequest(ctx *gin.Context) (issueSearchRequest, error) {
-	contentType, _, err := mime.ParseMediaType(ctx.GetHeader("Content-Type"))
-	if err != nil || contentType != "application/json" {
-		return issueSearchRequest{}, fmt.Errorf(
-			"Content-Type must be application/json",
-		)
-	}
-
-	body := http.MaxBytesReader(
-		ctx.Writer,
-		ctx.Request.Body,
-		maxIssueSearchRequestBytes,
+	return decodeStrictJSONBody[issueSearchRequest](
+		ctx,
+		strictJSONOptions{
+			description:  "issue search request",
+			maximumBytes: maxIssueSearchRequestBytes,
+		},
 	)
-	defer body.Close()
-	decoder := json.NewDecoder(body)
-	decoder.DisallowUnknownFields()
-
-	var request issueSearchRequest
-	if err := decoder.Decode(&request); err != nil {
-		return issueSearchRequest{}, fmt.Errorf(
-			"decode issue search request: %w",
-			err,
-		)
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		if err == nil {
-			return issueSearchRequest{}, fmt.Errorf(
-				"issue search request must contain exactly one JSON object",
-			)
-		}
-		return issueSearchRequest{}, fmt.Errorf(
-			"decode trailing issue search request data: %w",
-			err,
-		)
-	}
-	return request, nil
 }
 
 func parseIssueSearchPagination(ctx *gin.Context) (issue.Pagination, error) {
-	query := ctx.Request.URL.Query()
-	for key := range query {
-		if key != "page" && key != "perPage" {
-			return issue.Pagination{}, fmt.Errorf(
-				"unsupported query parameter %q",
-				key,
-			)
-		}
-	}
-	page, err := parseSingleQueryInteger(query["page"], issue.DefaultPage)
-	if err != nil {
-		return issue.Pagination{}, fmt.Errorf("page: %w", err)
-	}
-	perPage, err := parseSingleQueryInteger(
-		query["perPage"],
+	page, perPage, err := parsePaginationQuery(
+		ctx,
+		issue.DefaultPage,
 		issue.DefaultPerPage,
 	)
 	if err != nil {
-		return issue.Pagination{}, fmt.Errorf("perPage: %w", err)
+		return issue.Pagination{}, err
 	}
 	return issue.NewPagination(page, perPage)
 }

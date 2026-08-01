@@ -5,7 +5,7 @@ IssueScout uses small, issue-linked pull requests and automated quality gates. D
 ## Before implementation
 
 1. Open or select an English issue containing `Summary`, `Scope`, engineering requirements, acceptance criteria, and a test plan.
-2. Branch from the latest `main` using `agent/issue-<number>-<short-name>` for Codex work or `feature/issue-<number>-<short-name>` for human work.
+2. Branch from the latest `main` using `codex/issue-<number>-<short-name>` for Codex work or `feature/issue-<number>-<short-name>` for human work.
 3. Confirm that the intended change belongs to one issue. Split unrelated behavior before coding.
 
 ## Development

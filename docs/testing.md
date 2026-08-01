@@ -26,7 +26,7 @@ flowchart LR
 | Go application | fakes and in-memory caches               | fan-out, singleflight, fallback, error mapping         |
 | GoDoc          | AST policy and executable examples       | package, declaration, interface, and contract coverage |
 | HTTP           | Gin recorder and typed fixtures          | status, envelope, headers, validation, middleware      |
-| Contract       | Redocly, Ajv, generated types            | OpenAPI semantics, examples, route and type drift      |
+| Contract       | Redocly, Ajv, generated types, HTTPYAC   | OpenAPI semantics, examples, executable route coverage |
 | React          | Vitest and Testing Library               | forms, hooks, routing, a11y states, safe presentation  |
 | Built stack    | Playwright and deterministic API adapter | journeys, errors, and self-contained Swagger UI        |
 | Native process | Node test runner and real child groups   | startup interruption, readiness, signal cleanup        |
@@ -62,6 +62,7 @@ pnpm run docs:go:check
 pnpm run coverage:web
 pnpm run bundle:check
 pnpm run contracts:check
+pnpm run http:check
 ```
 
 `pnpm run quality:strict` combines the complete repository gate. To investigate
@@ -183,6 +184,14 @@ the same file.
 | Largest JavaScript asset                             |  75 KiB gzip |
 | All JavaScript and CSS                               | 205 KiB gzip |
 
+Production-oriented orchestration tests additionally prove a 50-candidate
+window, exactly 20 unique detail leaders, no more than five active detail
+operations, prompt cancellation, and fixed cache capacity under concurrent
+churn. The built deterministic API enforces the original 3-second normal-route
+and 10-second profile-analysis targets. These latency gates exclude internet
+variance; live conditions are defined in
+[Production readiness](production-readiness.md).
+
 ## Contract fixtures
 
 `packages/contracts/fixtures/manifest.json` maps each JSON document to one
@@ -196,6 +205,12 @@ Playwright uses the profile fixtures for its focused network-boundary test.
 generated from those validated fixtures. Playwright loads `/docs/` at desktop
 and mobile widths, verifies keyboard entry, fetches `/openapi.yaml`, and fails
 if Swagger performs a non-local runtime request.
+
+The [HTTPYAC collection](httpyac.md) covers all OpenAPI operations plus
+important validation, origin, CSRF, and authentication failures. Its checker
+rejects literal credentials, proves anonymous requests remain credential-free,
+and runs every request through the real pinned parser against an ephemeral
+loopback server. It performs no GitHub, OAuth, or database I/O.
 
 When an HTTP response changes:
 

@@ -50,6 +50,7 @@ func (h GitHubProfileAnalysisHandler) Get(ctx *gin.Context) {
 		return
 	}
 
+	writeCacheStatus(ctx, output.CacheHit)
 	var remaining *int
 	if output.RateLimit.Known {
 		remaining = &output.RateLimit.Remaining

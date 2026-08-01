@@ -109,6 +109,20 @@ fail. Update the OpenAPI contract first when a field is intentional.
 Gin and OpenAPI disagree on method or path parameter spelling. Update both in
 the same feature commit and add a handler/router test.
 
+### HTTPYAC coverage or execution fails
+
+Run `pnpm run http:check`. Every OpenAPI operation needs a named request using
+`{{apiBaseUrl}}`; core validation/auth boundaries also need `[negative]`
+requests. Keep real Cookie, CSRF, OAuth, and account values only in the ignored
+`http/http-client.private.env.json`. A parser failure occurs against an
+ephemeral local catch-all and does not require a running API.
+
+### Mermaid parsing fails
+
+Run `pnpm run docs:check` and inspect the reported file/diagram index. Mermaid
+punctuation has grammar meaning, especially semicolons in sequence messages.
+Fix the diagram source; do not disable executable parsing.
+
 ## Quality gates
 
 ### Go coverage or race check fails

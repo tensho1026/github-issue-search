@@ -645,6 +645,62 @@ test("serves the built API with the shared response envelope", async ({
   });
 });
 
+test("meets API latency targets with deterministic bounded dependencies", async ({
+  request,
+}) => {
+  const normalRequestBudgetMs = 3_000;
+  const profileAnalysisBudgetMs = 10_000;
+  const normalRequests = [
+    {
+      execute: () => request.get(`${apiBaseURL}/api/health`),
+      name: "process health",
+    },
+    {
+      execute: () => request.get(`${apiBaseURL}/api/github/users/octocat`),
+      name: "public profile",
+    },
+    {
+      execute: () =>
+        request.post(`${apiBaseURL}/api/repositories/search`, {
+          data: {},
+        }),
+      name: "repository discovery",
+    },
+    {
+      execute: () =>
+        request.post(`${apiBaseURL}/api/issues/search`, {
+          data: { username: "octocat" },
+        }),
+      name: "issue search",
+    },
+    {
+      execute: () =>
+        request.get(
+          `${apiBaseURL}/api/issues/octocat/typed-service/42?skills=TypeScript`,
+        ),
+      name: "issue detail",
+    },
+  ];
+
+  for (const normalRequest of normalRequests) {
+    await test.step(normalRequest.name, async () => {
+      const startedAt = performance.now();
+      const response = await normalRequest.execute();
+      const elapsedMs = performance.now() - startedAt;
+      expect(response.ok()).toBe(true);
+      expect(elapsedMs).toBeLessThan(normalRequestBudgetMs);
+    });
+  }
+
+  const profileStartedAt = performance.now();
+  const profileResponse = await request.get(
+    `${apiBaseURL}/api/github/users/octocat/profile-analysis`,
+  );
+  const profileElapsedMs = performance.now() - profileStartedAt;
+  expect(profileResponse.ok()).toBe(true);
+  expect(profileElapsedMs).toBeLessThan(profileAnalysisBudgetMs);
+});
+
 test("serves anonymous repository discovery without database state", async ({
   request,
 }) => {

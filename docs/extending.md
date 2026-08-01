@@ -19,7 +19,7 @@ behavior when IssueScout grows.
 
 ```mermaid
 flowchart LR
-    Contract["OpenAPI + DTO"] --> Handler
+    Contract["OpenAPI + DTO + HTTPYAC"] --> Handler
     Handler --> Usecase
     Usecase --> Domain
     Usecase --> Port
@@ -57,7 +57,8 @@ clock tests. Document the TTL and safe override.
 2. Complete GitHub OAuth on the API using state, PKCE where supported, secure
    HTTP-only cookies, CSRF defense, rotation, and bounded expiry.
 3. Put account identity and saved-data operations behind application ports.
-4. Implement Neon as one persistence adapter with least-privilege migrations.
+4. Extend the Neon-compatible PostgreSQL adapter with least-privilege
+   migrations.
 5. Fail authenticated writes closed when the database is unavailable; anonymous
    analysis must remain healthy.
 6. Never send a database credential, OAuth client secret, or server token to
@@ -85,4 +86,6 @@ Preserve provider-neutral promotion metadata and health verification.
 
 Update the executable source, example environment, configuration reference,
 commands, and troubleshooting in the same PR. `pnpm run docs:check` rejects
-missing variables, commands, paths, error codes, and broken local links.
+missing variables, commands, paths, error codes, invalid Mermaid, and broken
+local links. `pnpm run http:check` rejects uncovered OpenAPI operations,
+unsafe environments, invalid HTTPYAC, and missing negative boundaries.
