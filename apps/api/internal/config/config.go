@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -42,6 +43,12 @@ const (
 	defaultDatabaseMaxConnectionLifetime      = 30 * time.Minute
 	defaultDatabaseMaxConnectionIdleTime      = 5 * time.Minute
 	defaultDatabaseHealthCheckPeriod          = 30 * time.Second
+	defaultGitHubOAuthAuthorizeURL            = "https://github.com/login/oauth/authorize"
+	//nolint:gosec // This is GitHub's public token-exchange endpoint, not a credential.
+	defaultGitHubOAuthTokenURL = "https://github.com/login/oauth/access_token"
+	defaultAuthStateTTL        = 10 * time.Minute
+	defaultAuthSessionTTL      = 12 * time.Hour
+	defaultAuthMaxSessions     = 10
 )
 
 var errInvalidConfig = errors.New("invalid configuration")
@@ -109,6 +116,19 @@ type Config struct {
 	DatabaseMaxConnectionLifetime      time.Duration
 	DatabaseMaxConnectionIdleTime      time.Duration
 	DatabaseHealthCheckPeriod          time.Duration
+	AuthEnabled                        bool
+	GitHubOAuthClientID                string
+	GitHubOAuthClientSecret            Secret
+	GitHubOAuthAuthorizeURL            *url.URL
+	GitHubOAuthTokenURL                *url.URL
+	GitHubOAuthCallbackURL             *url.URL
+	AuthFrontendURL                    *url.URL
+	AuthFlowEncryptionKey              Secret
+	AuthStateTTL                       time.Duration
+	AuthSessionTTL                     time.Duration
+	AuthMaxSessions                    int
+	AuthCookieSecure                   bool
+	TrustedProxyCIDRs                  []string
 	UseGitHubAPIMock                   bool
 	ReadHeaderTimeout                  time.Duration
 	ReadTimeout                        time.Duration
@@ -368,6 +388,20 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	authConfiguration, err := parseAuthConfiguration(
+		appEnvironment,
+		allowedOrigins,
+		databaseURL != "",
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	trustedProxyCIDRs, err := parseTrustedProxyCIDRs(
+		os.Getenv("TRUSTED_PROXY_CIDRS"),
+	)
+	if err != nil {
+		return Config{}, err
+	}
 
 	useGitHubAPIMock, err := parseBool("USE_GITHUB_API_MOCK", false)
 	if err != nil {
@@ -410,6 +444,19 @@ func Load() (Config, error) {
 		DatabaseMaxConnectionLifetime:      databaseMaxConnectionLifetime,
 		DatabaseMaxConnectionIdleTime:      databaseMaxConnectionIdleTime,
 		DatabaseHealthCheckPeriod:          databaseHealthCheckPeriod,
+		AuthEnabled:                        authConfiguration.enabled,
+		GitHubOAuthClientID:                authConfiguration.clientID,
+		GitHubOAuthClientSecret:            authConfiguration.clientSecret,
+		GitHubOAuthAuthorizeURL:            authConfiguration.authorizeURL,
+		GitHubOAuthTokenURL:                authConfiguration.tokenURL,
+		GitHubOAuthCallbackURL:             authConfiguration.callbackURL,
+		AuthFrontendURL:                    authConfiguration.frontendURL,
+		AuthFlowEncryptionKey:              authConfiguration.flowEncryptionKey,
+		AuthStateTTL:                       authConfiguration.stateTTL,
+		AuthSessionTTL:                     authConfiguration.sessionTTL,
+		AuthMaxSessions:                    authConfiguration.maxSessions,
+		AuthCookieSecure:                   authConfiguration.cookieSecure,
+		TrustedProxyCIDRs:                  trustedProxyCIDRs,
 		UseGitHubAPIMock:                   useGitHubAPIMock,
 		ReadHeaderTimeout:                  5 * time.Second,
 		ReadTimeout:                        20 * time.Second,
@@ -422,6 +469,194 @@ func Load() (Config, error) {
 		IssueDetailRequestTimeout:          15 * time.Second,
 		RepositoryDiscoveryRequestTimeout:  15 * time.Second,
 	}, nil
+}
+
+type authConfiguration struct {
+	enabled           bool
+	clientID          string
+	clientSecret      Secret
+	authorizeURL      *url.URL
+	tokenURL          *url.URL
+	callbackURL       *url.URL
+	frontendURL       *url.URL
+	flowEncryptionKey Secret
+	stateTTL          time.Duration
+	sessionTTL        time.Duration
+	maxSessions       int
+	cookieSecure      bool
+}
+
+func parseAuthConfiguration(
+	appEnvironment string,
+	allowedOrigins []string,
+	databaseConfigured bool,
+) (authConfiguration, error) {
+	stateTTL, err := parseDuration(
+		"AUTH_STATE_TTL",
+		defaultAuthStateTTL,
+		15*time.Minute,
+	)
+	if err != nil {
+		return authConfiguration{}, err
+	}
+	sessionTTL, err := parseDuration(
+		"AUTH_SESSION_TTL",
+		defaultAuthSessionTTL,
+		7*24*time.Hour,
+	)
+	if err != nil {
+		return authConfiguration{}, err
+	}
+	maxSessions, err := parseInt(
+		"AUTH_MAX_SESSIONS",
+		defaultAuthMaxSessions,
+		1,
+		50,
+	)
+	if err != nil {
+		return authConfiguration{}, err
+	}
+	secureDefault := appEnvironment != "development" && appEnvironment != "test"
+	cookieSecure, err := parseBool("AUTH_COOKIE_SECURE", secureDefault)
+	if err != nil {
+		return authConfiguration{}, err
+	}
+	if !cookieSecure &&
+		appEnvironment != "development" &&
+		appEnvironment != "test" {
+		return authConfiguration{}, configError(
+			"AUTH_COOKIE_SECURE",
+			"must be true outside development and test",
+		)
+	}
+
+	rawValues := map[string]string{
+		"GITHUB_OAUTH_CLIENT_ID":     os.Getenv("GITHUB_OAUTH_CLIENT_ID"),
+		"GITHUB_OAUTH_CLIENT_SECRET": os.Getenv("GITHUB_OAUTH_CLIENT_SECRET"),
+		"GITHUB_OAUTH_CALLBACK_URL":  os.Getenv("GITHUB_OAUTH_CALLBACK_URL"),
+		"AUTH_FRONTEND_URL":          os.Getenv("AUTH_FRONTEND_URL"),
+		"AUTH_FLOW_ENCRYPTION_KEY":   os.Getenv("AUTH_FLOW_ENCRYPTION_KEY"),
+	}
+	configuredValues := 0
+	for _, value := range rawValues {
+		if value != "" {
+			configuredValues++
+		}
+	}
+	base := authConfiguration{
+		stateTTL:     stateTTL,
+		sessionTTL:   sessionTTL,
+		maxSessions:  maxSessions,
+		cookieSecure: cookieSecure,
+	}
+	if configuredValues == 0 {
+		return base, nil
+	}
+	if configuredValues != len(rawValues) {
+		return authConfiguration{}, configError(
+			"GITHUB_OAUTH_CLIENT_ID",
+			"and all OAuth/authentication secrets and URLs must be supplied together",
+		)
+	}
+	if !databaseConfigured {
+		return authConfiguration{}, configError(
+			"DATABASE_URL",
+			"is required when GitHub OAuth is enabled",
+		)
+	}
+	if clientID := rawValues["GITHUB_OAUTH_CLIENT_ID"]; len(clientID) > 255 ||
+		strings.TrimSpace(clientID) != clientID ||
+		strings.ContainsAny(clientID, " \t\r\n") {
+		return authConfiguration{}, configError(
+			"GITHUB_OAUTH_CLIENT_ID",
+			"must be a non-empty GitHub client identifier",
+		)
+	}
+	if len(rawValues["GITHUB_OAUTH_CLIENT_SECRET"]) < 20 {
+		return authConfiguration{}, configError(
+			"GITHUB_OAUTH_CLIENT_SECRET",
+			"must contain at least 20 characters",
+		)
+	}
+	encryptionKey := rawValues["AUTH_FLOW_ENCRYPTION_KEY"]
+	decodedKey, decodeErr := hex.DecodeString(encryptionKey)
+	if decodeErr != nil || len(decodedKey) != 32 ||
+		encryptionKey != strings.ToLower(encryptionKey) {
+		return authConfiguration{}, configError(
+			"AUTH_FLOW_ENCRYPTION_KEY",
+			"must be exactly 64 lower-case hexadecimal characters",
+		)
+	}
+	callbackURL, err := parseSecureURL(
+		"GITHUB_OAUTH_CALLBACK_URL",
+		rawValues["GITHUB_OAUTH_CALLBACK_URL"],
+	)
+	if err != nil {
+		return authConfiguration{}, err
+	}
+	if callbackURL.Path != "/api/auth/github/callback" ||
+		callbackURL.RawQuery != "" {
+		return authConfiguration{}, configError(
+			"GITHUB_OAUTH_CALLBACK_URL",
+			"must use the exact /api/auth/github/callback path without a query",
+		)
+	}
+	frontendOrigins, err := parseOrigins(rawValues["AUTH_FRONTEND_URL"])
+	if err != nil || len(frontendOrigins) != 1 {
+		return authConfiguration{}, configError(
+			"AUTH_FRONTEND_URL",
+			"must be exactly one allowed HTTP(S) origin",
+		)
+	}
+	if !containsString(allowedOrigins, frontendOrigins[0]) {
+		return authConfiguration{}, configError(
+			"AUTH_FRONTEND_URL",
+			"must also be present in ALLOWED_ORIGINS",
+		)
+	}
+	frontendURL, parseErr := url.Parse(frontendOrigins[0])
+	if parseErr != nil {
+		return authConfiguration{}, configError(
+			"AUTH_FRONTEND_URL",
+			"must be a valid origin",
+		)
+	}
+	if !cookieSecure &&
+		(!isLoopbackHTTP(callbackURL) || !isLoopbackHTTP(frontendURL)) {
+		return authConfiguration{}, configError(
+			"AUTH_COOKIE_SECURE",
+			"can be false only when OAuth URLs use loopback HTTP",
+		)
+	}
+	authorizeURL, err := parseSecureURL(
+		"GITHUB_OAUTH_AUTHORIZE_URL",
+		valueOrDefault(
+			"GITHUB_OAUTH_AUTHORIZE_URL",
+			defaultGitHubOAuthAuthorizeURL,
+		),
+	)
+	if err != nil {
+		return authConfiguration{}, err
+	}
+	tokenURL, err := parseSecureURL(
+		"GITHUB_OAUTH_TOKEN_URL",
+		valueOrDefault("GITHUB_OAUTH_TOKEN_URL", defaultGitHubOAuthTokenURL),
+	)
+	if err != nil {
+		return authConfiguration{}, err
+	}
+
+	base.enabled = true
+	base.clientID = rawValues["GITHUB_OAUTH_CLIENT_ID"]
+	base.clientSecret = Secret{
+		value: rawValues["GITHUB_OAUTH_CLIENT_SECRET"],
+	}
+	base.authorizeURL = authorizeURL
+	base.tokenURL = tokenURL
+	base.callbackURL = callbackURL
+	base.frontendURL = frontendURL
+	base.flowEncryptionKey = Secret{value: encryptionKey}
+	return base, nil
 }
 
 func parseAppEnvironment(raw string) (string, error) {
@@ -498,6 +733,21 @@ func parseBaseURL(raw string) (*url.URL, error) {
 	return parsed, nil
 }
 
+func parseSecureURL(key, raw string) (*url.URL, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" ||
+		parsed.User != nil || parsed.Fragment != "" {
+		return nil, configError(key, "must be an absolute HTTP(S) URL")
+	}
+	if parsed.Scheme != "https" && !isLoopbackHTTP(parsed) {
+		return nil, configError(
+			key,
+			"must use HTTPS unless the host is loopback",
+		)
+	}
+	return parsed, nil
+}
+
 func parseDatabaseURL(raw string) (string, error) {
 	if raw == "" {
 		return "", nil
@@ -534,12 +784,46 @@ func parseDatabaseURL(raw string) (string, error) {
 	return raw, nil
 }
 
+func parseTrustedProxyCIDRs(raw string) ([]string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	parts := strings.Split(raw, ",")
+	cidrs := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		cidr := strings.TrimSpace(part)
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil || network.String() != cidr {
+			return nil, configError(
+				"TRUSTED_PROXY_CIDRS",
+				"must contain canonical comma-separated CIDR ranges",
+			)
+		}
+		if _, exists := seen[cidr]; exists {
+			continue
+		}
+		seen[cidr] = struct{}{}
+		cidrs = append(cidrs, cidr)
+	}
+	return cidrs, nil
+}
+
 func isLoopbackHTTP(parsed *url.URL) bool {
 	if parsed.Scheme != "http" {
 		return false
 	}
 	host := parsed.Hostname()
 	return host == "localhost" || net.ParseIP(host).IsLoopback()
+}
+
+func containsString(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func parseDuration(
