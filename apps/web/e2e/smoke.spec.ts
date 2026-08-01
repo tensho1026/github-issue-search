@@ -470,11 +470,15 @@ test("hydrates the code-split account workspace without browser token storage", 
     }),
   ).toBeVisible();
   await expect(page.getByText("octocat/typed-service#42")).toBeVisible();
-  const browserStorage = (await page.evaluate(`({
-      local: Object.keys(localStorage),
-      session: Object.keys(sessionStorage),
-      url: window.location.href,
-    })`)) as { local: string[]; session: string[]; url: string };
+  const browserStorage = await page.evaluate<{
+    local: string[];
+    session: string[];
+    url: string;
+  }>(`({
+    local: Object.keys(localStorage),
+    session: Object.keys(sessionStorage),
+    url: window.location.href,
+  })`);
   expect(browserStorage.local).toEqual([]);
   expect(browserStorage.session).toEqual([]);
   expect(browserStorage.url).not.toContain("csrf-browser-memory-only");
