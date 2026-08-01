@@ -1,10 +1,12 @@
 openapi: 3.1.0
 info:
   title: IssueScout API
-  version: 0.6.0
+  version: 0.7.0
   description: |
-    Stateless API for analyzing a public GitHub profile and finding suitable
-    open-source repositories and issues. GitHub credentials remain server-side.
+    API for analyzing a public GitHub profile and finding suitable open-source
+    repositories and issues. Core discovery remains anonymous and stateless.
+    Optional GitHub sign-in adds server-side sessions for account-owned
+    features; GitHub and database credentials always remain server-side.
   license:
     name: MIT
     identifier: MIT
@@ -23,6 +25,11 @@ tags:
     description: Bounded, evidence-oriented discovery of public OSS repositories.
   - name: Issue recommendations
     description: Explainable scoring and bounded repository-maintainer analysis.
+  - name: Authentication
+    description: |
+      Optional GitHub OAuth with PKCE, single-use state, rotating server
+      sessions, and CSRF-protected mutations. Authentication is never an
+      anonymous-feature access wall.
 paths:
   /api/health:
     get:
@@ -427,6 +434,220 @@ paths:
           $ref: "#/components/responses/InternalServerError"
         "504":
           $ref: "#/components/responses/RequestTimeout"
+  /api/auth/session:
+    get:
+      operationId: getAuthSession
+      summary: Read optional browser-session state
+      description: |
+        Returns `configured=false` when GitHub OAuth is intentionally disabled
+        and `authenticated=false` when both opaque browser cookies are absent
+        or malformed. Those anonymous outcomes do not query PostgreSQL.
+        An authenticated response contains only the retained public GitHub
+        identity and a CSRF token for in-memory use by the frontend. The opaque
+        session token is never returned in JSON.
+      tags:
+        - Authentication
+      responses:
+        "200":
+          description: Current optional authentication state.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+            Set-Cookie:
+              $ref: "#/components/headers/AuthSetCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSessionEnvelope"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "503":
+          $ref: "#/components/responses/AuthUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/auth/github/start:
+    get:
+      operationId: startGitHubOAuth
+      summary: Start GitHub authorization with PKCE
+      description: |
+        Creates a random single-use state record containing only a SHA-256
+        digest. The raw state, PKCE verifier, exact return path, and expiry are
+        sealed with AES-256-GCM in a short-lived HttpOnly SameSite=Lax cookie.
+        The response redirects to the configured GitHub authorization endpoint
+        with explicit `read:user`, the exact registered callback URL, and an
+        S256 PKCE challenge.
+      tags:
+        - Authentication
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          description: |
+            Bounded root-relative frontend path. Absolute URLs, scheme-relative
+            paths, backslashes, and fragments are rejected. Defaults to `/`.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 2048
+            pattern: "^/(?!/)(?!.*\\\\).*$"
+          example: /workspace?tab=saved
+      responses:
+        "302":
+          description: Redirect to GitHub's configured authorization endpoint.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+            Location:
+              $ref: "#/components/headers/RedirectLocation"
+            Set-Cookie:
+              $ref: "#/components/headers/AuthSetCookie"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "503":
+          $ref: "#/components/responses/AuthUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/auth/github/callback:
+    get:
+      operationId: completeGitHubOAuth
+      summary: Complete or deny one GitHub authorization
+      description: |
+        GitHub redirects the top-level browser navigation here. The API opens
+        and expires the encrypted flow cookie, constant-time compares query
+        state, atomically consumes the matching database state, exchanges the
+        one-time code with its PKCE verifier, fetches only `GET /user`, and
+        immediately discards the GitHub access token. Success writes rotating
+        opaque session and CSRF cookies whose SHA-256 digests are persisted.
+        Provider denial also consumes state. Every browser redirect is built
+        from the fixed configured frontend origin and the previously validated
+        relative return path; provider error descriptions are never reflected.
+      tags:
+        - Authentication
+      parameters:
+        - name: code
+          in: query
+          required: false
+          description: GitHub one-time authorization code; required on success.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 4096
+        - name: state
+          in: query
+          required: true
+          description: Unpadded base64url encoding of the random 256-bit state.
+          schema:
+            $ref: "#/components/schemas/OpaqueCredential"
+        - name: error
+          in: query
+          required: false
+          description: |
+            GitHub denial code. `access_denied` produces a safe `auth=denied`
+            frontend marker; other values produce `auth=error`.
+          schema:
+            type: string
+            maxLength: 255
+      responses:
+        "302":
+          description: |
+            Redirect to the fixed frontend origin with `auth=success`,
+            `auth=denied`, or `auth=error`.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+            Location:
+              $ref: "#/components/headers/RedirectLocation"
+            Set-Cookie:
+              $ref: "#/components/headers/AuthSetCookie"
+        "400":
+          $ref: "#/components/responses/InvalidAuthCallback"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "502":
+          $ref: "#/components/responses/OAuthUpstreamUnavailable"
+        "503":
+          $ref: "#/components/responses/AuthUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/auth/session/refresh:
+    post:
+      operationId: refreshAuthSession
+      summary: Rotate the current browser session
+      description: |
+        Requires both valid HttpOnly cookies and a constant-time matching
+        `X-CSRF-Token` header. The server revokes the current hashed session
+        token and inserts new session and CSRF digests in one transaction.
+        Concurrent reuse of the old session fails closed.
+      tags:
+        - Authentication
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      responses:
+        "200":
+          description: Rotated session state and the new in-memory CSRF token.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+            Set-Cookie:
+              $ref: "#/components/headers/AuthSetCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSessionEnvelope"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/AuthMutationForbidden"
+        "503":
+          $ref: "#/components/responses/AuthUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/auth/logout:
+    post:
+      operationId: logoutAuthSession
+      summary: Revoke the current browser session
+      description: |
+        Requires the same cookie and CSRF checks as refresh. Server-side
+        revocation completes before both browser cookies are expired. No
+        GitHub token is retained or revoked because it was discarded at login.
+      tags:
+        - Authentication
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      responses:
+        "200":
+          description: The server session was revoked and cookies were expired.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+            Set-Cookie:
+              $ref: "#/components/headers/AuthSetCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthLogoutEnvelope"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/AuthMutationForbidden"
+        "503":
+          $ref: "#/components/responses/AuthUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
 components:
   headers:
     RequestID:
@@ -438,6 +659,38 @@ components:
         type: string
         minLength: 1
         maxLength: 64
+    RedirectLocation:
+      description: Validated absolute redirect destination.
+      required: true
+      schema:
+        type: string
+        format: uri
+    AuthSetCookie:
+      description: |
+        One or more HttpOnly Path=/ SameSite=Lax authentication cookies.
+        HTTPS deployments use Secure `__Host-issuescout_oauth_flow`,
+        `__Host-issuescout_session`, and `__Host-issuescout_csrf` names with no
+        Domain attribute. Loopback HTTP development uses the same names without
+        the `__Host-` prefix and is prohibited outside development/test.
+      required: false
+      schema:
+        type: string
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-issuescout_session
+      description: |
+        Opaque 256-bit rotating session credential. Only its SHA-256 digest is
+        persisted. Loopback development omits the `__Host-` prefix.
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: |
+        Opaque token read from `GET /api/auth/session` and retained only in
+        frontend memory. It must match both the HttpOnly CSRF cookie and the
+        server-side digest.
   parameters:
     GitHubUsername:
       name: username
@@ -547,6 +800,61 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
+    AuthUnavailable:
+      description: |
+        GitHub sign-in is not configured, PostgreSQL is unavailable, or a
+        bounded authentication persistence operation failed. Anonymous
+        discovery capabilities remain available.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    InvalidAuthCallback:
+      description: |
+        State or encrypted browser binding is missing, malformed, modified,
+        expired, mismatched, or already consumed; alternatively GitHub rejected
+        the one-time authorization result. Details are intentionally collapsed.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    OAuthUpstreamUnavailable:
+      description: GitHub token exchange or public identity lookup failed safely.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    AuthenticationRequired:
+      description: |
+        Session cookies are missing, malformed, expired, revoked, or otherwise
+        unusable.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    AuthMutationForbidden:
+      description: |
+        The browser Origin is not allowed or the CSRF cookie/header/server
+        digest comparison failed.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
     RequestTimeout:
       description: The bounded request deadline elapsed or the client cancelled.
       headers:
@@ -622,6 +930,90 @@ components:
             status:
               type: string
               const: ready
+        meta:
+          $ref: "#/components/schemas/Meta"
+    OpaqueCredential:
+      type: string
+      minLength: 43
+      maxLength: 43
+      pattern: "^[A-Za-z0-9_-]{43}$"
+      description: Unpadded base64url encoding of exactly 256 random bits.
+    AuthSessionEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/AuthSession"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    AuthSession:
+      type: object
+      additionalProperties: false
+      required:
+        - authenticated
+        - configured
+      properties:
+        configured:
+          type: boolean
+          description: Whether the server has a complete validated OAuth setup.
+        authenticated:
+          type: boolean
+          description: Whether both cookies resolved to one active server session.
+        user:
+          $ref: "#/components/schemas/AuthUser"
+        expiresAt:
+          type: string
+          format: date-time
+        csrfToken:
+          allOf:
+            - $ref: "#/components/schemas/OpaqueCredential"
+          description: |
+            Returned only for an authenticated session. Keep this value in
+            memory and send it as X-CSRF-Token on authenticated mutations.
+    AuthUser:
+      type: object
+      additionalProperties: false
+      required:
+        - accountId
+        - avatarUrl
+        - login
+        - profileUrl
+      properties:
+        accountId:
+          type: string
+          format: uuid
+          description: Opaque IssueScout account ownership identifier.
+        login:
+          type: string
+          minLength: 1
+          maxLength: 39
+        avatarUrl:
+          type: string
+          format: uri
+          pattern: "^https://"
+        profileUrl:
+          type: string
+          format: uri
+          pattern: "^https://"
+    AuthLogoutEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - loggedOut
+          properties:
+            loggedOut:
+              type: boolean
+              const: true
         meta:
           $ref: "#/components/schemas/Meta"
     GitHubUserEnvelope:
@@ -2818,12 +3210,17 @@ components:
             code:
               type: string
               enum:
+                - AUTHENTICATION_REQUIRED
+                - AUTH_UNAVAILABLE
+                - CSRF_REJECTED
                 - DATABASE_UNAVAILABLE
                 - FORBIDDEN_ORIGIN
+                - GITHUB_AUTHORIZATION_REJECTED
                 - GITHUB_API_ERROR
                 - GITHUB_RATE_LIMIT_EXCEEDED
                 - GITHUB_USER_NOT_FOUND
                 - INTERNAL_SERVER_ERROR
+                - INVALID_AUTH_STATE
                 - INVALID_REQUEST
                 - NOT_FOUND
                 - REQUEST_TIMEOUT

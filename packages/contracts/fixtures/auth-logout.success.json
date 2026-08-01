@@ -1,0 +1,9 @@
+{
+  "data": {
+    "loggedOut": true
+  },
+  "meta": {
+    "requestId": "req_auth_logout",
+    "timestamp": "2026-08-01T05:00:00Z"
+  }
+}

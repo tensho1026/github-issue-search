@@ -9,6 +9,18 @@
       "schema": "DatabaseHealthEnvelope"
     },
     {
+      "file": "auth-session.anonymous.json",
+      "schema": "AuthSessionEnvelope"
+    },
+    {
+      "file": "auth-session.authenticated.json",
+      "schema": "AuthSessionEnvelope"
+    },
+    {
+      "file": "auth-logout.success.json",
+      "schema": "AuthLogoutEnvelope"
+    },
+    {
       "file": "github-user.success.json",
       "schema": "GitHubUserEnvelope"
     },

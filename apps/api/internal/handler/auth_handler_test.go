@@ -374,8 +374,9 @@ func TestAuthRefreshAndLogoutUseContextPrincipal(t *testing.T) {
 		handler.Logout,
 		logoutRequest,
 	)
-	if logoutRecorder.Code != http.StatusNoContent ||
-		service.logoutCalls != 1 {
+	if logoutRecorder.Code != http.StatusOK ||
+		service.logoutCalls != 1 ||
+		!strings.Contains(logoutRecorder.Body.String(), `"loggedOut":true`) {
 		t.Fatalf(
 			"logout response = %d calls = %d",
 			logoutRecorder.Code,

@@ -39,7 +39,7 @@ for (const [route, pathItem] of Object.entries(contract.paths ?? {})) {
     }
 
     const successStatuses = Object.keys(responses).filter((status) =>
-      /^2\d\d$/.test(status),
+      /^[23]\d\d$/.test(status),
     );
     if (successStatuses.length !== 1) {
       failures.push(
@@ -72,6 +72,24 @@ for (const [route, pathItem] of Object.entries(contract.paths ?? {})) {
         if (schema !== "#/components/schemas/ErrorEnvelope") {
           failures.push(`${location} ${status}: errors must use ErrorEnvelope`);
         }
+      } else if (/^3\d\d$/.test(status)) {
+        const redirectLocation = resolveLocalReference(
+          response?.headers?.Location,
+        );
+        if (
+          !redirectLocation ||
+          redirectLocation.required !== true ||
+          redirectLocation.schema?.format !== "uri"
+        ) {
+          failures.push(
+            `${location} ${status}: redirect must declare a required URI Location header`,
+          );
+        }
+        if (response?.content) {
+          failures.push(
+            `${location} ${status}: redirect must not declare a response body`,
+          );
+        }
       } else if (!schema.endsWith("Envelope")) {
         failures.push(`${location} ${status}: success must use an envelope`);
       }
@@ -88,7 +106,7 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `${operationIDs.size} OpenAPI operation(s) declare strict statuses, envelopes, and request correlation.`,
+  `${operationIDs.size} OpenAPI operation(s) declare strict statuses, envelopes or redirects, and request correlation.`,
 );
 
 function resolveLocalReference(value) {

@@ -10,6 +10,8 @@ search warning returned by `POST /api/issues/search`.
 by backend response decoding and frontend browser-boundary tests.
 `fixtures/manifest.json` maps every document to its OpenAPI component schema.
 Fixture JSON must contain no credentials or user-specific production data.
+Authentication fixtures use synthetic values and cover both anonymous and
+authenticated session shapes plus confirmed server-side logout.
 
 Run semantic validation, explicit status/envelope/request-ID policy, positive
 and negative JSON Schema fixture validation, generated frontend type drift,

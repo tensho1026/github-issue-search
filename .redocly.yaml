@@ -8,4 +8,7 @@ extends:
 rules:
   no-server-example.com: error
   operation-4xx-response: error
+  # OAuth navigation uses an explicit 302. The custom contract policy requires
+  # exactly one 2xx or 3xx success and validates redirect Location headers.
+  operation-2xx-response: off
   security-defined: error

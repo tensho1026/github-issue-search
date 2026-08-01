@@ -25,6 +25,52 @@ export type DatabaseHealthEnvelope = {
   meta: Meta;
 };
 
+/**
+ * Unpadded base64url encoding of exactly 256 random bits.
+ */
+export type OpaqueCredential = string;
+
+export type AuthSessionEnvelope = {
+  data: AuthSession;
+  meta: Meta;
+};
+
+export type AuthSession = {
+  /**
+   * Whether the server has a complete validated OAuth setup.
+   */
+  configured: boolean;
+  /**
+   * Whether both cookies resolved to one active server session.
+   */
+  authenticated: boolean;
+  user?: AuthUser;
+  expiresAt?: string;
+  /**
+   * Returned only for an authenticated session. Keep this value in
+   * memory and send it as X-CSRF-Token on authenticated mutations.
+   *
+   */
+  csrfToken?: OpaqueCredential;
+};
+
+export type AuthUser = {
+  /**
+   * Opaque IssueScout account ownership identifier.
+   */
+  accountId: string;
+  login: string;
+  avatarUrl: string;
+  profileUrl: string;
+};
+
+export type AuthLogoutEnvelope = {
+  data: {
+    loggedOut: true;
+  };
+  meta: Meta;
+};
+
 export type GitHubUserEnvelope = {
   data: GitHubUser;
   meta: Meta;
@@ -962,12 +1008,17 @@ export type AnalysisWarning = {
 export type ErrorEnvelope = {
   error: {
     code:
+      | "AUTHENTICATION_REQUIRED"
+      | "AUTH_UNAVAILABLE"
+      | "CSRF_REJECTED"
       | "DATABASE_UNAVAILABLE"
       | "FORBIDDEN_ORIGIN"
+      | "GITHUB_AUTHORIZATION_REJECTED"
       | "GITHUB_API_ERROR"
       | "GITHUB_RATE_LIMIT_EXCEEDED"
       | "GITHUB_USER_NOT_FOUND"
       | "INTERNAL_SERVER_ERROR"
+      | "INVALID_AUTH_STATE"
       | "INVALID_REQUEST"
       | "NOT_FOUND"
       | "REQUEST_TIMEOUT";
@@ -1379,3 +1430,246 @@ export type GetIssueRecommendationResponses = {
 
 export type GetIssueRecommendationResponse =
   GetIssueRecommendationResponses[keyof GetIssueRecommendationResponses];
+
+export type GetAuthSessionData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/api/auth/session";
+};
+
+export type GetAuthSessionErrors = {
+  /**
+   * The browser Origin is not in the configured allowlist.
+   */
+  403: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
+  /**
+   * GitHub sign-in is not configured, PostgreSQL is unavailable, or a
+   * bounded authentication persistence operation failed. Anonymous
+   * discovery capabilities remain available.
+   *
+   */
+  503: ErrorEnvelope;
+  /**
+   * The bounded request deadline elapsed or the client cancelled.
+   */
+  504: ErrorEnvelope;
+};
+
+export type GetAuthSessionError =
+  GetAuthSessionErrors[keyof GetAuthSessionErrors];
+
+export type GetAuthSessionResponses = {
+  /**
+   * Current optional authentication state.
+   */
+  200: AuthSessionEnvelope;
+};
+
+export type GetAuthSessionResponse =
+  GetAuthSessionResponses[keyof GetAuthSessionResponses];
+
+export type StartGitHubOAuthData = {
+  body?: never;
+  path?: never;
+  query?: {
+    /**
+     * Bounded root-relative frontend path. Absolute URLs, scheme-relative
+     * paths, backslashes, and fragments are rejected. Defaults to `/`.
+     *
+     */
+    returnTo?: string;
+  };
+  url: "/api/auth/github/start";
+};
+
+export type StartGitHubOAuthErrors = {
+  /**
+   * A path or request value failed validation.
+   */
+  400: ErrorEnvelope;
+  /**
+   * The browser Origin is not in the configured allowlist.
+   */
+  403: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
+  /**
+   * GitHub sign-in is not configured, PostgreSQL is unavailable, or a
+   * bounded authentication persistence operation failed. Anonymous
+   * discovery capabilities remain available.
+   *
+   */
+  503: ErrorEnvelope;
+  /**
+   * The bounded request deadline elapsed or the client cancelled.
+   */
+  504: ErrorEnvelope;
+};
+
+export type StartGitHubOAuthError =
+  StartGitHubOAuthErrors[keyof StartGitHubOAuthErrors];
+
+export type CompleteGitHubOAuthData = {
+  body?: never;
+  path?: never;
+  query: {
+    /**
+     * GitHub one-time authorization code; required on success.
+     */
+    code?: string;
+    /**
+     * Unpadded base64url encoding of the random 256-bit state.
+     */
+    state: OpaqueCredential;
+    /**
+     * GitHub denial code. `access_denied` produces a safe `auth=denied`
+     * frontend marker; other values produce `auth=error`.
+     *
+     */
+    error?: string;
+  };
+  url: "/api/auth/github/callback";
+};
+
+export type CompleteGitHubOAuthErrors = {
+  /**
+   * State or encrypted browser binding is missing, malformed, modified,
+   * expired, mismatched, or already consumed; alternatively GitHub rejected
+   * the one-time authorization result. Details are intentionally collapsed.
+   *
+   */
+  400: ErrorEnvelope;
+  /**
+   * The browser Origin is not in the configured allowlist.
+   */
+  403: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
+  /**
+   * GitHub token exchange or public identity lookup failed safely.
+   */
+  502: ErrorEnvelope;
+  /**
+   * GitHub sign-in is not configured, PostgreSQL is unavailable, or a
+   * bounded authentication persistence operation failed. Anonymous
+   * discovery capabilities remain available.
+   *
+   */
+  503: ErrorEnvelope;
+  /**
+   * The bounded request deadline elapsed or the client cancelled.
+   */
+  504: ErrorEnvelope;
+};
+
+export type CompleteGitHubOAuthError =
+  CompleteGitHubOAuthErrors[keyof CompleteGitHubOAuthErrors];
+
+export type RefreshAuthSessionData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/api/auth/session/refresh";
+};
+
+export type RefreshAuthSessionErrors = {
+  /**
+   * Session cookies are missing, malformed, expired, revoked, or otherwise
+   * unusable.
+   *
+   */
+  401: ErrorEnvelope;
+  /**
+   * The browser Origin is not allowed or the CSRF cookie/header/server
+   * digest comparison failed.
+   *
+   */
+  403: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
+  /**
+   * GitHub sign-in is not configured, PostgreSQL is unavailable, or a
+   * bounded authentication persistence operation failed. Anonymous
+   * discovery capabilities remain available.
+   *
+   */
+  503: ErrorEnvelope;
+  /**
+   * The bounded request deadline elapsed or the client cancelled.
+   */
+  504: ErrorEnvelope;
+};
+
+export type RefreshAuthSessionError =
+  RefreshAuthSessionErrors[keyof RefreshAuthSessionErrors];
+
+export type RefreshAuthSessionResponses = {
+  /**
+   * Rotated session state and the new in-memory CSRF token.
+   */
+  200: AuthSessionEnvelope;
+};
+
+export type RefreshAuthSessionResponse =
+  RefreshAuthSessionResponses[keyof RefreshAuthSessionResponses];
+
+export type LogoutAuthSessionData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/api/auth/logout";
+};
+
+export type LogoutAuthSessionErrors = {
+  /**
+   * Session cookies are missing, malformed, expired, revoked, or otherwise
+   * unusable.
+   *
+   */
+  401: ErrorEnvelope;
+  /**
+   * The browser Origin is not allowed or the CSRF cookie/header/server
+   * digest comparison failed.
+   *
+   */
+  403: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
+  /**
+   * GitHub sign-in is not configured, PostgreSQL is unavailable, or a
+   * bounded authentication persistence operation failed. Anonymous
+   * discovery capabilities remain available.
+   *
+   */
+  503: ErrorEnvelope;
+  /**
+   * The bounded request deadline elapsed or the client cancelled.
+   */
+  504: ErrorEnvelope;
+};
+
+export type LogoutAuthSessionError =
+  LogoutAuthSessionErrors[keyof LogoutAuthSessionErrors];
+
+export type LogoutAuthSessionResponses = {
+  /**
+   * The server session was revoked and cookies were expired.
+   */
+  200: AuthLogoutEnvelope;
+};
+
+export type LogoutAuthSessionResponse =
+  LogoutAuthSessionResponses[keyof LogoutAuthSessionResponses];

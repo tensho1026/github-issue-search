@@ -59,6 +59,12 @@ type AuthUserResponse struct {
 	ProfileURL string `json:"profileUrl"`
 }
 
+// AuthLogoutResponse confirms that server revocation completed before browser
+// credentials were cleared.
+type AuthLogoutResponse struct {
+	LoggedOut bool `json:"loggedOut"`
+}
+
 // NewAuthHandler constructs either a configured handler or an explicit
 // disabled handler. Disabled authentication never requires a database.
 func NewAuthHandler(
@@ -295,7 +301,9 @@ func (handler *AuthHandler) Logout(ctx *gin.Context) {
 		return
 	}
 	handler.cookies.ClearSession(ctx.Writer)
-	ctx.Status(http.StatusNoContent)
+	handler.responder.Data(ctx, http.StatusOK, AuthLogoutResponse{
+		LoggedOut: true,
+	})
 }
 
 func (handler *AuthHandler) openCallbackFlow(

@@ -38,6 +38,18 @@ func TestContractFixturesDecodeIntoBackendResponseTypes(t *testing.T) {
 			target: &fixtureSuccessEnvelope[databaseHealthResponse]{},
 		},
 		{
+			file:   "auth-session.anonymous.json",
+			target: &fixtureSuccessEnvelope[AuthSessionResponse]{},
+		},
+		{
+			file:   "auth-session.authenticated.json",
+			target: &fixtureSuccessEnvelope[AuthSessionResponse]{},
+		},
+		{
+			file:   "auth-logout.success.json",
+			target: &fixtureSuccessEnvelope[AuthLogoutResponse]{},
+		},
+		{
 			file:   "github-user.success.json",
 			target: &fixtureSuccessEnvelope[githubUserResponse]{},
 		},

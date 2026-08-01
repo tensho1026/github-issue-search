@@ -1,0 +1,10 @@
+{
+  "data": {
+    "configured": true,
+    "authenticated": false
+  },
+  "meta": {
+    "requestId": "req_auth_anonymous",
+    "timestamp": "2026-08-01T05:00:00Z"
+  }
+}
