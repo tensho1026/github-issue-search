@@ -10,6 +10,55 @@ import profileAnalysisFixture from "../../../packages/contracts/fixtures/profile
 
 const apiBaseURL = "http://127.0.0.1:18080";
 
+test("serves keyboard-accessible Swagger UI without runtime network dependencies", async ({
+  page,
+  request,
+}) => {
+  const externalRuntimeRequests: string[] = [];
+  page.on("request", (runtimeRequest) => {
+    const requestURL = new URL(runtimeRequest.url());
+    if (
+      ["http:", "https:"].includes(requestURL.protocol) &&
+      requestURL.origin !== apiBaseURL
+    ) {
+      externalRuntimeRequests.push(runtimeRequest.url());
+    }
+  });
+
+  const response = await page.goto(`${apiBaseURL}/docs/`);
+  expect(response?.status()).toBe(200);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "API reference" }),
+  ).toBeVisible();
+  await expect(
+    page.locator('.opblock-summary-path[data-path="/api/health"]'),
+  ).toBeVisible();
+
+  await page.keyboard.press("Tab");
+  await expect(
+    page.getByRole("link", { name: "Skip to API operations" }),
+  ).toBeFocused();
+
+  const contractResponse = await request.get(`${apiBaseURL}/openapi.yaml`);
+  expect(contractResponse.ok()).toBe(true);
+  expect(contractResponse.headers()["content-type"]).toBe(
+    "application/yaml; charset=utf-8",
+  );
+  expect(contractResponse.headers()["cache-control"]).toContain(
+    "must-revalidate",
+  );
+  expect(contractResponse.headers().etag).toMatch(/^"[a-f0-9]{64}"$/);
+  await expect(contractResponse.text()).resolves.toContain(
+    "/api/issues/search:",
+  );
+
+  await page.setViewportSize({ height: 844, width: 390 });
+  await expect(
+    page.getByRole("link", { name: "Download OpenAPI YAML" }),
+  ).toBeVisible();
+  expect(externalRuntimeRequests).toEqual([]);
+});
+
 test("serves the production application shell with keyboard navigation", async ({
   page,
 }) => {
