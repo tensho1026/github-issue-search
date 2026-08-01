@@ -1198,6 +1198,14 @@ export type ErrorEnvelope = {
 };
 
 /**
+ * Optional caller correlation identifier. Values must contain 1–64
+ * visible ASCII letters, digits, period, underscore, or hyphen;
+ * malformed values are replaced with a server-generated identifier.
+ *
+ */
+export type RequestId = string;
+
+/**
  * Public GitHub login, without a leading at-sign.
  */
 export type GitHubUsername = string;
@@ -1244,6 +1252,15 @@ export type ResourceVersion = number;
 
 export type GetHealthData = {
   body?: never;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path?: never;
   query?: never;
   url: "/api/health";
@@ -1277,6 +1294,15 @@ export type GetHealthResponse = GetHealthResponses[keyof GetHealthResponses];
 
 export type GetDatabaseHealthData = {
   body?: never;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path?: never;
   query?: never;
   url: "/api/health/database";
@@ -1318,6 +1344,15 @@ export type GetDatabaseHealthResponse =
 
 export type GetGitHubUserData = {
   body?: never;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path: {
     /**
      * Public GitHub login, without a leading at-sign.
@@ -1373,6 +1408,15 @@ export type GetGitHubUserResponse =
 
 export type AnalyzeGitHubProfileData = {
   body?: never;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path: {
     /**
      * Public GitHub login, without a leading at-sign.
@@ -1434,6 +1478,15 @@ export type SearchGitHubIssuesData = {
    *
    */
   body: IssueSearchRequest;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path?: never;
   query?: {
     /**
@@ -1497,6 +1550,15 @@ export type SearchGitHubRepositoriesData = {
    *
    */
   body: RepositoryDiscoveryRequest;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path?: never;
   query?: {
     /**
@@ -1556,6 +1618,15 @@ export type SearchGitHubRepositoriesResponse =
 
 export type GetIssueRecommendationData = {
   body?: never;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path: {
     /**
      * Public GitHub user or organization login.
@@ -1628,6 +1699,15 @@ export type GetIssueRecommendationResponse =
 
 export type GetAuthSessionData = {
   body?: never;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path?: never;
   query?: never;
   url: "/api/auth/session";
@@ -1670,6 +1750,15 @@ export type GetAuthSessionResponse =
 
 export type StartGitHubOAuthData = {
   body?: never;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path?: never;
   query?: {
     /**
@@ -1713,6 +1802,15 @@ export type StartGitHubOAuthError =
 
 export type CompleteGitHubOAuthData = {
   body?: never;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path?: never;
   query: {
     /**
@@ -1771,6 +1869,15 @@ export type CompleteGitHubOAuthError =
 
 export type RefreshAuthSessionData = {
   body?: never;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path?: never;
   query?: never;
   url: "/api/auth/session/refresh";
@@ -1821,6 +1928,15 @@ export type RefreshAuthSessionResponse =
 
 export type LogoutAuthSessionData = {
   body?: never;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path?: never;
   query?: never;
   url: "/api/auth/logout";
@@ -1871,6 +1987,15 @@ export type LogoutAuthSessionResponse =
 
 export type ListAccountBookmarksData = {
   body?: never;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path?: never;
   query?: {
     /**
@@ -1930,7 +2055,21 @@ export type ListAccountBookmarksResponse =
   ListAccountBookmarksResponses[keyof ListAccountBookmarksResponses];
 
 export type UpsertAccountBookmarkData = {
+  /**
+   * One normalized public GitHub reference. Unknown fields are rejected;
+   * `issueNumber` is required only when kind is `issue`.
+   *
+   */
   body: BookmarkWriteRequest;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path?: never;
   query?: never;
   url: "/api/account/bookmarks";
@@ -1990,6 +2129,15 @@ export type UpsertAccountBookmarkResponse =
 
 export type DeleteAccountBookmarkData = {
   body?: never;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path: {
     /**
      * Opaque account-owned bookmark identifier.
@@ -2065,6 +2213,15 @@ export type DeleteAccountBookmarkResponse =
 
 export type ListAccountSavedSearchesData = {
   body?: never;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path?: never;
   query?: {
     /**
@@ -2124,7 +2281,21 @@ export type ListAccountSavedSearchesResponse =
   ListAccountSavedSearchesResponses[keyof ListAccountSavedSearchesResponses];
 
 export type CreateAccountSavedSearchData = {
+  /**
+   * A bounded display name, search kind, and filter document accepted by
+   * the corresponding anonymous discovery endpoint.
+   *
+   */
   body: SavedSearchWriteRequest;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path?: never;
   query?: never;
   url: "/api/account/saved-searches";
@@ -2184,6 +2355,15 @@ export type CreateAccountSavedSearchResponse =
 
 export type DeleteAccountSavedSearchData = {
   body?: never;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path: {
     /**
      * Opaque account-owned saved-search identifier.
@@ -2258,7 +2438,21 @@ export type DeleteAccountSavedSearchResponse =
   DeleteAccountSavedSearchResponses[keyof DeleteAccountSavedSearchResponses];
 
 export type UpdateAccountSavedSearchData = {
+  /**
+   * Complete replacement document including the current optimistic
+   * version. Partial updates are intentionally unsupported.
+   *
+   */
   body: SavedSearchUpdateRequest;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path: {
     /**
      * Opaque account-owned saved-search identifier.
@@ -2329,6 +2523,15 @@ export type UpdateAccountSavedSearchResponse =
 
 export type GetAccountPreferencesData = {
   body?: never;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path?: never;
   query?: never;
   url: "/api/account/preferences";
@@ -2375,7 +2578,21 @@ export type GetAccountPreferencesResponse =
   GetAccountPreferencesResponses[keyof GetAccountPreferencesResponses];
 
 export type UpdateAccountPreferencesData = {
+  /**
+   * Complete display-preference document. Version zero creates defaults;
+   * later writes must send the current positive version.
+   *
+   */
   body: PreferencesWriteRequest;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path?: never;
   query?: never;
   url: "/api/account/preferences";
@@ -2435,6 +2652,15 @@ export type UpdateAccountPreferencesResponse =
 
 export type ExportAccountDataData = {
   body?: never;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path?: never;
   query?: never;
   url: "/api/account/export";
@@ -2481,7 +2707,21 @@ export type ExportAccountDataResponse =
   ExportAccountDataResponses[keyof ExportAccountDataResponses];
 
 export type DeleteAccountData = {
+  /**
+   * Explicit irreversible-action confirmation. The only accepted value
+   * for `confirmation` is the uppercase literal `DELETE`.
+   *
+   */
   body: AccountDeleteRequest;
+  headers?: {
+    /**
+     * Optional caller correlation identifier. Values must contain 1–64
+     * visible ASCII letters, digits, period, underscore, or hyphen;
+     * malformed values are replaced with a server-generated identifier.
+     *
+     */
+    "X-Request-ID"?: string;
+  };
   path?: never;
   query?: never;
   url: "/api/account";

@@ -13,6 +13,27 @@ const contract = parse(
 );
 const methods = ["get", "post", "put", "patch", "delete"];
 const requiredOperationalStatuses = ["403", "500", "504"];
+const operationsRequiringExamples = new Set([
+  "analyzeGitHubProfile",
+  "deleteAccount",
+  "exportAccountData",
+  "getAccountPreferences",
+  "getAuthSession",
+  "getDatabaseHealth",
+  "getGitHubUser",
+  "getHealth",
+  "getIssueRecommendation",
+  "listAccountBookmarks",
+  "listAccountSavedSearches",
+  "logoutAuthSession",
+  "searchGitHubIssues",
+  "searchGitHubRepositories",
+]);
+const cacheAwareOperations = new Set([
+  "getIssueRecommendation",
+  "searchGitHubIssues",
+  "searchGitHubRepositories",
+]);
 const failures = [];
 const operationIDs = new Set();
 
@@ -23,10 +44,51 @@ for (const [route, pathItem] of Object.entries(contract.paths ?? {})) {
       continue;
     }
     const location = `${method.toUpperCase()} ${route}`;
+    if (!operation.summary || !operation.description) {
+      failures.push(
+        `${location}: summary and detailed description are required`,
+      );
+    }
+    if (!Array.isArray(operation.tags) || operation.tags.length === 0) {
+      failures.push(`${location}: at least one operation tag is required`);
+    }
     if (!operation.operationId || operationIDs.has(operation.operationId)) {
       failures.push(`${location}: operationId must be present and unique`);
     }
     operationIDs.add(operation.operationId);
+
+    const parameters = [
+      ...(pathItem.parameters ?? []),
+      ...(operation.parameters ?? []),
+    ].map(resolveLocalReference);
+    if (
+      !parameters.some(
+        (parameter) =>
+          parameter?.in === "header" &&
+          parameter?.name?.toLowerCase() === "x-request-id",
+      )
+    ) {
+      failures.push(`${location}: optional X-Request-ID input is undocumented`);
+    }
+    for (const parameter of parameters) {
+      if (!parameter?.description) {
+        failures.push(
+          `${location}: ${parameter?.in ?? "unknown"} parameter ${parameter?.name ?? "unknown"} has no description`,
+        );
+      }
+    }
+
+    if (operation.requestBody) {
+      const requestBody = resolveLocalReference(operation.requestBody);
+      if (!requestBody.description) {
+        failures.push(`${location}: request body has no description`);
+      }
+      if (!requestBody.content?.["application/json"]?.schema) {
+        failures.push(
+          `${location}: request body must declare an application/json schema`,
+        );
+      }
+    }
 
     const responses = operation.responses ?? {};
     if (Object.hasOwn(responses, "default")) {
@@ -53,6 +115,9 @@ for (const [route, pathItem] of Object.entries(contract.paths ?? {})) {
         continue;
       }
       const response = resolveLocalReference(unresolvedResponse);
+      if (!response?.description) {
+        failures.push(`${location} ${status}: response has no description`);
+      }
       const requestID = resolveLocalReference(
         response?.headers?.["X-Request-ID"],
       );
@@ -94,8 +159,48 @@ for (const [route, pathItem] of Object.entries(contract.paths ?? {})) {
         failures.push(`${location} ${status}: success must use an envelope`);
       }
     }
+
+    if (operationsRequiringExamples.has(operation.operationId)) {
+      const hasExample = successStatuses.some((status) => {
+        const response = resolveLocalReference(responses[status]);
+        const mediaType = response?.content?.["application/json"];
+        return (
+          mediaType?.example !== undefined ||
+          Object.keys(mediaType?.examples ?? {}).length > 0
+        );
+      });
+      if (!hasExample) {
+        failures.push(
+          `${location}: common success flow needs a realistic example`,
+        );
+      }
+    }
+
+    if (cacheAwareOperations.has(operation.operationId)) {
+      const response = resolveLocalReference(responses[successStatuses[0]]);
+      const cacheHeader = response?.headers?.["X-IssueScout-Cache"]?.$ref ?? "";
+      if (cacheHeader !== "#/components/headers/CacheStatus") {
+        failures.push(
+          `${location}: cache behavior must use the shared CacheStatus header`,
+        );
+      }
+    }
   }
 }
+
+for (const responseName of ["InvalidRequest", "GitHubRateLimited"]) {
+  const examples =
+    contract.components?.responses?.[responseName]?.content?.[
+      "application/json"
+    ]?.examples ?? {};
+  if (Object.keys(examples).length === 0) {
+    failures.push(
+      `components.responses.${responseName}: a realistic error example is required`,
+    );
+  }
+}
+
+walkContract(contract);
 
 if (failures.length > 0) {
   console.error("OpenAPI policy violations:");
@@ -106,7 +211,7 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `${operationIDs.size} OpenAPI operation(s) declare strict statuses, envelopes or redirects, and request correlation.`,
+  `${operationIDs.size} OpenAPI operation(s) declare detailed inputs, strict statuses, examples, cache semantics, envelopes or redirects, and request correlation.`,
 );
 
 function resolveLocalReference(value) {
@@ -120,4 +225,25 @@ function resolveLocalReference(value) {
     .slice(2)
     .split("/")
     .reduce((current, segment) => current?.[segment], contract);
+}
+
+function walkContract(value) {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      walkContract(item);
+    }
+    return;
+  }
+  if (!value || typeof value !== "object") {
+    return;
+  }
+  for (const [key, item] of Object.entries(value)) {
+    if (key === "$ref" && !item.startsWith("#/")) {
+      failures.push(`remote OpenAPI reference is forbidden: ${item}`);
+    }
+    if (key === "externalValue") {
+      failures.push(`external example value is forbidden: ${item}`);
+    }
+    walkContract(item);
+  }
 }

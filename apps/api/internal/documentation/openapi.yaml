@@ -1,12 +1,26 @@
 openapi: 3.1.0
 info:
   title: IssueScout API
+  summary: Anonymous GitHub discovery with optional account-owned workflows
   version: 0.8.0
   description: |
     API for analyzing a public GitHub profile and finding suitable open-source
     repositories and issues. Core discovery remains anonymous and stateless.
     Optional GitHub sign-in adds server-side sessions for account-owned
     features; GitHub and database credentials always remain server-side.
+
+    Every response carries `X-Request-ID`, and JSON envelopes repeat the value
+    in `meta.requestId`. Public GitHub operations are bounded by explicit
+    deadlines and concurrency limits. A `504` represents cancellation or a
+    deadline, `429` represents GitHub rate exhaustion, and `502` represents a
+    required upstream dependency failure. Successful discovery responses can
+    preserve partial evidence through typed warnings rather than silently
+    converting unknown data to zero.
+
+    The contract is served byte-for-byte at `/openapi.yaml`. Interactive,
+    CDN-free Swagger UI is available at `/docs/` when API documentation is
+    enabled. Cookie-authenticated examples require an existing browser session;
+    mutations additionally require `X-CSRF-Token`.
   license:
     name: MIT
     identifier: MIT
@@ -37,9 +51,15 @@ tags:
       accept an account identifier from the client.
 paths:
   /api/health:
+    parameters:
+      - $ref: "#/components/parameters/RequestID"
     get:
       operationId: getHealth
       summary: Check API health
+      description: |
+        Reports process readiness without calling GitHub or PostgreSQL. This is
+        the load-balancer probe and remains independent from optional account
+        storage health.
       tags:
         - System
       responses:
@@ -52,6 +72,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthEnvelope"
+              examples:
+                ready:
+                  $ref: "#/components/examples/HealthSuccess"
         "403":
           $ref: "#/components/responses/ForbiddenOrigin"
         "500":
@@ -59,6 +82,8 @@ paths:
         "504":
           $ref: "#/components/responses/RequestTimeout"
   /api/health/database:
+    parameters:
+      - $ref: "#/components/parameters/RequestID"
     get:
       operationId: getDatabaseHealth
       summary: Check authenticated account storage readiness
@@ -79,6 +104,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DatabaseHealthEnvelope"
+              examples:
+                ready:
+                  $ref: "#/components/examples/DatabaseHealthSuccess"
         "403":
           $ref: "#/components/responses/ForbiddenOrigin"
         "503":
@@ -89,10 +117,15 @@ paths:
           $ref: "#/components/responses/RequestTimeout"
   /api/github/users/{username}:
     parameters:
+      - $ref: "#/components/parameters/RequestID"
       - $ref: "#/components/parameters/GitHubUsername"
     get:
       operationId: getGitHubUser
       summary: Get a normalized public GitHub profile
+      description: |
+        Returns one public GitHub identity and a bounded repository summary.
+        The adapter propagates cancellation and never returns the upstream
+        GitHub response shape or server credential.
       tags:
         - GitHub profiles
       responses:
@@ -105,6 +138,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GitHubUserEnvelope"
+              examples:
+                normalized-profile:
+                  $ref: "#/components/examples/GitHubUserSuccess"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "403":
@@ -121,6 +157,7 @@ paths:
           $ref: "#/components/responses/RequestTimeout"
   /api/github/users/{username}/profile-analysis:
     parameters:
+      - $ref: "#/components/parameters/RequestID"
       - $ref: "#/components/parameters/GitHubUsername"
     get:
       operationId: analyzeGitHubProfile
@@ -149,6 +186,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProfileAnalysisEnvelope"
+              examples:
+                bounded-evidence:
+                  $ref: "#/components/examples/ProfileAnalysisSuccess"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "403":
@@ -164,6 +204,8 @@ paths:
         "504":
           $ref: "#/components/responses/RequestTimeout"
   /api/issues/search:
+    parameters:
+      - $ref: "#/components/parameters/RequestID"
     post:
       operationId: searchGitHubIssues
       summary: Find eligible public GitHub issue candidates
@@ -241,16 +283,14 @@ paths:
             X-Request-ID:
               $ref: "#/components/headers/RequestID"
             X-IssueScout-Cache:
-              description: Whether the canonical condition was served from cache.
-              schema:
-                type: string
-                enum:
-                  - HIT
-                  - MISS
+              $ref: "#/components/headers/CacheStatus"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/IssueSearchEnvelope"
+              examples:
+                empty-result:
+                  $ref: "#/components/examples/IssueSearchEmpty"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "403":
@@ -264,6 +304,8 @@ paths:
         "504":
           $ref: "#/components/responses/RequestTimeout"
   /api/repositories/search:
+    parameters:
+      - $ref: "#/components/parameters/RequestID"
     post:
       operationId: searchGitHubRepositories
       summary: Find contribution-ready public OSS repositories
@@ -345,16 +387,14 @@ paths:
             X-Request-ID:
               $ref: "#/components/headers/RequestID"
             X-IssueScout-Cache:
-              description: Whether the canonical condition was served from cache.
-              schema:
-                type: string
-                enum:
-                  - HIT
-                  - MISS
+              $ref: "#/components/headers/CacheStatus"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/RepositoryDiscoveryEnvelope"
+              examples:
+                partial-upstream-evidence:
+                  $ref: "#/components/examples/RepositoryDiscoveryPartial"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "403":
@@ -369,6 +409,7 @@ paths:
           $ref: "#/components/responses/RequestTimeout"
   /api/issues/{owner}/{repository}/{issueNumber}:
     parameters:
+      - $ref: "#/components/parameters/RequestID"
       - $ref: "#/components/parameters/GitHubOwner"
       - $ref: "#/components/parameters/GitHubRepository"
       - $ref: "#/components/parameters/GitHubIssueNumber"
@@ -415,16 +456,14 @@ paths:
             X-Request-ID:
               $ref: "#/components/headers/RequestID"
             X-IssueScout-Cache:
-              description: Whether the normalized detail snapshot came from cache.
-              schema:
-                type: string
-                enum:
-                  - HIT
-                  - MISS
+              $ref: "#/components/headers/CacheStatus"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/IssueDetailEnvelope"
+              examples:
+                analyzed-issue:
+                  $ref: "#/components/examples/IssueDetailSuccess"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "403":
@@ -440,6 +479,8 @@ paths:
         "504":
           $ref: "#/components/responses/RequestTimeout"
   /api/auth/session:
+    parameters:
+      - $ref: "#/components/parameters/RequestID"
     get:
       operationId: getAuthSession
       summary: Read optional browser-session state
@@ -464,6 +505,11 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuthSessionEnvelope"
+              examples:
+                anonymous:
+                  $ref: "#/components/examples/AuthSessionAnonymous"
+                authenticated:
+                  $ref: "#/components/examples/AuthSessionAuthenticated"
         "403":
           $ref: "#/components/responses/ForbiddenOrigin"
         "503":
@@ -473,6 +519,8 @@ paths:
         "504":
           $ref: "#/components/responses/RequestTimeout"
   /api/auth/github/start:
+    parameters:
+      - $ref: "#/components/parameters/RequestID"
     get:
       operationId: startGitHubOAuth
       summary: Start GitHub authorization with PKCE
@@ -519,6 +567,8 @@ paths:
         "504":
           $ref: "#/components/responses/RequestTimeout"
   /api/auth/github/callback:
+    parameters:
+      - $ref: "#/components/parameters/RequestID"
     get:
       operationId: completeGitHubOAuth
       summary: Complete or deny one GitHub authorization
@@ -583,6 +633,8 @@ paths:
         "504":
           $ref: "#/components/responses/RequestTimeout"
   /api/auth/session/refresh:
+    parameters:
+      - $ref: "#/components/parameters/RequestID"
     post:
       operationId: refreshAuthSession
       summary: Rotate the current browser session
@@ -619,6 +671,8 @@ paths:
         "504":
           $ref: "#/components/responses/RequestTimeout"
   /api/auth/logout:
+    parameters:
+      - $ref: "#/components/parameters/RequestID"
     post:
       operationId: logoutAuthSession
       summary: Revoke the current browser session
@@ -643,6 +697,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuthLogoutEnvelope"
+              examples:
+                revoked:
+                  $ref: "#/components/examples/AuthLogoutSuccess"
         "401":
           $ref: "#/components/responses/AuthenticationRequired"
         "403":
@@ -654,6 +711,8 @@ paths:
         "504":
           $ref: "#/components/responses/RequestTimeout"
   /api/account/bookmarks:
+    parameters:
+      - $ref: "#/components/parameters/RequestID"
     get:
       operationId: listAccountBookmarks
       summary: List owned bookmarks
@@ -680,6 +739,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BookmarkListEnvelope"
+              examples:
+                owned-page:
+                  $ref: "#/components/examples/AccountBookmarksSuccess"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -707,6 +769,9 @@ paths:
           csrfHeader: []
       requestBody:
         required: true
+        description: |
+          One normalized public GitHub reference. Unknown fields are rejected;
+          `issueNumber` is required only when kind is `issue`.
         content:
           application/json:
             schema:
@@ -737,6 +802,7 @@ paths:
           $ref: "#/components/responses/RequestTimeout"
   /api/account/bookmarks/{bookmarkID}:
     parameters:
+      - $ref: "#/components/parameters/RequestID"
       - $ref: "#/components/parameters/BookmarkID"
     delete:
       operationId: deleteAccountBookmark
@@ -778,6 +844,8 @@ paths:
         "504":
           $ref: "#/components/responses/RequestTimeout"
   /api/account/saved-searches:
+    parameters:
+      - $ref: "#/components/parameters/RequestID"
     get:
       operationId: listAccountSavedSearches
       summary: List owned saved searches
@@ -802,6 +870,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SavedSearchListEnvelope"
+              examples:
+                owned-page:
+                  $ref: "#/components/examples/AccountSavedSearchesSuccess"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -828,6 +899,9 @@ paths:
           csrfHeader: []
       requestBody:
         required: true
+        description: |
+          A bounded display name, search kind, and filter document accepted by
+          the corresponding anonymous discovery endpoint.
         content:
           application/json:
             schema:
@@ -858,6 +932,7 @@ paths:
           $ref: "#/components/responses/RequestTimeout"
   /api/account/saved-searches/{savedSearchID}:
     parameters:
+      - $ref: "#/components/parameters/RequestID"
       - $ref: "#/components/parameters/SavedSearchID"
     put:
       operationId: updateAccountSavedSearch
@@ -872,6 +947,9 @@ paths:
           csrfHeader: []
       requestBody:
         required: true
+        description: |
+          Complete replacement document including the current optimistic
+          version. Partial updates are intentionally unsupported.
         content:
           application/json:
             schema:
@@ -905,6 +983,10 @@ paths:
     delete:
       operationId: deleteAccountSavedSearch
       summary: Delete an owned saved search
+      description: |
+        Deletes only the authenticated account's row when the supplied
+        optimistic version matches. Missing and differently owned identifiers
+        are deliberately indistinguishable.
       tags:
         - Account workspace
       security:
@@ -939,6 +1021,8 @@ paths:
         "504":
           $ref: "#/components/responses/RequestTimeout"
   /api/account/preferences:
+    parameters:
+      - $ref: "#/components/parameters/RequestID"
     get:
       operationId: getAccountPreferences
       summary: Read owned display preferences
@@ -959,6 +1043,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PreferencesEnvelope"
+              examples:
+                persisted:
+                  $ref: "#/components/examples/AccountPreferencesSuccess"
         "401":
           $ref: "#/components/responses/AuthenticationRequired"
         "403":
@@ -982,6 +1069,9 @@ paths:
           csrfHeader: []
       requestBody:
         required: true
+        description: |
+          Complete display-preference document. Version zero creates defaults;
+          later writes must send the current positive version.
         content:
           application/json:
             schema:
@@ -1011,6 +1101,8 @@ paths:
         "504":
           $ref: "#/components/responses/RequestTimeout"
   /api/account/export:
+    parameters:
+      - $ref: "#/components/parameters/RequestID"
     get:
       operationId: exportAccountData
       summary: Export bounded account-owned feature data
@@ -1032,6 +1124,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AccountExportEnvelope"
+              examples:
+                privacy-export:
+                  $ref: "#/components/examples/AccountExportSuccess"
         "401":
           $ref: "#/components/responses/AuthenticationRequired"
         "403":
@@ -1043,6 +1138,8 @@ paths:
         "504":
           $ref: "#/components/responses/RequestTimeout"
   /api/account:
+    parameters:
+      - $ref: "#/components/parameters/RequestID"
     delete:
       operationId: deleteAccount
       summary: Permanently delete the authenticated account
@@ -1058,6 +1155,9 @@ paths:
           csrfHeader: []
       requestBody:
         required: true
+        description: |
+          Explicit irreversible-action confirmation. The only accepted value
+          for `confirmation` is the uppercase literal `DELETE`.
         content:
           application/json:
             schema:
@@ -1074,6 +1174,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AccountDeleteEnvelope"
+              examples:
+                deleted:
+                  $ref: "#/components/examples/AccountDeleteSuccess"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -1087,6 +1190,665 @@ paths:
         "504":
           $ref: "#/components/responses/RequestTimeout"
 components:
+  # BEGIN GENERATED FIXTURE EXAMPLES
+  examples:
+    HealthSuccess:
+      summary: Process readiness
+      value:
+        data:
+          status: ok
+        meta:
+          requestId: fixture_health
+          timestamp: 2026-07-30T00:00:00Z
+    DatabaseHealthSuccess:
+      summary: Optional account storage is ready
+      value:
+        data:
+          configured: true
+          status: ready
+        meta:
+          requestId: fixture_database_health
+          timestamp: 2026-07-30T00:00:00Z
+    AuthSessionAnonymous:
+      summary: Authentication is configured without a current session
+      value:
+        data:
+          configured: true
+          authenticated: false
+        meta:
+          requestId: req_auth_anonymous
+          timestamp: 2026-08-01T05:00:00Z
+    AuthSessionAuthenticated:
+      summary: Authenticated browser session with an in-memory CSRF token
+      value:
+        data:
+          configured: true
+          authenticated: true
+          user:
+            accountId: 6ca6dfc4-0114-44fb-a9f8-d703f8c9a8b2
+            login: example-user
+            avatarUrl: https://avatars.githubusercontent.com/u/1
+            profileUrl: https://github.com/example-user
+          expiresAt: 2026-08-01T17:00:00Z
+          csrfToken: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        meta:
+          requestId: req_auth_authenticated
+          timestamp: 2026-08-01T05:00:00Z
+    AuthLogoutSuccess:
+      summary: Revoked browser session
+      value:
+        data:
+          loggedOut: true
+        meta:
+          requestId: req_auth_logout
+          timestamp: 2026-08-01T05:00:00Z
+    AccountBookmarksSuccess:
+      summary: Deterministic account-owned bookmark page
+      value:
+        data:
+          items:
+            - id: 69cf232f-f1ba-4c24-9b18-9083f90b1a1a
+              targetType: issue
+              repositoryOwner: openai
+              repositoryName: openai-go
+              issueNumber: 42
+              upstreamState: unverified
+              version: 1
+              createdAt: 2026-08-01T01:02:03Z
+              updatedAt: 2026-08-01T01:02:03Z
+          pagination:
+            page: 1
+            perPage: 20
+            total: 1
+            totalPages: 1
+        meta:
+          requestId: req_account_bookmarks
+          timestamp: 2026-08-01T01:02:03Z
+    AccountSavedSearchesSuccess:
+      summary: Deterministic account-owned saved-search page
+      value:
+        data:
+          items:
+            - id: 69cf232f-f1ba-4c24-9b18-9083f90b1a1a
+              searchType: issue
+              name: Go starter issues
+              filters:
+                username: octocat
+                languages:
+                  - Go
+                frameworks: []
+                labels:
+                  - good first issue
+                  - help wanted
+                minimumStars: 10
+                maximumDifficulty: 3
+                updatedWithinDays: 180
+                includeDocumentation: false
+                includeEnglish: true
+                excludeArchived: true
+              version: 1
+              createdAt: 2026-08-01T01:02:03Z
+              updatedAt: 2026-08-01T01:02:03Z
+          pagination:
+            page: 1
+            perPage: 20
+            total: 1
+            totalPages: 1
+        meta:
+          requestId: req_account_searches
+          timestamp: 2026-08-01T01:02:03Z
+    AccountPreferencesSuccess:
+      summary: Persisted account display preferences
+      value:
+        data:
+          theme: dark
+          reducedMotion: reduce
+          resultsPerPage: 50
+          version: 2
+          createdAt: 2026-08-01T01:02:03Z
+          updatedAt: 2026-08-01T02:03:04Z
+        meta:
+          requestId: req_account_preferences
+          timestamp: 2026-08-01T02:03:04Z
+    AccountExportSuccess:
+      summary: Bounded privacy export
+      value:
+        data:
+          schemaVersion: 1
+          generatedAt: 2026-08-01T02:03:04Z
+          bookmarks: []
+          savedSearches: []
+          preferences: null
+        meta:
+          requestId: req_account_export
+          timestamp: 2026-08-01T02:03:04Z
+    AccountDeleteSuccess:
+      summary: Irreversible account deletion confirmation
+      value:
+        data:
+          deleted: true
+          removed:
+            bookmarks: 2
+            identities: 1
+            preferences: 1
+            savedSearches: 3
+            sessions: 1
+        meta:
+          requestId: req_account_delete
+          timestamp: 2026-08-01T02:03:04Z
+    GitHubUserSuccess:
+      summary: Normalized public GitHub profile
+      value:
+        data:
+          avatarUrl: https://avatars.githubusercontent.com/u/1?v=4
+          bio: Builds accessible, typed developer tools.
+          followers: 1250
+          following: 42
+          login: octocat
+          name: The Octocat
+          publicRepos: 1
+          repositories:
+            - defaultBranch: main
+              description: A typed service with accessible contributor workflows.
+              forks: 32
+              fullName: octocat/typed-service
+              isArchived: false
+              isFork: false
+              mainLanguage: TypeScript
+              name: typed-service
+              openIssues: 4
+              owner: octocat
+              pushedAt: 2026-07-29T10:00:00Z
+              stars: 1250
+              updatedAt: 2026-07-29T12:00:00Z
+              url: https://github.com/octocat/typed-service
+        meta:
+          rateLimitRemaining: 4992
+          requestId: fixture_github_user
+          timestamp: 2026-07-30T00:00:00Z
+    ProfileAnalysisSuccess:
+      summary: Bounded public profile evidence
+      value:
+        data:
+          analysisWindow:
+            days: 365
+            from: 2025-07-30T00:00:00Z
+            publicOnly: true
+            to: 2026-07-30T00:00:00Z
+          contributions:
+            commits:
+              status: sampled
+              value: 18
+            issuesOpened:
+              status: exact
+              value: 3
+            pullRequestReviews:
+              status: sampled
+              value: 4
+            pullRequestsOpened:
+              status: exact
+              value: 7
+            repositoriesTouched:
+              status: sampled
+              value: 1
+            windowDays: 365
+          frameworks:
+            - React
+          languages:
+            - name: TypeScript
+              percentage: 65
+            - name: Go
+              percentage: 35
+          languageStatus: exact
+          ossExperience:
+            confidence: high
+            evidence:
+              - kind: authored_pull_requests
+                status: exact
+                value: 7
+              - kind: contributed_repositories
+                status: sampled
+                value: 1
+              - kind: pull_request_reviews
+                status: sampled
+                value: 4
+            level: active
+            publicOnly: true
+          proficiency:
+            - confidence: medium
+              evidence:
+                - kind: language_share_percentage
+                  status: exact
+                  value: 65
+                - kind: owned_repositories
+                  status: exact
+                  value: 1
+                - kind: contributed_repositories
+                  status: exact
+                  value: 1
+                - kind: forked_repositories
+                  status: exact
+                  value: 0
+                - kind: recent_repositories
+                  status: exact
+                  value: 2
+                - kind: framework_manifests
+                  status: exact
+                  value: 0
+              kind: language
+              label: developing
+              level: 2
+              name: TypeScript
+              score: 39
+          recentTechnologies:
+            - confidence: medium
+              kind: language
+              lastUsedAt: 2026-07-29T00:00:00Z
+              name: TypeScript
+              repositoryCount: 2
+              repositorySources:
+                - contributed
+                - owned
+          repositoryEvidence:
+            contributed:
+              activeInWindow: 1
+              limit: 20
+              observed: 1
+              primaryTechnologies:
+                - name: TypeScript
+                  percentage: 100
+              status: exact
+              total: 1
+            forked:
+              activeInWindow: 1
+              limit: 20
+              observed: 1
+              primaryTechnologies:
+                - name: Go
+                  percentage: 100
+              status: exact
+              total: 1
+            owned:
+              activeInWindow: 1
+              limit: 20
+              observed: 1
+              primaryTechnologies:
+                - name: TypeScript
+                  percentage: 65
+                - name: Go
+                  percentage: 35
+              status: exact
+              total: 1
+            starred:
+              activeInWindow: 1
+              limit: 20
+              observed: 1
+              primaryTechnologies:
+                - name: Rust
+                  percentage: 100
+              status: sampled
+              total: null
+          repositoriesAnalyzed: 1
+          username: octocat
+          warnings: []
+        meta:
+          rateLimitRemaining: 4992
+          requestId: fixture_profile_analysis
+          timestamp: 2026-07-30T00:00:00Z
+    IssueSearchEmpty:
+      summary: Valid search with no eligible issues
+      value:
+        data:
+          items: []
+          pagination:
+            hasNext: false
+            page: 1
+            perPage: 20
+            total: 0
+            totalPages: 0
+          searchSummary:
+            candidatesChecked: 0
+            enrichmentAttempted: 0
+            enrichmentFailed: 0
+            excludedByReason: []
+            upstreamTotal: 0
+          warnings: []
+        meta:
+          rateLimitRemaining: 4992
+          requestId: fixture_issue_search_empty
+          timestamp: 2026-07-30T00:00:00Z
+    RepositoryDiscoveryPartial:
+      summary: Successful bounded search with explicit upstream partial-data warnings
+      value:
+        data:
+          items:
+            - repository:
+                owner: example
+                name: typed-service
+                fullName: example/typed-service
+                description: A typed React and Go developer tool
+                url: https://github.com/example/typed-service
+                isFork: false
+                isArchived: false
+              topics:
+                - developer-tools
+                - react
+              technologies:
+                - React
+              language: TypeScript
+              category: tooling
+              license:
+                spdxId: MIT
+                name: MIT License
+                status: exact
+              popularity:
+                stars: 420
+                forks: 32
+                watchers: 18
+                openIssues: 14
+              activity:
+                updatedAt: 2026-07-30T09:00:00Z
+                pushedAt: 2026-07-30T08:00:00Z
+              readiness:
+                score: 88
+                band: ready
+                reasons:
+                  - readme_available
+                  - contributing_guide_available
+                  - good_first_issues_available
+                goodFirstIssues: 4
+                helpWantedIssues: 6
+                issuesEnabled: true
+                discussionsEnabled: true
+              documentation:
+                status: sampled
+                readmeAvailable: true
+                contributingGuide: true
+                codeOfConduct: true
+                securityPolicy: true
+                japaneseReadme:
+                  detected: true
+                  status: sampled
+                  confidence: medium
+                  japaneseRunes: 80
+                  letterRunes: 200
+                  analyzedBytes: 4096
+              difficulty:
+                level: 1
+                label: very_low
+                reasons:
+                  - contributing_guide_available
+                  - good_first_issues_available
+              warnings:
+                - code: readme_content_sampled
+                  message: README language and technology evidence uses a bounded content sample
+          pagination:
+            page: 1
+            perPage: 20
+            total: 1
+            totalPages: 1
+            hasNext: false
+          searchSummary:
+            candidatesChecked: 50
+            upstreamTotal: 200
+            enrichmentAttempted: 20
+            enrichmentFailed: 1
+            githubIncomplete: true
+            enrichmentIncomplete: true
+          warnings:
+            - code: github_results_incomplete
+              message: GitHub reported more repositories than the bounded candidate window
+            - code: repository_enrichment_incomplete
+              message: Some shortlist documentation evidence was unavailable
+        meta:
+          requestId: req_repository_discovery
+          timestamp: 2026-07-30T10:00:00Z
+          rateLimitRemaining: 58
+    IssueDetailSuccess:
+      summary: Analyzed issue with explainable recommendation evidence
+      value:
+        data:
+          activity:
+            ci: unknown
+            contributors:
+              confidence: low
+              sampleSize: 0
+              status: unavailable
+              truncated: false
+              value: null
+              windowDays: 180
+            issueResponse:
+              confidence: low
+              medianSeconds: null
+              percentile90Seconds: null
+              sampleSize: 0
+              status: unavailable
+              truncated: false
+              windowDays: 180
+            lastMeaningfulUpdate: 2026-07-29T12:00:00Z
+            pullRequestMerge:
+              confidence: low
+              denominator: null
+              numerator: null
+              percentage: null
+              sampleSize: 0
+              status: unavailable
+              truncated: false
+              windowDays: 180
+            pullRequestMergeTime:
+              confidence: low
+              medianSeconds: null
+              percentile90Seconds: null
+              sampleSize: 0
+              status: unavailable
+              truncated: false
+              windowDays: 180
+            pullRequestReview:
+              confidence: low
+              medianSeconds: null
+              percentile90Seconds: null
+              sampleSize: 0
+              status: unavailable
+              truncated: false
+              windowDays: 180
+            pullRequestsOpened:
+              confidence: low
+              sampleSize: 0
+              status: unavailable
+              truncated: false
+              value: null
+              windowDays: 180
+            staleOpenPullRequests:
+              confidence: low
+              sampleSize: 0
+              status: unavailable
+              truncated: false
+              value: null
+              windowDays: 180
+            unansweredIssues:
+              confidence: low
+              sampleSize: 0
+              status: unavailable
+              truncated: false
+              value: null
+              windowDays: 180
+          analysis:
+            category:
+              confidence: high
+              evidence: []
+              matches:
+                - accessibility
+              primary: accessibility
+            confidence: medium
+            difficulty:
+              confidence: high
+              evidence: []
+              label: Very Easy
+              level: 1
+            effort:
+              band: two_hours
+              confidence: high
+              evidence: []
+              label: 2 hours
+            quality:
+              confidence: medium
+              score: 33
+              signals:
+                - evidence: []
+                  key: problem_description
+                  state: present
+                - evidence: []
+                  key: current_behavior
+                  state: not_applicable
+                - evidence: []
+                  key: expected_behavior
+                  state: not_applicable
+                - evidence: []
+                  key: reproduction_steps
+                  state: not_applicable
+                - evidence: []
+                  key: implementation_guidance
+                  state: absent
+                - evidence: []
+                  key: related_files
+                  state: absent
+                - evidence: []
+                  key: screenshot
+                  state: absent
+                - evidence: []
+                  key: test_method
+                  state: absent
+                - evidence: []
+                  key: acceptance_criteria
+                  state: present
+            requiredTechnologies:
+              - confidence: high
+                evidence: []
+                kind: language
+                name: TypeScript
+            scope:
+              areas:
+                - frontend
+                - tests
+              confidence: medium
+              databaseChange: absent
+              evidence: []
+              fileCount:
+                label: 1–3 files
+                maximum: 3
+                minimum: 1
+          inspection:
+            incomplete: false
+          issue:
+            assignees: []
+            author:
+              login: maintainer
+              type: User
+            body: Improve keyboard navigation and document the verification steps.
+            comments: 1
+            createdAt: 2026-07-16T00:00:00Z
+            labels:
+              - good first issue
+              - accessibility
+            locked: false
+            number: 42
+            state: open
+            title: Improve keyboard navigation in the command palette
+            updatedAt: 2026-07-29T00:00:00Z
+            url: https://github.com/octocat/typed-service/issues/42
+          recommendation:
+            breakdown:
+              - maximum: 30
+                name: skill_match
+                reasons: []
+                score: 0
+              - maximum: 20
+                name: issue_quality
+                reasons: []
+                score: 0
+              - maximum: 15
+                name: repository_quality
+                reasons: []
+                score: 0
+              - maximum: 15
+                name: activity
+                reasons: []
+                score: 0
+              - maximum: 10
+                name: maintainer_responsiveness
+                reasons: []
+                score: 0
+              - maximum: 10
+                name: availability
+                reasons: []
+                score: 0
+            claim:
+              claimed: false
+              confidence: low
+              evidence: []
+            reasons: []
+            score: 0
+            skillMatch:
+              denominator: 0
+              matched: 0
+              percentage: 0
+              skills: []
+            warnings: []
+          repository:
+            defaultBranch: main
+            description: A typed service with accessible contributor workflows.
+            forks: 32
+            fullName: octocat/typed-service
+            id: 1
+            isArchived: false
+            isFork: false
+            mainLanguage: TypeScript
+            name: typed-service
+            openIssues: 4
+            owner: octocat
+            pushedAt: 2026-07-29T10:00:00Z
+            stars: 1250
+            updatedAt: 2026-07-29T12:00:00Z
+            url: https://github.com/octocat/typed-service
+          repositoryHealth:
+            - evidence: []
+              key: readme
+              state: present
+            - evidence: []
+              key: contributing
+              state: present
+            - evidence: []
+              key: ci
+              state: present
+            - evidence: []
+              key: tests
+              state: present
+            - evidence: []
+              key: code_of_conduct
+              state: absent
+        meta:
+          rateLimitRemaining: 4992
+          requestId: fixture_issue_detail
+          timestamp: 2026-07-30T00:00:00Z
+    GitHubRateLimitError:
+      summary: GitHub rejected the bounded upstream request at its rate limit
+      value:
+        error:
+          code: GITHUB_RATE_LIMIT_EXCEEDED
+          message: GitHub API rate limit was exceeded
+        meta:
+          requestId: fixture_rate_limit
+          timestamp: 2026-07-30T00:00:00Z
+    InvalidRequestError:
+      summary: A client value failed bounded validation
+      value:
+        error:
+          code: INVALID_REQUEST
+          message: request validation failed
+        meta:
+          requestId: fixture_invalid_request
+          timestamp: 2026-07-30T00:00:00Z
+  # END GENERATED FIXTURE EXAMPLES
   headers:
     RequestID:
       description: |
@@ -1097,6 +1859,17 @@ components:
         type: string
         minLength: 1
         maxLength: 64
+    CacheStatus:
+      description: |
+        `HIT` when the canonical bounded snapshot came from the in-process LRU
+        cache; `MISS` when this request populated it. Authentication and
+        account state are never cached by this mechanism.
+      required: true
+      schema:
+        type: string
+        enum:
+          - HIT
+          - MISS
     RedirectLocation:
       description: Validated absolute redirect destination.
       required: true
@@ -1130,6 +1903,20 @@ components:
         frontend memory. It must match both the HttpOnly CSRF cookie and the
         server-side digest.
   parameters:
+    RequestID:
+      name: X-Request-ID
+      in: header
+      required: false
+      description: |
+        Optional caller correlation identifier. Values must contain 1–64
+        visible ASCII letters, digits, period, underscore, or hyphen;
+        malformed values are replaced with a server-generated identifier.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+        pattern: "^[A-Za-z0-9._-]{1,64}$"
+      example: docs_tryout_01
     GitHubUsername:
       name: username
       in: path
@@ -1182,6 +1969,7 @@ components:
         minimum: 1
         maximum: 100
         default: 1
+      example: 1
     AccountPerPage:
       name: perPage
       in: query
@@ -1192,6 +1980,7 @@ components:
         minimum: 1
         maximum: 50
         default: 20
+      example: 20
     BookmarkID:
       name: bookmarkID
       in: path
@@ -1200,6 +1989,7 @@ components:
       schema:
         type: string
         format: uuid
+      example: 06d30598-6b27-44dc-ad1f-87a4c821d615
     SavedSearchID:
       name: savedSearchID
       in: path
@@ -1208,6 +1998,7 @@ components:
       schema:
         type: string
         format: uuid
+      example: 9ae1f9e9-acba-4638-94ed-2e7d56ec723f
     ResourceVersion:
       name: version
       in: query
@@ -1217,6 +2008,7 @@ components:
         type: integer
         format: int64
         minimum: 1
+      example: 3
   responses:
     InvalidRequest:
       description: A path or request value failed validation.
@@ -1227,6 +2019,9 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            invalid-request:
+              $ref: "#/components/examples/InvalidRequestError"
     ForbiddenOrigin:
       description: The browser Origin is not in the configured allowlist.
       headers:
@@ -1254,6 +2049,9 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            rate-limit:
+              $ref: "#/components/examples/GitHubRateLimitError"
     GitHubUpstreamError:
       description: Required public data could not be retrieved from GitHub.
       headers:
