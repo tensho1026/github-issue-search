@@ -41,6 +41,7 @@ import {
   evidencePresentation,
   readinessPresentation,
 } from "../model/repository-presentation";
+import { BookmarkAction } from "../../account/components/BookmarkAction";
 
 type RepositoryCardProps = {
   item: RepositoryDiscoveryItem;
@@ -307,6 +308,15 @@ export function RepositoryCard({ item, rank }: RepositoryCardProps) {
           Repository updated {formatDate(item.activity.updatedAt)}. Server
           ordering and decisions are preserved.
         </p>
+        <div>
+          <BookmarkAction
+            request={{
+              repositoryName: item.repository.name,
+              repositoryOwner: item.repository.owner,
+              targetType: "repository",
+            }}
+          />
+        </div>
       </CardContent>
     </Card>
   );

@@ -3,19 +3,22 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
+import { AppProviders } from "../../../app/AppProviders";
 import { issueSearchFixture } from "../../../test/issue-fixtures";
 import { IssueSearchResults } from "./IssueSearchResults";
 
 describe("IssueSearchResults", () => {
   it("preserves API order and renders every required recommendation field", () => {
     render(
-      <MemoryRouter>
-        <IssueSearchResults
-          envelope={issueSearchFixture}
-          isFetching={false}
-          onPageChange={vi.fn()}
-        />
-      </MemoryRouter>,
+      <AppProviders>
+        <MemoryRouter>
+          <IssueSearchResults
+            envelope={issueSearchFixture}
+            isFetching={false}
+            onPageChange={vi.fn()}
+          />
+        </MemoryRouter>
+      </AppProviders>,
     );
 
     expect(
@@ -54,13 +57,15 @@ describe("IssueSearchResults", () => {
     const user = userEvent.setup();
     const onPageChange = vi.fn();
     render(
-      <MemoryRouter>
-        <IssueSearchResults
-          envelope={issueSearchFixture}
-          isFetching={false}
-          onPageChange={onPageChange}
-        />
-      </MemoryRouter>,
+      <AppProviders>
+        <MemoryRouter>
+          <IssueSearchResults
+            envelope={issueSearchFixture}
+            isFetching={false}
+            onPageChange={onPageChange}
+          />
+        </MemoryRouter>
+      </AppProviders>,
     );
 
     await user.click(screen.getByRole("button", { name: "Go to page 2" }));

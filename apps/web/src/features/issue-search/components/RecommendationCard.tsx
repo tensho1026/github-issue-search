@@ -20,6 +20,7 @@ import {
 } from "../../../shared/lib/format";
 import { cn } from "../../../shared/lib/cn";
 import { issueDetailSearchParameters } from "../../../shared/lib/issue-detail-location";
+import { BookmarkAction } from "../../account/components/BookmarkAction";
 import {
   scorePresentation,
   skillPresentation,
@@ -218,6 +219,14 @@ export function RecommendationCard({ item, rank }: RecommendationCardProps) {
             <Icon icon={ArrowUpRight} />
           </a>
         </Button>
+        <BookmarkAction
+          request={{
+            issueNumber: item.issue.number,
+            repositoryName: item.repository.name,
+            repositoryOwner: item.repository.owner,
+            targetType: "issue",
+          }}
+        />
       </CardFooter>
     </Card>
   );
