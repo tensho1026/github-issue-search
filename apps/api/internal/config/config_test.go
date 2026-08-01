@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -30,6 +31,14 @@ var configurationKeys = []string{
 	"REPOSITORY_DISCOVERY_CACHE_TTL",
 	"REPOSITORY_DISCOVERY_CACHE_CAPACITY",
 	"MANIFEST_FILE_LIMIT",
+	"DATABASE_URL",
+	"DATABASE_MAX_CONNECTIONS",
+	"DATABASE_MIN_CONNECTIONS",
+	"DATABASE_CONNECT_TIMEOUT",
+	"DATABASE_QUERY_TIMEOUT",
+	"DATABASE_MAX_CONNECTION_LIFETIME",
+	"DATABASE_MAX_CONNECTION_IDLE_TIME",
+	"DATABASE_HEALTH_CHECK_PERIOD",
 	"USE_GITHUB_API_MOCK",
 }
 
@@ -85,6 +94,18 @@ func TestLoadUsesSafeDefaults(t *testing.T) {
 			defaultRepositoryDiscoveryCacheCapacity {
 		t.Fatalf("Load() repository discovery defaults = %+v", cfg)
 	}
+	if cfg.DatabaseURL.IsSet() ||
+		cfg.DatabaseMaxConnections != defaultDatabaseMaxConnections ||
+		cfg.DatabaseMinConnections != defaultDatabaseMinConnections ||
+		cfg.DatabaseConnectTimeout != defaultDatabaseConnectTimeout ||
+		cfg.DatabaseQueryTimeout != defaultDatabaseQueryTimeout ||
+		cfg.DatabaseMaxConnectionLifetime !=
+			defaultDatabaseMaxConnectionLifetime ||
+		cfg.DatabaseMaxConnectionIdleTime !=
+			defaultDatabaseMaxConnectionIdleTime ||
+		cfg.DatabaseHealthCheckPeriod != defaultDatabaseHealthCheckPeriod {
+		t.Fatal("Load() did not apply database-safe defaults")
+	}
 }
 
 func TestLoadReadsConfiguredValues(t *testing.T) {
@@ -113,6 +134,18 @@ func TestLoadReadsConfiguredValues(t *testing.T) {
 	t.Setenv("REPOSITORY_DISCOVERY_CACHE_TTL", "2m")
 	t.Setenv("REPOSITORY_DISCOVERY_CACHE_CAPACITY", "700")
 	t.Setenv("MANIFEST_FILE_LIMIT", "2")
+	databaseURL := fmt.Sprintf(
+		"postgresql://owner:%s@db.example/issuescout?sslmode=require",
+		"configuration-test-value",
+	)
+	t.Setenv("DATABASE_URL", databaseURL)
+	t.Setenv("DATABASE_MAX_CONNECTIONS", "12")
+	t.Setenv("DATABASE_MIN_CONNECTIONS", "2")
+	t.Setenv("DATABASE_CONNECT_TIMEOUT", "4s")
+	t.Setenv("DATABASE_QUERY_TIMEOUT", "3s")
+	t.Setenv("DATABASE_MAX_CONNECTION_LIFETIME", "20m")
+	t.Setenv("DATABASE_MAX_CONNECTION_IDLE_TIME", "4m")
+	t.Setenv("DATABASE_HEALTH_CHECK_PERIOD", "20s")
 	t.Setenv("USE_GITHUB_API_MOCK", "true")
 
 	cfg, err := Load()
@@ -122,7 +155,8 @@ func TestLoadReadsConfiguredValues(t *testing.T) {
 
 	if cfg.AppEnvironment != "test" ||
 		cfg.Port != "9090" ||
-		cfg.GitHubToken != "server-only-token" {
+		cfg.GitHubToken.Value() != "server-only-token" ||
+		cfg.DatabaseURL.Value() != databaseURL {
 		t.Fatalf("Load() did not preserve configured scalar values")
 	}
 	if cfg.GitHubRequestTimeout != 7*time.Second ||
@@ -141,8 +175,15 @@ func TestLoadReadsConfiguredValues(t *testing.T) {
 		cfg.RepositoryDiscoveryCacheTTL != 2*time.Minute ||
 		cfg.RepositoryDiscoveryCacheCapacity != 700 ||
 		cfg.ManifestFileLimit != 2 ||
+		cfg.DatabaseMaxConnections != 12 ||
+		cfg.DatabaseMinConnections != 2 ||
+		cfg.DatabaseConnectTimeout != 4*time.Second ||
+		cfg.DatabaseQueryTimeout != 3*time.Second ||
+		cfg.DatabaseMaxConnectionLifetime != 20*time.Minute ||
+		cfg.DatabaseMaxConnectionIdleTime != 4*time.Minute ||
+		cfg.DatabaseHealthCheckPeriod != 20*time.Second ||
 		!cfg.UseGitHubAPIMock {
-		t.Fatalf("Load() did not parse configured limits: %+v", cfg)
+		t.Fatal("Load() did not parse configured limits")
 	}
 	if got := cfg.GitHubAPIBaseURL.String(); got != "http://127.0.0.1:9000" {
 		t.Fatalf("Load().GitHubAPIBaseURL = %q", got)
@@ -289,6 +330,41 @@ func TestLoadRejectsInvalidConfiguration(t *testing.T) {
 			message: "MANIFEST_FILE_LIMIT",
 		},
 		{
+			name:    "database URL scheme",
+			key:     "DATABASE_URL",
+			value:   "https://db.example/issuescout?sslmode=require",
+			message: "DATABASE_URL",
+		},
+		{
+			name: "database URL TLS",
+			key:  "DATABASE_URL",
+			value: fmt.Sprintf(
+				"postgresql://owner:%s@db.example/issuescout?sslmode=disable",
+				"configuration-test-value",
+			),
+			message: "DATABASE_URL",
+		},
+		{
+			name:    "database maximum connections",
+			key:     "DATABASE_MAX_CONNECTIONS",
+			value:   "101",
+			message: "DATABASE_MAX_CONNECTIONS",
+		},
+		{
+			name:     "database minimum exceeds maximum",
+			key:      "DATABASE_MIN_CONNECTIONS",
+			value:    "4",
+			message:  "DATABASE_MIN_CONNECTIONS",
+			preKey:   "DATABASE_MAX_CONNECTIONS",
+			preValue: "3",
+		},
+		{
+			name:    "database query timeout",
+			key:     "DATABASE_QUERY_TIMEOUT",
+			value:   "0s",
+			message: "DATABASE_QUERY_TIMEOUT",
+		},
+		{
 			name:    "mock boolean",
 			key:     "USE_GITHUB_API_MOCK",
 			value:   "sometimes",
@@ -320,6 +396,34 @@ func TestLoadRejectsInvalidConfiguration(t *testing.T) {
 				t.Fatalf("Load() error = %q, want key %q", err, test.message)
 			}
 		})
+	}
+}
+
+func TestSecretsNeverFormatTheirValues(t *testing.T) {
+	clearConfiguration(t)
+	//nolint:gosec // This is a synthetic sentinel used only to prove redaction.
+	const token = "github-configuration-sensitive-value"
+	const databasePassword = "database-configuration-sensitive-value"
+	t.Setenv("GITHUB_TOKEN", token)
+	t.Setenv(
+		"DATABASE_URL",
+		fmt.Sprintf(
+			"postgresql://owner:%s@db.example/issuescout?sslmode=verify-full",
+			databasePassword,
+		),
+	)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	formatted := fmt.Sprintf("%+v %#v %s %s", cfg, cfg, cfg.GitHubToken, cfg.DatabaseURL)
+	if strings.Contains(formatted, token) ||
+		strings.Contains(formatted, databasePassword) {
+		t.Fatal("formatted configuration exposed a secret")
+	}
+	if !strings.Contains(formatted, "<redacted>") {
+		t.Fatal("formatted configuration did not identify redacted values")
 	}
 }
 

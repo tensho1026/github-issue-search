@@ -73,6 +73,24 @@ pnpm run e2e
 
 No test command requires `GITHUB_TOKEN`.
 
+Ordinary tests also require no database. Router tests inject a recording
+database health port and prove that process health, profile analysis,
+repository discovery, issue search, and issue detail cause zero database
+calls. PostgreSQL repository tests assert parameterized account ownership and
+safe error mapping. `pnpm run migrations:check` validates the forward-only
+catalog without a live service.
+
+An explicit clean-schema integration is available only with an approved,
+disposable `TEST_DATABASE_URL`:
+
+```sh
+go -C apps/api test -run TestMigrationsAgainstConfiguredPostgreSQL \
+  ./internal/database/postgres
+```
+
+It uses a random isolated schema and removes that schema after verification.
+Pull request CI intentionally receives no database secret.
+
 ## Deterministic GitHub adapter
 
 The built-stack suite starts the compiled API with:

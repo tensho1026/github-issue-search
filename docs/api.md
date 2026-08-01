@@ -57,6 +57,7 @@ or `MISS`.
 | Method and path                                      | Purpose                                                         | Bounds                                                     |
 | ---------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------- |
 | GET `/api/health`                                    | Liveness/readiness and request-correlation check                | No upstream or database access                             |
+| GET `/api/health/database`                           | Separate authenticated-storage readiness probe                  | One bounded ping; does not gate anonymous routes           |
 | GET `/api/github/users/{username}`                   | Normalized public user and repository summaries                 | At most 20 repositories                                    |
 | GET `/api/github/users/{username}/profile-analysis`  | Public technology, OSS activity, samples, proficiency, warnings | One GraphQL snapshot; 20 repositories per collection       |
 | POST `/api/repositories/search`                      | Filtered public repositories with OSS readiness evidence        | 50 candidates, one 20-repository enrichment batch          |
@@ -85,15 +86,17 @@ panic recovery, and request deadlines apply at the middleware boundary.
 Feature routes additionally declare their possible `400`, `404`, `429`, and
 `502` outcomes. The contract forbids a catch-all default response.
 
-| Error code                   | Typical HTTP status | Meaning and caller action                                     |
-| ---------------------------- | ------------------: | ------------------------------------------------------------- |
-| `INVALID_REQUEST`            |                 400 | Fix request syntax, validation, or bounds                     |
-| `GITHUB_USER_NOT_FOUND`      |                 404 | Check the public username                                     |
-| `NOT_FOUND`                  |                 404 | Check the route, repository, or issue reference               |
-| `GITHUB_RATE_LIMIT_EXCEEDED` |                 429 | Wait for normalized rate-limit recovery                       |
-| `GITHUB_API_ERROR`           |                 502 | GitHub failed or returned unusable required data; retry later |
-| `INTERNAL_SERVER_ERROR`      |                 500 | Unexpected failure was safely recovered; report request ID    |
-| `REQUEST_TIMEOUT`            |                 504 | Caller cancelled or the bounded request deadline elapsed      |
+| Error code                   | Typical HTTP status | Meaning and caller action                                      |
+| ---------------------------- | ------------------: | -------------------------------------------------------------- |
+| `INVALID_REQUEST`            |                 400 | Fix request syntax, validation, or bounds                      |
+| `GITHUB_USER_NOT_FOUND`      |                 404 | Check the public username                                      |
+| `NOT_FOUND`                  |                 404 | Check the route, repository, or issue reference                |
+| `GITHUB_RATE_LIMIT_EXCEEDED` |                 429 | Wait for normalized rate-limit recovery                        |
+| `GITHUB_API_ERROR`           |                 502 | GitHub failed or returned unusable required data; retry later  |
+| `DATABASE_UNAVAILABLE`       |                 503 | Account storage is unavailable; anonymous routes remain usable |
+| `FORBIDDEN_ORIGIN`           |                 403 | Use a browser origin from the exact server allowlist           |
+| `INTERNAL_SERVER_ERROR`      |                 500 | Unexpected failure was safely recovered; report request ID     |
+| `REQUEST_TIMEOUT`            |                 504 | Caller cancelled or the bounded request deadline elapsed       |
 
 Forbidden-origin responses use an error envelope without exposing allowlist
 details. Error messages never include tokens, raw upstream bodies, issue

@@ -48,6 +48,11 @@ middleware is active, and response correlation works. It performs no GitHub or
 database operation, so an upstream incident does not incorrectly mark the
 process dead.
 
+`GET /api/health/database` separately pings optional authenticated account
+storage with the configured query deadline. It returns `DATABASE_UNAVAILABLE`
+without driver details when storage is absent or unhealthy. Do not use this
+endpoint as the liveness gate for anonymous traffic.
+
 The native supervisor and packaged-artifact smoke test validate health plus the
 web root. Promotion health checks use a public HTTPS endpoint supplied by the
 deployment environment.

@@ -9,6 +9,7 @@ import (
 	"github.com/tensho1026/github-issue-search/apps/api/internal/config"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/handler"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/middleware"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/transport/response"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/usecase"
 )
@@ -22,6 +23,8 @@ type Dependencies struct {
 	SearchIssues         usecase.SearchIssues
 	SearchRepositories   usecase.SearchRepositories
 	RecommendIssue       usecase.IssueRecommender
+	DatabaseHealth       port.DatabaseHealth
+	DatabaseConfigured   bool
 }
 
 // New composes concrete HTTP dependencies. Feature handlers are constructed by
@@ -51,6 +54,11 @@ func New(dependencies Dependencies) (http.Handler, error) {
 			"compose router: recommend issue usecase is required",
 		)
 	}
+	if dependencies.DatabaseConfigured && dependencies.DatabaseHealth == nil {
+		return nil, fmt.Errorf(
+			"compose router: configured database health probe is required",
+		)
+	}
 
 	engine := gin.New()
 	if err := engine.SetTrustedProxies(nil); err != nil {
@@ -66,6 +74,11 @@ func New(dependencies Dependencies) (http.Handler, error) {
 	)
 
 	healthHandler := handler.NewHealthHandler(dependencies.Responder)
+	databaseHealthHandler := handler.NewDatabaseHealthHandler(
+		dependencies.DatabaseHealth,
+		dependencies.DatabaseConfigured,
+		dependencies.Responder,
+	)
 	gitHubUserHandler := handler.NewGitHubUserHandler(
 		dependencies.GetGitHubUser,
 		dependencies.Responder,
@@ -94,6 +107,14 @@ func New(dependencies Dependencies) (http.Handler, error) {
 			dependencies.Responder,
 		),
 		healthHandler.Check,
+	)
+	api.GET(
+		"/health/database",
+		middleware.Timeout(
+			dependencies.Config.NormalRequestTimeout,
+			dependencies.Responder,
+		),
+		databaseHealthHandler.Check,
 	)
 	api.GET(
 		"/github/users/:username",

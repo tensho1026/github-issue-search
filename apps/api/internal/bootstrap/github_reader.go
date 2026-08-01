@@ -21,7 +21,7 @@ func NewGitHubReader(cfg config.Config, logger *slog.Logger) port.GitHubReader {
 	}
 	return githubclient.NewClient(
 		cfg.GitHubAPIBaseURL,
-		cfg.GitHubToken,
+		cfg.GitHubToken.Value(),
 		cfg.GitHubRequestTimeout,
 		logger,
 	)

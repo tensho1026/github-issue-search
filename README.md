@@ -9,8 +9,35 @@ requirements, estimated effort, and repository health.
 
 The anonymous core is intentionally stateless: the API reads public GitHub data
 on demand and may cache it in memory, but it does not require a database or
-GitHub OAuth. Optional account features are isolated behind later
-authentication and persistence boundaries.
+GitHub OAuth. Optional account features use a separate TLS-only PostgreSQL
+boundary; database failure never disables anonymous profile, repository, or
+issue discovery.
+
+## Quick start
+
+The deterministic stack needs no credential:
+
+```sh
+corepack enable
+corepack prepare --activate
+make install
+make dev-smoke
+```
+
+For interactive development, create ignored environment files and start both
+native processes:
+
+```sh
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env
+make dev
+```
+
+- Web: `http://127.0.0.1:5173`
+- API process health: `http://127.0.0.1:8080/api/health`
+- Optional database readiness: `http://127.0.0.1:8080/api/health/database`
+
+Press Ctrl-C once; the supervisor gracefully stops both process trees.
 
 ## Repository layout
 
@@ -20,7 +47,9 @@ authentication and persistence boundaries.
 │   ├── api/              # Go + Gin HTTP API
 │   └── web/              # React + TypeScript web application
 ├── docs/                 # Architecture and engineering decisions
-├── packages/             # Shared contracts and generated artifacts (later issues)
+├── http/                 # HTTPYAC requests grouped by capability
+├── packages/             # OpenAPI contract, fixtures, and generated types
+├── scripts/              # Reusable CI, database, release, and dev automation
 ├── go.work               # Go workspace
 ├── package.json          # Cross-application commands
 └── pnpm-workspace.yaml   # JavaScript workspace
@@ -41,7 +70,9 @@ documents the score, sampling, warnings, cache, and deterministic ranking.
 - Node.js 22.22 or newer (Node 24 LTS is recommended)
 - pnpm 10
 - Go 1.25
-- A server-only GitHub personal access token for GitHub-powered API routes
+- A server-only GitHub personal access token for live GraphQL-powered routes
+- PostgreSQL 14+ only when manually verifying optional account persistence
+- GNU tar only when building reproducible release archives on macOS
 
 The repository pins the pnpm release in `package.json`. Corepack can provision
 that version:
@@ -51,31 +82,41 @@ corepack enable
 corepack prepare --activate
 ```
 
-## Setup
+## Environment variables
 
-```sh
-make install
-cp apps/api/.env.example apps/api/.env
-cp apps/web/.env.example apps/web/.env
-```
+Examples contain no credential. Store local server secrets only in the ignored
+`apps/api/.env`; never put them in a `VITE_*` variable.
 
-Run a deterministic no-credential startup, health, request-correlation, profile,
-and shutdown journey:
+| Variable            | Required | Purpose                                                            |
+| ------------------- | -------- | ------------------------------------------------------------------ |
+| `GITHUB_TOKEN`      | Live use | Server-only public GitHub REST/GraphQL access                      |
+| `DATABASE_URL`      | No       | Rotated TLS PostgreSQL URL for optional authenticated account data |
+| `ALLOWED_ORIGINS`   | No       | Exact browser origins; defaults to the local Vite origin           |
+| `PORT`              | No       | API listener; defaults to `8080`                                   |
+| `VITE_API_BASE_URL` | No       | Browser-visible API origin; defaults to local API                  |
 
-```sh
-make dev-smoke
-```
+`DATABASE_URL` must use `sslmode=require` or `sslmode=verify-full`. A
+connection string exposed in chat, an issue, a screenshot, or terminal output
+must be rotated before use. The complete bounded configuration surface is in
+[the configuration reference](docs/configuration.md).
 
-For normal development, the native supervisor loads the application environment
-files, starts both services, waits for readiness, and cleans up both process
-trees on Ctrl-C:
+## Essential commands
 
-```sh
-make dev
-```
+| Command                     | Purpose                                               |
+| --------------------------- | ----------------------------------------------------- |
+| `make dev`                  | Start API and web with readiness and safe cleanup     |
+| `make dev-smoke`            | Prove the deterministic credential-free stack         |
+| `make check`                | Format, lint, typecheck, unit test, and build         |
+| `pnpm run quality:strict`   | Run the complete local pre-PR quality policy          |
+| `pnpm run e2e`              | Test production web against the compiled API          |
+| `pnpm run database:status`  | Inspect safe migration state and checksums            |
+| `pnpm run database:migrate` | Apply pending forward-only migrations                 |
+| `pnpm run database:verify`  | Require a complete, checksum-matching database schema |
+| `pnpm run migrations:check` | Enforce SQL safety and append-only migration history  |
 
-- Web: `http://127.0.0.1:5173`
-- API: `http://127.0.0.1:8080`
+Database commands load `apps/api/.env` without printing it. Leave
+`DATABASE_URL` empty for anonymous-only development. See
+[the database guide](docs/database.md) before enabling it.
 
 The API can search a bounded GitHub issue candidate window after startup:
 

@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -50,6 +52,78 @@ func TestHealthRouteUsesStandardEnvelopeAndHeaders(t *testing.T) {
 	}
 	if body.Data.Status != "ok" || body.Meta.RequestID != "req_health" {
 		t.Fatalf("body = %+v", body)
+	}
+}
+
+func TestDatabaseHealthRouteIsSeparateFromProcessHealth(t *testing.T) {
+	health := &routerDatabaseHealthStub{}
+	router := newTestRouterWithDatabase(t, health, true)
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(
+		recorder,
+		httptest.NewRequest(
+			http.MethodGet,
+			"/api/health/database",
+			nil,
+		),
+	)
+
+	if recorder.Code != http.StatusOK ||
+		!strings.Contains(recorder.Body.String(), `"status":"ready"`) {
+		t.Fatalf("response = %d %s", recorder.Code, recorder.Body.String())
+	}
+	if health.calls.Load() != 1 {
+		t.Fatalf("Ping() calls = %d", health.calls.Load())
+	}
+}
+
+func TestAnonymousCoreRoutesNeverProbeDatabase(t *testing.T) {
+	health := &routerDatabaseHealthStub{
+		err: errors.New("simulated database outage"),
+	}
+	router := newTestRouterWithDatabase(t, health, true)
+	requests := []*http.Request{
+		httptest.NewRequest(http.MethodGet, "/api/health", nil),
+		httptest.NewRequest(http.MethodGet, "/api/github/users/octocat", nil),
+		httptest.NewRequest(
+			http.MethodGet,
+			"/api/github/users/octocat/profile-analysis",
+			nil,
+		),
+		httptest.NewRequest(
+			http.MethodPost,
+			"/api/issues/search",
+			strings.NewReader(`{"username":"octocat"}`),
+		),
+		httptest.NewRequest(
+			http.MethodPost,
+			"/api/repositories/search",
+			strings.NewReader(`{}`),
+		),
+		httptest.NewRequest(
+			http.MethodGet,
+			"/api/issues/acme/rocket/42",
+			nil,
+		),
+	}
+	requests[3].Header.Set("Content-Type", "application/json")
+	requests[4].Header.Set("Content-Type", "application/json")
+	for _, request := range requests {
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, request)
+		if recorder.Code >= http.StatusInternalServerError {
+			t.Fatalf(
+				"%s %s response = %d %s",
+				request.Method,
+				request.URL.Path,
+				recorder.Code,
+				recorder.Body.String(),
+			)
+		}
+	}
+	if health.calls.Load() != 0 {
+		t.Fatalf("anonymous routes made %d database calls", health.calls.Load())
 	}
 }
 
@@ -201,6 +275,14 @@ func TestNewRequiresLogger(t *testing.T) {
 }
 
 func newTestRouter(t *testing.T) http.Handler {
+	return newTestRouterWithDatabase(t, nil, false)
+}
+
+func newTestRouterWithDatabase(
+	t *testing.T,
+	databaseHealth port.DatabaseHealth,
+	databaseConfigured bool,
+) http.Handler {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	var logs bytes.Buffer
@@ -213,11 +295,23 @@ func newTestRouter(t *testing.T) http.Handler {
 		SearchIssues:         routerSearchIssuesStub{},
 		SearchRepositories:   routerSearchRepositoriesStub{},
 		RecommendIssue:       routerRecommendIssueStub{},
+		DatabaseHealth:       databaseHealth,
+		DatabaseConfigured:   databaseConfigured,
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
 	return router
+}
+
+type routerDatabaseHealthStub struct {
+	calls atomic.Int64
+	err   error
+}
+
+func (health *routerDatabaseHealthStub) Ping(context.Context) error {
+	health.calls.Add(1)
+	return health.err
 }
 
 type routerGetGitHubUserStub struct{}
