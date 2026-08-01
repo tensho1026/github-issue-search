@@ -14,9 +14,11 @@ then follow the topic guide that matches your change.
    sessions or account ownership.
 5. Read [Authenticated account workspace](account-workspace.md) before
    changing bookmarks, saved searches, preferences, export, or deletion.
-6. Use [Commands](commands.md) and [Testing](testing.md) while changing code.
-7. Use [Troubleshooting](troubleshooting.md) when a local or CI check fails.
-8. Read [Extension playbooks](extending.md) before adding a feature,
+6. Read [GoDoc and internal API contracts](godoc.md) before changing Go package
+   boundaries or exported declarations.
+7. Use [Commands](commands.md) and [Testing](testing.md) while changing code.
+8. Use [Troubleshooting](troubleshooting.md) when a local or CI check fails.
+9. Read [Extension playbooks](extending.md) before adding a feature,
    upstream adapter, persistence, or a scoring rule.
 
 ## Knowledge map
@@ -34,6 +36,7 @@ then follow the topic guide that matches your change.
 | Optional OAuth and server sessions       | [Authentication](authentication.md)             | [Database](database.md)                       |
 | Account-owned optional features          | [Account workspace](account-workspace.md)       | [Authentication](authentication.md)           |
 | Authenticated PostgreSQL persistence     | [Database](database.md)                         | [Architecture](architecture.md)               |
+| Go packages and internal contracts       | [GoDoc](godoc.md)                               | [Architecture](architecture.md)               |
 | Automated verification                   | [Testing](testing.md)                           | [CI](ci.md)                                   |
 | Release and promotion                    | [Delivery](delivery.md)                         | [ADR 0005](adr/0005-docker-free-delivery.md)  |
 | Logs and request correlation             | [Observability](observability.md)               | [Troubleshooting](troubleshooting.md)         |

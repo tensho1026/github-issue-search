@@ -46,6 +46,8 @@ surface; pnpm scripts expose every CI building block.
 | `pnpm run dev:smoke`                                 | Start, verify, and stop the deterministic stack      |
 | `pnpm run dev:web`                                   | Run only Vite                                        |
 | `pnpm run docs:check`                                | Check links and documentation/source coverage        |
+| `pnpm run docs:go`                                   | Print full GoDoc for every API package               |
+| `pnpm run docs:go:check`                             | Enforce package and exported declaration comments    |
 | `pnpm run e2e`                                       | Build the stack and run Playwright                   |
 | `pnpm run format`                                    | Apply repository formatters                          |
 | `pnpm run format:check`                              | Verify repository formatting                         |
