@@ -30,6 +30,11 @@ const IssueDetailPage = lazy(async () => {
   return { default: module.IssueDetailPage };
 });
 
+const WorkspacePage = lazy(async () => {
+  const module = await import("../pages/WorkspacePage");
+  return { default: module.WorkspacePage };
+});
+
 const NotFoundPage = lazy(async () => {
   const module = await import("../pages/NotFoundPage");
   return { default: module.NotFoundPage };
@@ -97,6 +102,14 @@ export function AppRoutes() {
               </LazyPage>
             }
             path={appRoutes.issuePattern}
+          />
+          <Route
+            element={
+              <LazyPage>
+                <WorkspacePage />
+              </LazyPage>
+            }
+            path={appRoutes.workspace}
           />
           <Route
             element={
