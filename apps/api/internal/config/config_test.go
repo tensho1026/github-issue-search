@@ -13,6 +13,7 @@ var configurationKeys = []string{
 	"APP_ENV",
 	"PORT",
 	"ALLOWED_ORIGINS",
+	"API_DOCUMENTATION_ENABLED",
 	"GITHUB_API_BASE_URL",
 	"GITHUB_TOKEN",
 	"GITHUB_REQUEST_TIMEOUT",
@@ -74,6 +75,9 @@ func TestLoadUsesSafeDefaults(t *testing.T) {
 	}
 	if !reflect.DeepEqual(cfg.AllowedOrigins, []string{defaultAllowedOrigins}) {
 		t.Fatalf("Load().AllowedOrigins = %v", cfg.AllowedOrigins)
+	}
+	if !cfg.APIDocumentationEnabled {
+		t.Fatal("Load().APIDocumentationEnabled = false")
 	}
 	if cfg.GitHubAPIBaseURL.String() != defaultGitHubAPIBaseURL {
 		t.Fatalf("Load().GitHubAPIBaseURL = %q", cfg.GitHubAPIBaseURL)
@@ -137,6 +141,7 @@ func TestLoadReadsConfiguredValues(t *testing.T) {
 		"https://issuescout.example, http://localhost:5173,https://issuescout.example/",
 	)
 	t.Setenv("GITHUB_API_BASE_URL", "http://127.0.0.1:9000/")
+	t.Setenv("API_DOCUMENTATION_ENABLED", "false")
 	t.Setenv("GITHUB_TOKEN", "server-only-token")
 	t.Setenv("GITHUB_REQUEST_TIMEOUT", "7s")
 	t.Setenv("GITHUB_API_MAX_CONCURRENCY", "3")
@@ -178,6 +183,9 @@ func TestLoadReadsConfiguredValues(t *testing.T) {
 		cfg.GitHubToken.Value() != "server-only-token" ||
 		cfg.DatabaseURL.Value() != databaseURL {
 		t.Fatalf("Load() did not preserve configured scalar values")
+	}
+	if cfg.APIDocumentationEnabled {
+		t.Fatal("Load().APIDocumentationEnabled = true")
 	}
 	if cfg.GitHubRequestTimeout != 7*time.Second ||
 		cfg.GitHubMaxConcurrency != 3 ||
@@ -468,6 +476,12 @@ func TestLoadRejectsInvalidConfiguration(t *testing.T) {
 			key:     "DATABASE_QUERY_TIMEOUT",
 			value:   "0s",
 			message: "DATABASE_QUERY_TIMEOUT",
+		},
+		{
+			name:    "API documentation boolean",
+			key:     "API_DOCUMENTATION_ENABLED",
+			value:   "sometimes",
+			message: "API_DOCUMENTATION_ENABLED",
 		},
 		{
 			name:    "mock boolean",

@@ -26,9 +26,9 @@ flowchart LR
 | Go application | fakes and in-memory caches               | fan-out, singleflight, fallback, error mapping         |
 | GoDoc          | AST policy and executable examples       | package, declaration, interface, and contract coverage |
 | HTTP           | Gin recorder and typed fixtures          | status, envelope, headers, validation, middleware      |
-| Contract       | Redocly, Ajv, generated types            | OpenAPI semantics, fixture shape, route and type drift |
+| Contract       | Redocly, Ajv, generated types            | OpenAPI semantics, examples, route and type drift      |
 | React          | Vitest and Testing Library               | forms, hooks, routing, a11y states, safe presentation  |
-| Built stack    | Playwright and deterministic API adapter | profile → search → detail and resilient errors         |
+| Built stack    | Playwright and deterministic API adapter | journeys, errors, and self-contained Swagger UI        |
 | Native process | Node test runner and real child groups   | startup interruption, readiness, signal cleanup        |
 | Release        | independent builds and packaged smoke    | byte identity, secret surface, request ID, shutdown    |
 
@@ -192,6 +192,11 @@ fixture to prove unknown envelope/payload fields and missing metadata fail.
 Backend tests decode those documents through concrete response types.
 Playwright uses the profile fixtures for its focused network-boundary test.
 
+`pnpm run contracts:examples:check` also proves the interactive examples are
+generated from those validated fixtures. Playwright loads `/docs/` at desktop
+and mobile widths, verifies keyboard entry, fetches `/openapi.yaml`, and fails
+if Swagger performs a non-local runtime request.
+
 When an HTTP response changes:
 
 1. update `packages/contracts/openapi.yaml`;
@@ -228,7 +233,7 @@ sends SIGTERM to the actual supervisor, then proves both API and web ports are
 closed.
 
 `pnpm run dev:smoke` proves the local Go/Vite stack without a token.
-`pnpm run release:reproducibility -- v0.0.0-test` performs two independent
+`pnpm run release:reproducibility v0.0.0-test` performs two independent
 builds, contract and checksum verification, extracted-content secret scanning,
 byte comparison, packaged readiness, request-correlation, and graceful
 shutdown checks.

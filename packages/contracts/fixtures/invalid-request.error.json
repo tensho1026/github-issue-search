@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": "INVALID_REQUEST",
+    "message": "request validation failed"
+  },
+  "meta": {
+    "requestId": "fixture_invalid_request",
+    "timestamp": "2026-07-30T00:00:00Z"
+  }
+}

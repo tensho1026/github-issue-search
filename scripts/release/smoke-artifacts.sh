@@ -79,6 +79,23 @@ for _ in {1..30}; do
       --header "X-Request-ID: artifact-smoke-readiness" \
       "http://127.0.0.1:18080/api/health" 2>/dev/null || true
   )"
+  documentation_headers="${temporary_directory}/documentation-headers"
+  documentation_response="$(
+    curl --fail --show-error --silent \
+      --dump-header "${documentation_headers}" \
+      "http://127.0.0.1:18080/docs/" 2>/dev/null || true
+  )"
+  openapi_headers="${temporary_directory}/openapi-headers"
+  openapi_response="$(
+    curl --fail --show-error --silent \
+      --dump-header "${openapi_headers}" \
+      "http://127.0.0.1:18080/openapi.yaml" 2>/dev/null || true
+  )"
+  swagger_stylesheet="$(
+    curl --fail --show-error --silent \
+      --header "Accept-Encoding: identity" \
+      "http://127.0.0.1:18080/docs/swagger-ui.css" 2>/dev/null || true
+  )"
   web_response="$(
     curl --fail --show-error --silent \
       "http://127.0.0.1:14173/" 2>/dev/null || true
@@ -87,6 +104,19 @@ for _ in {1..30}; do
     [[ "${api_response}" == *'"requestId":"artifact-smoke-readiness"'* ]] &&
     tr -d '\r' <"${api_headers}" |
       grep -Eiq '^x-request-id: artifact-smoke-readiness$' &&
+    [[ "${documentation_response}" == *"<title>IssueScout API reference</title>"* ]] &&
+    [[ "${documentation_response}" == *'src="/docs/issuescout-swagger.js"'* ]] &&
+    tr -d '\r' <"${documentation_headers}" |
+      grep -Eiq "^content-security-policy: .*script-src 'self'" &&
+    [[ "${openapi_response}" == *"openapi: 3.1.0"* ]] &&
+    [[ "${openapi_response}" == *"title: IssueScout API"* ]] &&
+    tr -d '\r' <"${openapi_headers}" |
+      grep -Eiq '^content-type: application/yaml; charset=utf-8$' &&
+    tr -d '\r' <"${openapi_headers}" |
+      grep -Eiq '^cache-control: public, max-age=300, must-revalidate$' &&
+    tr -d '\r' <"${openapi_headers}" |
+      grep -Eiq '^etag: \"[a-f0-9]{64}\"$' &&
+    [[ "${swagger_stylesheet}" == *".swagger-ui"* ]] &&
     [[ "${web_response}" == *"<title>IssueScout</title>"* ]]; then
     kill "${api_pid}"
     set +e
@@ -101,7 +131,7 @@ for _ in {1..30}; do
       echo "release API did not shut down gracefully" >&2
       exit 1
     fi
-    echo "Release API and web passed readiness, correlation, and graceful shutdown smoke tests."
+    echo "Release API, embedded documentation, and web passed readiness, correlation, and graceful shutdown smoke tests."
     exit 0
   fi
   sleep 1

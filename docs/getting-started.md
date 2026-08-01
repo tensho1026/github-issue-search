@@ -105,14 +105,14 @@ every byte, smoke-tests the host API and web artifacts, and removes temporary
 builds:
 
 ```sh
-pnpm run release:reproducibility -- v0.1.0
+pnpm run release:reproducibility v0.1.0
 ```
 
 To retain one verified set:
 
 ```sh
-pnpm run release:build -- v0.1.0 artifacts/release
-pnpm run release:smoke -- artifacts/release v0.1.0
+pnpm run release:build v0.1.0 artifacts/release
+pnpm run release:smoke artifacts/release v0.1.0
 ```
 
 ## Next steps

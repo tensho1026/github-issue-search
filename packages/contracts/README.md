@@ -13,6 +13,12 @@ Fixture JSON must contain no credentials or user-specific production data.
 Authentication fixtures use synthetic values and cover both anonymous and
 authenticated session shapes plus confirmed server-side logout.
 
+The OpenAPI component examples are generated from these validated fixtures.
+Run `pnpm run contracts:sync` after a contract or example change; do not edit
+the marked generated block or
+`apps/api/internal/documentation/openapi.yaml` by hand. The latter is the
+byte-identical copy embedded in each native API release.
+
 Run semantic validation, explicit status/envelope/request-ID policy, positive
 and negative JSON Schema fixture validation, generated frontend type drift,
 and Gin route drift from the repository root:

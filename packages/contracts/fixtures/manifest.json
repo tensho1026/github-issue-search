@@ -63,6 +63,10 @@
     {
       "file": "rate-limit.error.json",
       "schema": "ErrorEnvelope"
+    },
+    {
+      "file": "invalid-request.error.json",
+      "schema": "ErrorEnvelope"
     }
   ]
 }

@@ -182,6 +182,7 @@ export type {
   RepositoryEvidenceSource,
   RepositorySignal,
   RepositorySummary,
+  RequestId,
   RequiredTechnology,
   ResourceVersion,
   SavedSearch,

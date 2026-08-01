@@ -68,7 +68,7 @@ pnpm run migrations:check
 pnpm run lint:docs
 pnpm run lint:workflows
 pnpm run e2e
-pnpm run release:reproducibility -- v0.0.0-local
+pnpm run release:reproducibility v0.0.0-local
 ```
 
 `golangci-lint`, `actionlint`, and `shellcheck` are expected developer tools. CI installs or provisions fixed versions. The actionlint release archive is checked against its pinned upstream SHA-256 before installation. The workflow pins third-party actions by commit SHA; Dependabot proposes controlled SHA updates.

@@ -10,6 +10,7 @@ contain names and safe defaults, never credentials. Commit no `.env` file.
 | `APP_ENV`                               | `development`            | One of `development`, `test`, `staging`, `production`                 | No     |
 | `PORT`                                  | `8080`                   | TCP port 1–65535 for the API listener                                 | No     |
 | `ALLOWED_ORIGINS`                       | `http://127.0.0.1:5173`  | Comma-separated absolute HTTP(S) browser origins; no wildcard         | No     |
+| `API_DOCUMENTATION_ENABLED`             | `true`                   | Serve embedded `/docs/` and `/openapi.yaml`; false omits the routes   | No     |
 | `GITHUB_API_BASE_URL`                   | `https://api.github.com` | Absolute HTTPS upstream URL; HTTP is accepted only for loopback tests | No     |
 | `GITHUB_TOKEN`                          | empty                    | Server-only GitHub credential; required by GraphQL search             | Yes    |
 | `GITHUB_REQUEST_TIMEOUT`                | `10s`                    | Positive duration, at most one minute                                 | No     |

@@ -223,6 +223,55 @@ func TestUnknownRouteUsesSafeErrorEnvelope(t *testing.T) {
 	}
 }
 
+func TestDocumentationRoutesAreInjectedAndDisableable(t *testing.T) {
+	router := newTestRouter(t)
+	for _, path := range []string{
+		"/docs",
+		"/docs/",
+		"/docs/swagger-ui.css",
+		"/openapi.yaml",
+	} {
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		request.Header.Set("X-Request-ID", "req_docs")
+		router.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusOK ||
+			recorder.Body.String() != "injected documentation" {
+			t.Errorf(
+				"%s response = %d %q",
+				path,
+				recorder.Code,
+				recorder.Body.String(),
+			)
+		}
+		if recorder.Header().Get("X-Request-ID") != "req_docs" {
+			t.Errorf("%s did not preserve request correlation", path)
+		}
+	}
+
+	cfg := testConfig(t)
+	cfg.APIDocumentationEnabled = false
+	disabled, err := newTestRouterFromDependencies(Dependencies{
+		Config: cfg,
+	})
+	if err != nil {
+		t.Fatalf("New() disabled documentation error = %v", err)
+	}
+	recorder := httptest.NewRecorder()
+	disabled.ServeHTTP(
+		recorder,
+		httptest.NewRequest(http.MethodGet, "/docs/", nil),
+	)
+	if recorder.Code != http.StatusNotFound ||
+		!strings.Contains(recorder.Body.String(), `"code":"NOT_FOUND"`) {
+		t.Fatalf(
+			"disabled response = %d %s",
+			recorder.Code,
+			recorder.Body.String(),
+		)
+	}
+}
+
 func TestProfileAnalysisRouteUsesStandardEnvelope(t *testing.T) {
 	router := newTestRouter(t)
 	request := httptest.NewRequest(
@@ -353,6 +402,15 @@ func TestNewRequiresLogger(t *testing.T) {
 	}
 }
 
+func TestNewRequiresEnabledDocumentationHandler(t *testing.T) {
+	cfg := testConfig(t)
+	_, err := newTestRouterFromDependencies(Dependencies{Config: cfg})
+	if err == nil ||
+		!strings.Contains(err.Error(), "documentation handler is required") {
+		t.Fatalf("New() error = %v", err)
+	}
+}
+
 func newTestRouter(t *testing.T) http.Handler {
 	return newTestRouterWithDatabase(t, nil, false)
 }
@@ -366,9 +424,15 @@ func newTestRouterWithDatabase(
 	gin.SetMode(gin.TestMode)
 	var logs bytes.Buffer
 	router, err := New(Dependencies{
-		Config:               testConfig(t),
-		Logger:               slog.New(slog.NewJSONHandler(&logs, nil)),
-		Responder:            response.NewResponder(),
+		Config:    testConfig(t),
+		Logger:    slog.New(slog.NewJSONHandler(&logs, nil)),
+		Responder: response.NewResponder(),
+		Documentation: http.HandlerFunc(func(
+			writer http.ResponseWriter,
+			_ *http.Request,
+		) {
+			_, _ = writer.Write([]byte("injected documentation"))
+		}),
 		GetGitHubUser:        routerGetGitHubUserStub{},
 		AnalyzeGitHubProfile: routerAnalyzeGitHubProfileStub{},
 		SearchIssues:         routerSearchIssuesStub{},
@@ -381,6 +445,21 @@ func newTestRouterWithDatabase(
 		t.Fatalf("New() error = %v", err)
 	}
 	return router
+}
+
+func newTestRouterFromDependencies(
+	dependencies Dependencies,
+) (http.Handler, error) {
+	var logs bytes.Buffer
+	dependencies.Logger = slog.New(slog.NewJSONHandler(&logs, nil))
+	dependencies.Responder = response.NewResponder()
+	dependencies.GetGitHubUser = routerGetGitHubUserStub{}
+	dependencies.AnalyzeGitHubProfile = routerAnalyzeGitHubProfileStub{}
+	dependencies.SearchIssues = routerSearchIssuesStub{}
+	dependencies.SearchRepositories = routerSearchRepositoriesStub{}
+	dependencies.RecommendIssue = routerRecommendIssueStub{}
+
+	return New(dependencies)
 }
 
 type routerDatabaseHealthStub struct {

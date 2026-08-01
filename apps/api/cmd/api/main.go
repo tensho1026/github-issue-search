@@ -10,9 +10,11 @@ import (
 	"syscall"
 
 	"github.com/gin-gonic/gin"
+	"github.com/swaggest/swgui/v5emb"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/bootstrap"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/cache/memory"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/config"
+	apidocs "github.com/tensho1026/github-issue-search/apps/api/internal/documentation"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/router"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/server"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/transport/response"
@@ -133,10 +135,23 @@ func main() {
 		logger.Error("compose repository discovery usecase", "error", err)
 		os.Exit(1)
 	}
+	var documentationHandler http.Handler
+	if cfg.APIDocumentationEnabled {
+		documentationHandler, err = apidocs.New(v5emb.New(
+			"IssueScout API",
+			apidocs.OpenAPIPath,
+			apidocs.IndexPath,
+		))
+		if err != nil {
+			logger.Error("compose API documentation", "error", err)
+			os.Exit(1)
+		}
+	}
 	httpHandler, err := router.New(router.Dependencies{
 		Config:               cfg,
 		Logger:               logger,
 		Responder:            response.NewResponder(),
+		Documentation:        documentationHandler,
 		GetGitHubUser:        getGitHubUser,
 		AnalyzeGitHubProfile: analyzeGitHubProfile,
 		SearchIssues:         searchIssues,

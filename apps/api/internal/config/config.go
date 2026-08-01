@@ -19,6 +19,7 @@ const (
 	defaultAppEnvironment                     = "development"
 	defaultPort                               = "8080"
 	defaultAllowedOrigins                     = "http://127.0.0.1:5173"
+	defaultAPIDocumentationEnabled            = true
 	defaultGitHubAPIBaseURL                   = "https://api.github.com"
 	defaultGitHubRequestTimeout               = 10 * time.Second
 	defaultGitHubMaxConcurrency               = 5
@@ -90,6 +91,7 @@ type Config struct {
 	AppEnvironment                     string
 	Port                               string
 	AllowedOrigins                     []string
+	APIDocumentationEnabled            bool
 	GitHubToken                        Secret
 	GitHubAPIBaseURL                   *url.URL
 	GitHubRequestTimeout               time.Duration
@@ -159,6 +161,14 @@ func Load() (Config, error) {
 
 	allowedOrigins, err := parseOrigins(
 		valueOrDefault("ALLOWED_ORIGINS", defaultAllowedOrigins),
+	)
+	if err != nil {
+		return Config{}, err
+	}
+
+	apiDocumentationEnabled, err := parseBool(
+		"API_DOCUMENTATION_ENABLED",
+		defaultAPIDocumentationEnabled,
 	)
 	if err != nil {
 		return Config{}, err
@@ -418,6 +428,7 @@ func Load() (Config, error) {
 		AppEnvironment:                     appEnvironment,
 		Port:                               port,
 		AllowedOrigins:                     allowedOrigins,
+		APIDocumentationEnabled:            apiDocumentationEnabled,
 		GitHubToken:                        Secret{value: os.Getenv("GITHUB_TOKEN")},
 		GitHubAPIBaseURL:                   gitHubAPIBaseURL,
 		GitHubRequestTimeout:               gitHubRequestTimeout,
