@@ -358,6 +358,131 @@ test("keeps repository discovery usable at the 320 CSS pixel equivalent of 200% 
   expect(overflow).toEqual([]);
 });
 
+test("keeps anonymous save prompts optional and preserves the exact search URL", async ({
+  page,
+}) => {
+  let accountMutations = 0;
+  await page.route("**/api/auth/session", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        data: { authenticated: false, configured: true },
+        meta: {
+          requestId: "req_e2e_auth_anonymous",
+          timestamp: "2026-08-01T00:00:00Z",
+        },
+      }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await page.route("**/api/account/**", async (route) => {
+    accountMutations += 1;
+    await route.abort();
+  });
+  await page.route("**/api/issues/search**", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify(issueSearchFixture),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+
+  const searchURL = "/search?username=octocat&search=1";
+  await page.goto(searchURL);
+  await expect(
+    page.getByRole("heading", {
+      name: "Improve keyboard navigation in the command palette",
+    }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Bookmark" }).click();
+
+  await expect(
+    page.getByRole("dialog", {
+      name: "Save this reference to your workspace",
+    }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(searchURL);
+  expect(accountMutations).toBe(0);
+});
+
+test("hydrates the code-split account workspace without browser token storage", async ({
+  page,
+}) => {
+  await page.route("**/api/auth/session", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        data: {
+          authenticated: true,
+          configured: true,
+          csrfToken: "csrf-browser-memory-only",
+          expiresAt: "2026-08-01T02:00:00Z",
+          user: {
+            accountId: "00000000-0000-4000-8000-000000000001",
+            avatarUrl: "https://avatars.githubusercontent.com/u/1",
+            login: "octocat",
+            profileUrl: "https://github.com/octocat",
+          },
+        },
+        meta: {
+          requestId: "req_e2e_auth_workspace",
+          timestamp: "2026-08-01T00:00:00Z",
+        },
+      }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await page.route("**/api/account/bookmarks**", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        data: {
+          items: [
+            {
+              createdAt: "2026-08-01T00:00:00Z",
+              id: "00000000-0000-4000-8000-000000000010",
+              issueNumber: 42,
+              repositoryName: "typed-service",
+              repositoryOwner: "octocat",
+              targetType: "issue",
+              updatedAt: "2026-08-01T00:00:00Z",
+              upstreamState: "unverified",
+              version: 1,
+            },
+          ],
+          pagination: { page: 1, perPage: 50, total: 1, totalPages: 1 },
+        },
+        meta: {
+          requestId: "req_e2e_bookmarks",
+          timestamp: "2026-08-01T00:00:00Z",
+        },
+      }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+
+  await page.goto("/workspace");
+
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Your saved IssueScout workspace.",
+    }),
+  ).toBeVisible();
+  await expect(page.getByText("octocat/typed-service#42")).toBeVisible();
+  const browserStorage = (await page.evaluate(`({
+      local: Object.keys(localStorage),
+      session: Object.keys(sessionStorage),
+      url: window.location.href,
+    })`)) as { local: string[]; session: string[]; url: string };
+  expect(browserStorage.local).toEqual([]);
+  expect(browserStorage.session).toEqual([]);
+  expect(browserStorage.url).not.toContain("csrf-browser-memory-only");
+  expect(browserStorage.url).not.toContain(
+    "00000000-0000-4000-8000-000000000001",
+  );
+});
+
 test("opens a safe issue detail and restores the exact ranked search", async ({
   page,
 }) => {
