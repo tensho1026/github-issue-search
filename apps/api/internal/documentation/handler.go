@@ -162,7 +162,9 @@ func serveDocument(
 
 func etagMatches(header, etag string) bool {
 	for candidate := range strings.SplitSeq(header, ",") {
-		if strings.TrimSpace(candidate) == etag {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "*" ||
+			strings.TrimPrefix(candidate, "W/") == etag {
 			return true
 		}
 	}

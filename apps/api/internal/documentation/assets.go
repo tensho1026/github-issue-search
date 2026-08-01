@@ -74,7 +74,10 @@ const bootstrapJavaScript = `(() => {
       withCredentials: true,
       requestInterceptor: (request) => {
         request.headers = request.headers || {};
-        if (!request.headers["X-Request-ID"]) {
+        const hasRequestID = Object.keys(request.headers).some(
+          (name) => name.toLowerCase() === "x-request-id",
+        );
+        if (!hasRequestID) {
           const suffix =
             typeof window.crypto?.randomUUID === "function"
               ? window.crypto.randomUUID()

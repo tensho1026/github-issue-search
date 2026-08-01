@@ -113,6 +113,8 @@ for _ in {1..30}; do
     tr -d '\r' <"${openapi_headers}" |
       grep -Eiq '^content-type: application/yaml; charset=utf-8$' &&
     tr -d '\r' <"${openapi_headers}" |
+      grep -Eiq '^cache-control: public, max-age=300, must-revalidate$' &&
+    tr -d '\r' <"${openapi_headers}" |
       grep -Eiq '^etag: \"[a-f0-9]{64}\"$' &&
     [[ "${swagger_stylesheet}" == *".swagger-ui"* ]] &&
     [[ "${web_response}" == *"<title>IssueScout</title>"* ]]; then

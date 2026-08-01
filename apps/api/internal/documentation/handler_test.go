@@ -114,6 +114,25 @@ func TestHandlerSupportsConditionalAndHeadRequests(t *testing.T) {
 		)
 	}
 
+	for _, condition := range []string{
+		`W/` + first.Header().Get("ETag"),
+		"*",
+	} {
+		request := httptest.NewRequest(http.MethodGet, OpenAPIPath, nil)
+		request.Header.Set("If-None-Match", condition)
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusNotModified ||
+			recorder.Body.Len() != 0 {
+			t.Errorf(
+				"If-None-Match %q response = %d %q",
+				condition,
+				recorder.Code,
+				recorder.Body.String(),
+			)
+		}
+	}
+
 	headRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(
 		headRecorder,
