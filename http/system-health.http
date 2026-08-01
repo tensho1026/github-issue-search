@@ -9,4 +9,3 @@ X-Request-ID: httpyac-process-health
 # @name getDatabaseHealth
 GET {{apiBaseUrl}}/api/health/database
 X-Request-ID: httpyac-database-health
-
