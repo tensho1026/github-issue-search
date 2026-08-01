@@ -182,6 +182,8 @@ paths:
           headers:
             X-Request-ID:
               $ref: "#/components/headers/RequestID"
+            X-IssueScout-Cache:
+              $ref: "#/components/headers/CacheStatus"
           content:
             application/json:
               schema:

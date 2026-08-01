@@ -345,6 +345,8 @@ func TestRequestLoggerUsesStructuredSafeFields(t *testing.T) {
 	engine.NoRoute(func(ctx *gin.Context) { ctx.Status(http.StatusNotFound) })
 	request := httptest.NewRequest(http.MethodGet, "/missing", nil)
 	request.Header.Set("Authorization", "Bearer must-not-appear")
+	request.Header.Set("User-Agent", "private-user-agent")
+	request.RemoteAddr = "203.0.113.9:4242"
 	recorder := httptest.NewRecorder()
 
 	engine.ServeHTTP(recorder, request)
@@ -355,11 +357,48 @@ func TestRequestLoggerUsesStructuredSafeFields(t *testing.T) {
 	}
 	if entry["requestId"] != "req_log" ||
 		entry["status"] != float64(http.StatusNotFound) ||
-		entry["path"] != "/missing" {
+		entry["path"] != "/missing" ||
+		entry["responseBytes"] != float64(0) {
 		t.Fatalf("log entry = %+v", entry)
 	}
-	if strings.Contains(logs.String(), "must-not-appear") {
-		t.Fatalf("authorization value was logged")
+	for _, privateValue := range []string{
+		"must-not-appear",
+		"private-user-agent",
+		"203.0.113.9",
+	} {
+		if strings.Contains(logs.String(), privateValue) {
+			t.Fatalf("private value %q was logged", privateValue)
+		}
+	}
+}
+
+func TestRequestLoggerRecordsLowCardinalityCacheState(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var logs bytes.Buffer
+	engine := gin.New()
+	engine.Use(RequestLogger(slog.New(slog.NewJSONHandler(&logs, nil))))
+	engine.GET("/items/:item", func(ctx *gin.Context) {
+		ctx.Header("X-IssueScout-Cache", "HIT")
+		ctx.String(http.StatusOK, "ok")
+	})
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(
+		recorder,
+		httptest.NewRequest(http.MethodGet, "/items/private-item", nil),
+	)
+
+	var entry map[string]any
+	if err := json.NewDecoder(bytes.NewReader(logs.Bytes())).Decode(&entry); err != nil {
+		t.Fatalf("decode log: %v", err)
+	}
+	if entry["path"] != "/items/:item" ||
+		entry["cacheStatus"] != "HIT" ||
+		entry["responseBytes"] != float64(2) {
+		t.Fatalf("log entry = %+v", entry)
+	}
+	if strings.Contains(logs.String(), "private-item") {
+		t.Fatal("raw path parameter was logged")
 	}
 }
 

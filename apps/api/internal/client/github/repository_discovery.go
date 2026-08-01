@@ -54,7 +54,11 @@ func (c *Client) SearchRepositories(
 	query.Set("order", "desc")
 	endpoint.RawQuery = query.Encode()
 
-	response, err := c.do(ctx, endpoint.String())
+	response, err := c.do(
+		ctx,
+		operationSearchRepositories,
+		endpoint.String(),
+	)
 	if err != nil {
 		return port.GitHubRepositoryDiscoveryResult{}, err
 	}
@@ -207,7 +211,7 @@ func (c *Client) graphQLRequest(
 	endpoint := *c.baseURL
 	endpoint.Path = path.Join(endpoint.Path, "graphql")
 	endpoint.RawQuery = ""
-	return c.doRequest(ctx, func() (*http.Request, error) {
+	return c.doRequest(ctx, operationEnrichRepositories, func() (*http.Request, error) {
 		request, err := c.newRequest(
 			ctx,
 			http.MethodPost,

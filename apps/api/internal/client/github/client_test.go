@@ -1,7 +1,9 @@
 package github
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -9,11 +11,13 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/user"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/platform/requestcontext"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
 )
 
@@ -90,6 +94,58 @@ func TestGetUserSupportsNullableGitHubFields(t *testing.T) {
 	}
 	if result.Profile.Name != "" || result.Profile.Bio != "" {
 		t.Fatalf("nullable fields = %+v", result.Profile)
+	}
+}
+
+func TestGetUserLogsOnlyPrivacySafeUpstreamDiagnostics(t *testing.T) {
+	const privateLogin = "private-login"
+	const privateToken = "private-token"
+	server := jsonServer(`{"login":"private-login"}`)
+	defer server.Close()
+
+	baseURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse URL: %v", err)
+	}
+	var logs bytes.Buffer
+	client := NewClient(
+		baseURL,
+		privateToken,
+		time.Second,
+		slog.New(slog.NewJSONHandler(&logs, nil)),
+	)
+	ctx := requestcontext.WithRequestID(
+		context.Background(),
+		"req_upstream_log",
+	)
+	if _, err := client.GetUser(ctx, privateLogin); err != nil {
+		t.Fatalf("GetUser() error = %v", err)
+	}
+
+	var entry map[string]any
+	if err := json.NewDecoder(&logs).Decode(&entry); err != nil {
+		t.Fatalf("decode log: %v", err)
+	}
+	if entry["msg"] != "upstream request completed" ||
+		entry["upstreamService"] != upstreamServiceGitHub ||
+		entry["operation"] != operationGetUser ||
+		entry["outcome"] != upstreamOutcomeSuccess ||
+		entry["requestId"] != "req_upstream_log" ||
+		entry["attempts"] != float64(1) ||
+		entry["status"] != float64(http.StatusOK) {
+		t.Fatalf("log entry = %+v", entry)
+	}
+	if _, exists := entry["latencyMs"]; !exists {
+		t.Fatal("log entry is missing latencyMs")
+	}
+	for _, privateValue := range []string{
+		privateLogin,
+		privateToken,
+		server.URL,
+	} {
+		if strings.Contains(logs.String(), privateValue) {
+			t.Fatalf("private value %q was logged", privateValue)
+		}
 	}
 }
 

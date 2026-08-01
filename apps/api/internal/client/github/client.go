@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/repository"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/domain/user"
+	"github.com/tensho1026/github-issue-search/apps/api/internal/platform/requestcontext"
 	"github.com/tensho1026/github-issue-search/apps/api/internal/port"
 )
 
@@ -24,6 +26,23 @@ const (
 	maxAttempts      = 3
 	maxResponseBytes = 2 << 20
 	maxManifestBytes = 512 << 10
+
+	operationGetUser              = "user.get"
+	operationListRepositories     = "repository.list"
+	operationSearchIssues         = "issue.search"
+	operationGetIssueDetail       = "issue.detail"
+	operationAnalyzeProfile       = "profile.analyze"
+	operationSearchRepositories   = "repository.search"
+	operationEnrichRepositories   = "repository.enrich"
+	upstreamServiceGitHub         = "github"
+	upstreamOutcomeSuccess        = "success"
+	upstreamOutcomeNotFound       = "not_found"
+	upstreamOutcomeRateLimited    = "rate_limited"
+	upstreamOutcomeUnauthorized   = "unauthorized"
+	upstreamOutcomeCancelled      = "cancelled"
+	upstreamOutcomeDeadline       = "deadline_exceeded"
+	upstreamOutcomeTransportError = "transport_error"
+	upstreamOutcomeResponseError  = "response_error"
 )
 
 type httpDoer interface {
@@ -81,7 +100,7 @@ func (c *Client) GetUser(
 	endpoint := *c.baseURL
 	endpoint.Path = path.Join(endpoint.Path, "users", url.PathEscape(username.String()))
 
-	response, err := c.do(ctx, endpoint.String())
+	response, err := c.do(ctx, operationGetUser, endpoint.String())
 	if err != nil {
 		return port.GitHubUserResult{}, err
 	}
@@ -162,7 +181,11 @@ func (c *Client) ListRepositories(
 		query.Set("page", strconv.Itoa(pageNumber))
 		endpoint.RawQuery = query.Encode()
 
-		response, err := c.do(ctx, endpoint.String())
+		response, err := c.do(
+			ctx,
+			operationListRepositories,
+			endpoint.String(),
+		)
 		if err != nil {
 			return nil, rateLimit, err
 		}
@@ -206,17 +229,36 @@ func upstreamDecodeError(description string, err error) error {
 	}
 }
 
-func (c *Client) do(ctx context.Context, endpoint string) (*http.Response, error) {
-	return c.doRequest(ctx, func() (*http.Request, error) {
+func (c *Client) do(
+	ctx context.Context,
+	operation string,
+	endpoint string,
+) (*http.Response, error) {
+	return c.doRequest(ctx, operation, func() (*http.Request, error) {
 		return c.newRequest(ctx, http.MethodGet, endpoint, nil)
 	})
 }
 
 func (c *Client) doRequest(
 	ctx context.Context,
+	operation string,
 	createRequest requestFactory,
-) (*http.Response, error) {
+) (finalResponse *http.Response, finalErr error) {
+	startedAt := time.Now()
+	attempts := 0
+	defer func() {
+		c.logUpstreamRequest(
+			ctx,
+			operation,
+			finalResponse,
+			finalErr,
+			attempts,
+			time.Since(startedAt),
+		)
+	}()
+
 	for attempt := 0; attempt < maxAttempts; attempt++ {
+		attempts = attempt + 1
 		request, err := createRequest()
 		if err != nil {
 			return nil, &port.GitHubError{
@@ -254,6 +296,58 @@ func (c *Client) doRequest(
 	}
 
 	panic("unreachable GitHub retry loop")
+}
+
+func (c *Client) logUpstreamRequest(
+	ctx context.Context,
+	operation string,
+	response *http.Response,
+	err error,
+	attempts int,
+	duration time.Duration,
+) {
+	attributes := []any{
+		"upstreamService", upstreamServiceGitHub,
+		"operation", operation,
+		"outcome", upstreamOutcome(response, err),
+		"attempts", attempts,
+		"latencyMs", duration.Milliseconds(),
+	}
+	if requestID := requestcontext.RequestID(ctx); requestID != "" {
+		attributes = append(attributes, "requestId", requestID)
+	}
+	if response != nil {
+		attributes = append(attributes, "status", response.StatusCode)
+	}
+	c.logger.Info("upstream request completed", attributes...)
+}
+
+func upstreamOutcome(response *http.Response, err error) string {
+	switch {
+	case errors.Is(err, context.Canceled):
+		return upstreamOutcomeCancelled
+	case errors.Is(err, context.DeadlineExceeded):
+		return upstreamOutcomeDeadline
+	case err != nil:
+		return upstreamOutcomeTransportError
+	case response == nil:
+		return upstreamOutcomeTransportError
+	case response.StatusCode >= http.StatusOK &&
+		response.StatusCode < http.StatusMultipleChoices:
+		return upstreamOutcomeSuccess
+	case response.StatusCode == http.StatusNotFound:
+		return upstreamOutcomeNotFound
+	case response.StatusCode == http.StatusTooManyRequests ||
+		(response.StatusCode == http.StatusForbidden &&
+			parseRateLimit(response.Header).Known &&
+			parseRateLimit(response.Header).Remaining == 0):
+		return upstreamOutcomeRateLimited
+	case response.StatusCode == http.StatusUnauthorized ||
+		response.StatusCode == http.StatusForbidden:
+		return upstreamOutcomeUnauthorized
+	default:
+		return upstreamOutcomeResponseError
+	}
 }
 
 func (c *Client) newRequest(

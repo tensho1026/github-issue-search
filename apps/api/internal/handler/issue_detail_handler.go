@@ -74,11 +74,7 @@ func (handler IssueDetailHandler) Get(ctx *gin.Context) {
 		return
 	}
 
-	cacheStatus := issueSearchCacheMiss
-	if output.CacheHit {
-		cacheStatus = issueSearchCacheHit
-	}
-	ctx.Header(issueSearchCacheHeader, cacheStatus)
+	writeCacheStatus(ctx, output.CacheHit)
 	var remaining *int
 	if output.RateLimit.Known {
 		remaining = &output.RateLimit.Remaining

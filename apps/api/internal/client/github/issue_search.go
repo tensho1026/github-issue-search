@@ -128,19 +128,23 @@ func (c *Client) SearchIssues(
 	endpoint := *c.baseURL
 	endpoint.Path = path.Join(endpoint.Path, "graphql")
 	endpoint.RawQuery = ""
-	response, err := c.doRequest(ctx, func() (*http.Request, error) {
-		request, requestErr := c.newRequest(
-			ctx,
-			http.MethodPost,
-			endpoint.String(),
-			bytes.NewReader(requestPayload),
-		)
-		if requestErr != nil {
-			return nil, requestErr
-		}
-		request.Header.Set("Content-Type", "application/json")
-		return request, nil
-	})
+	response, err := c.doRequest(
+		ctx,
+		operationSearchIssues,
+		func() (*http.Request, error) {
+			request, requestErr := c.newRequest(
+				ctx,
+				http.MethodPost,
+				endpoint.String(),
+				bytes.NewReader(requestPayload),
+			)
+			if requestErr != nil {
+				return nil, requestErr
+			}
+			request.Header.Set("Content-Type", "application/json")
+			return request, nil
+		},
+	)
 	if err != nil {
 		return port.GitHubIssueSearchResult{}, err
 	}

@@ -42,7 +42,9 @@ warning. The API does not misclassify an organization as a missing user.
 The query does not paginate beyond these caps. One analysis cache miss makes
 one GitHub request; concurrent equivalent misses are coalesced. The inbound
 context controls the request, so cancellation and the profile timeout stop the
-work.
+work when no active caller still needs it. Successful responses expose
+`X-IssueScout-Cache: MISS` for a fresh bounded snapshot and
+`X-IssueScout-Cache: HIT` for a defensive cache copy.
 
 ## Public-only and anonymous invariant
 

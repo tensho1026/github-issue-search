@@ -183,19 +183,23 @@ func (c *Client) GetIssueDetail(
 	endpoint := *c.baseURL
 	endpoint.Path = path.Join(endpoint.Path, "graphql")
 	endpoint.RawQuery = ""
-	response, err := c.doRequest(ctx, func() (*http.Request, error) {
-		request, requestErr := c.newRequest(
-			ctx,
-			http.MethodPost,
-			endpoint.String(),
-			bytes.NewReader(requestBody),
-		)
-		if requestErr != nil {
-			return nil, requestErr
-		}
-		request.Header.Set("Content-Type", "application/json")
-		return request, nil
-	})
+	response, err := c.doRequest(
+		ctx,
+		operationGetIssueDetail,
+		func() (*http.Request, error) {
+			request, requestErr := c.newRequest(
+				ctx,
+				http.MethodPost,
+				endpoint.String(),
+				bytes.NewReader(requestBody),
+			)
+			if requestErr != nil {
+				return nil, requestErr
+			}
+			request.Header.Set("Content-Type", "application/json")
+			return request, nil
+		},
+	)
 	if err != nil {
 		return port.GitHubIssueDetailResult{}, err
 	}
@@ -223,8 +227,6 @@ func (c *Client) GetIssueDetail(
 	c.logger.Debug(
 		"GitHub GraphQL issue detail response received",
 		"status", response.StatusCode,
-		"repository", result.Candidate.Repository.FullName,
-		"issueNumber", result.Candidate.Issue.Number,
 		"incomplete", result.Incomplete,
 		"rateLimitKnown", result.RateLimit.Known,
 		"rateLimitRemaining", result.RateLimit.Remaining,
