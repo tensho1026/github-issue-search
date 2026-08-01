@@ -71,6 +71,173 @@ export type AuthLogoutEnvelope = {
   meta: Meta;
 };
 
+export type BookmarkWriteRequest =
+  | {
+      targetType: "issue";
+      repositoryOwner: GitHubOwnerValue;
+      repositoryName: GitHubRepositoryValue;
+      issueNumber: number;
+    }
+  | {
+      targetType: "repository";
+      repositoryOwner: GitHubOwnerValue;
+      repositoryName: GitHubRepositoryValue;
+    };
+
+export type GitHubOwnerValue = string;
+
+export type GitHubRepositoryValue = string;
+
+export type Bookmark = {
+  id: string;
+  targetType: "issue" | "repository";
+  repositoryOwner: GitHubOwnerValue;
+  repositoryName: GitHubRepositoryValue;
+  issueNumber?: number;
+  /**
+   * The reference is stored without a GitHub payload and may be stale.
+   *
+   */
+  upstreamState: "unverified";
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BookmarkEnvelope = {
+  data: Bookmark;
+  meta: Meta;
+};
+
+export type AccountPagination = {
+  page: number;
+  perPage: number;
+  total: number;
+  totalPages: number;
+};
+
+export type BookmarkListEnvelope = {
+  data: {
+    items: Array<Bookmark>;
+    pagination: AccountPagination;
+  };
+  meta: Meta;
+};
+
+export type SavedSearchWriteRequest =
+  | {
+      searchType: "issue";
+      name: SavedSearchName;
+      filters: IssueSearchRequest;
+    }
+  | {
+      searchType: "repository";
+      name: SavedSearchName;
+      filters: RepositoryDiscoveryRequest;
+    };
+
+export type SavedSearchUpdateRequest =
+  | {
+      searchType: "issue";
+      name: SavedSearchName;
+      filters: IssueSearchRequest;
+      version: number;
+    }
+  | {
+      searchType: "repository";
+      name: SavedSearchName;
+      filters: RepositoryDiscoveryRequest;
+      version: number;
+    };
+
+export type SavedSearchName = string;
+
+export type SavedSearch = {
+  id: string;
+  searchType: "issue" | "repository";
+  name: SavedSearchName;
+  filters: IssueSearchRequest | RepositoryDiscoveryRequest;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SavedSearchEnvelope = {
+  data: SavedSearch;
+  meta: Meta;
+};
+
+export type SavedSearchListEnvelope = {
+  data: {
+    items: Array<SavedSearch>;
+    pagination: AccountPagination;
+  };
+  meta: Meta;
+};
+
+export type PreferencesWriteRequest = {
+  theme: ThemePreference;
+  reducedMotion: ReducedMotionPreference;
+  resultsPerPage: 10 | 20 | 50;
+  version: number;
+};
+
+export type ThemePreference = "light" | "dark" | "system";
+
+export type ReducedMotionPreference = "reduce" | "no-preference" | "system";
+
+export type Preferences = {
+  theme: ThemePreference;
+  reducedMotion: ReducedMotionPreference;
+  resultsPerPage: 10 | 20 | 50;
+  version: number;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type PreferencesEnvelope = {
+  data: Preferences;
+  meta: Meta;
+};
+
+export type DeletionEnvelope = {
+  data: {
+    deleted: true;
+  };
+  meta: Meta;
+};
+
+export type AccountExportEnvelope = {
+  data: {
+    schemaVersion: 1;
+    generatedAt: string;
+    bookmarks: Array<Bookmark>;
+    savedSearches: Array<SavedSearch>;
+    preferences: Preferences | null;
+  };
+  meta: Meta;
+};
+
+export type AccountDeleteRequest = {
+  confirmation: "DELETE";
+};
+
+export type AccountDeleteEnvelope = {
+  data: {
+    deleted: true;
+    removed: OwnedDataSummary;
+  };
+  meta: Meta;
+};
+
+export type OwnedDataSummary = {
+  bookmarks: number;
+  identities: number;
+  preferences: number;
+  savedSearches: number;
+  sessions: number;
+};
+
 export type GitHubUserEnvelope = {
   data: GitHubUser;
   meta: Meta;
@@ -1008,10 +1175,12 @@ export type AnalysisWarning = {
 export type ErrorEnvelope = {
   error: {
     code:
+      | "ACCOUNT_QUOTA_EXCEEDED"
       | "AUTHENTICATION_REQUIRED"
       | "AUTH_UNAVAILABLE"
       | "CSRF_REJECTED"
       | "DATABASE_UNAVAILABLE"
+      | "DUPLICATE_SAVED_SEARCH"
       | "FORBIDDEN_ORIGIN"
       | "GITHUB_AUTHORIZATION_REJECTED"
       | "GITHUB_API_ERROR"
@@ -1021,7 +1190,8 @@ export type ErrorEnvelope = {
       | "INVALID_AUTH_STATE"
       | "INVALID_REQUEST"
       | "NOT_FOUND"
-      | "REQUEST_TIMEOUT";
+      | "REQUEST_TIMEOUT"
+      | "VERSION_CONFLICT";
     message: string;
   };
   meta: Meta;
@@ -1046,6 +1216,31 @@ export type GitHubRepository = string;
  * Positive repository-local issue number.
  */
 export type GitHubIssueNumber = number;
+
+/**
+ * One-based page over a quota-bounded owned collection.
+ */
+export type AccountPage = number;
+
+/**
+ * Bounded number of account-owned rows per page.
+ */
+export type AccountPerPage = number;
+
+/**
+ * Opaque account-owned bookmark identifier.
+ */
+export type BookmarkId = string;
+
+/**
+ * Opaque account-owned saved-search identifier.
+ */
+export type SavedSearchId = string;
+
+/**
+ * Current positive optimistic-concurrency version.
+ */
+export type ResourceVersion = number;
 
 export type GetHealthData = {
   body?: never;
@@ -1673,3 +1868,666 @@ export type LogoutAuthSessionResponses = {
 
 export type LogoutAuthSessionResponse =
   LogoutAuthSessionResponses[keyof LogoutAuthSessionResponses];
+
+export type ListAccountBookmarksData = {
+  body?: never;
+  path?: never;
+  query?: {
+    /**
+     * One-based page over a quota-bounded owned collection.
+     */
+    page?: number;
+    /**
+     * Bounded number of account-owned rows per page.
+     */
+    perPage?: number;
+  };
+  url: "/api/account/bookmarks";
+};
+
+export type ListAccountBookmarksErrors = {
+  /**
+   * A path or request value failed validation.
+   */
+  400: ErrorEnvelope;
+  /**
+   * Session cookies are missing, malformed, expired, revoked, or otherwise
+   * unusable.
+   *
+   */
+  401: ErrorEnvelope;
+  /**
+   * The browser Origin is not in the configured allowlist.
+   */
+  403: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
+  /**
+   * Optional account storage or authentication is unavailable. Anonymous
+   * profile, repository, and issue routes remain operational.
+   *
+   */
+  503: ErrorEnvelope;
+  /**
+   * The bounded request deadline elapsed or the client cancelled.
+   */
+  504: ErrorEnvelope;
+};
+
+export type ListAccountBookmarksError =
+  ListAccountBookmarksErrors[keyof ListAccountBookmarksErrors];
+
+export type ListAccountBookmarksResponses = {
+  /**
+   * A deterministic owned bookmark page.
+   */
+  200: BookmarkListEnvelope;
+};
+
+export type ListAccountBookmarksResponse =
+  ListAccountBookmarksResponses[keyof ListAccountBookmarksResponses];
+
+export type UpsertAccountBookmarkData = {
+  body: BookmarkWriteRequest;
+  path?: never;
+  query?: never;
+  url: "/api/account/bookmarks";
+};
+
+export type UpsertAccountBookmarkErrors = {
+  /**
+   * A path or request value failed validation.
+   */
+  400: ErrorEnvelope;
+  /**
+   * Session cookies are missing, malformed, expired, revoked, or otherwise
+   * unusable.
+   *
+   */
+  401: ErrorEnvelope;
+  /**
+   * The browser Origin is not allowed or the CSRF cookie/header/server
+   * digest comparison failed.
+   *
+   */
+  403: ErrorEnvelope;
+  /**
+   * The account quota was reached, the optimistic version was stale, or a
+   * case-insensitive saved-search name already exists.
+   *
+   */
+  409: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
+  /**
+   * Optional account storage or authentication is unavailable. Anonymous
+   * profile, repository, and issue routes remain operational.
+   *
+   */
+  503: ErrorEnvelope;
+  /**
+   * The bounded request deadline elapsed or the client cancelled.
+   */
+  504: ErrorEnvelope;
+};
+
+export type UpsertAccountBookmarkError =
+  UpsertAccountBookmarkErrors[keyof UpsertAccountBookmarkErrors];
+
+export type UpsertAccountBookmarkResponses = {
+  /**
+   * The newly inserted or existing owned bookmark.
+   */
+  200: BookmarkEnvelope;
+};
+
+export type UpsertAccountBookmarkResponse =
+  UpsertAccountBookmarkResponses[keyof UpsertAccountBookmarkResponses];
+
+export type DeleteAccountBookmarkData = {
+  body?: never;
+  path: {
+    /**
+     * Opaque account-owned bookmark identifier.
+     */
+    bookmarkID: string;
+  };
+  query: {
+    /**
+     * Current positive optimistic-concurrency version.
+     */
+    version: number;
+  };
+  url: "/api/account/bookmarks/{bookmarkID}";
+};
+
+export type DeleteAccountBookmarkErrors = {
+  /**
+   * A path or request value failed validation.
+   */
+  400: ErrorEnvelope;
+  /**
+   * Session cookies are missing, malformed, expired, revoked, or otherwise
+   * unusable.
+   *
+   */
+  401: ErrorEnvelope;
+  /**
+   * The browser Origin is not allowed or the CSRF cookie/header/server
+   * digest comparison failed.
+   *
+   */
+  403: ErrorEnvelope;
+  /**
+   * The resource is missing or is owned by another account. Those cases
+   * are intentionally indistinguishable.
+   *
+   */
+  404: ErrorEnvelope;
+  /**
+   * The account quota was reached, the optimistic version was stale, or a
+   * case-insensitive saved-search name already exists.
+   *
+   */
+  409: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
+  /**
+   * Optional account storage or authentication is unavailable. Anonymous
+   * profile, repository, and issue routes remain operational.
+   *
+   */
+  503: ErrorEnvelope;
+  /**
+   * The bounded request deadline elapsed or the client cancelled.
+   */
+  504: ErrorEnvelope;
+};
+
+export type DeleteAccountBookmarkError =
+  DeleteAccountBookmarkErrors[keyof DeleteAccountBookmarkErrors];
+
+export type DeleteAccountBookmarkResponses = {
+  /**
+   * The owned bookmark was deleted.
+   */
+  200: DeletionEnvelope;
+};
+
+export type DeleteAccountBookmarkResponse =
+  DeleteAccountBookmarkResponses[keyof DeleteAccountBookmarkResponses];
+
+export type ListAccountSavedSearchesData = {
+  body?: never;
+  path?: never;
+  query?: {
+    /**
+     * One-based page over a quota-bounded owned collection.
+     */
+    page?: number;
+    /**
+     * Bounded number of account-owned rows per page.
+     */
+    perPage?: number;
+  };
+  url: "/api/account/saved-searches";
+};
+
+export type ListAccountSavedSearchesErrors = {
+  /**
+   * A path or request value failed validation.
+   */
+  400: ErrorEnvelope;
+  /**
+   * Session cookies are missing, malformed, expired, revoked, or otherwise
+   * unusable.
+   *
+   */
+  401: ErrorEnvelope;
+  /**
+   * The browser Origin is not in the configured allowlist.
+   */
+  403: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
+  /**
+   * Optional account storage or authentication is unavailable. Anonymous
+   * profile, repository, and issue routes remain operational.
+   *
+   */
+  503: ErrorEnvelope;
+  /**
+   * The bounded request deadline elapsed or the client cancelled.
+   */
+  504: ErrorEnvelope;
+};
+
+export type ListAccountSavedSearchesError =
+  ListAccountSavedSearchesErrors[keyof ListAccountSavedSearchesErrors];
+
+export type ListAccountSavedSearchesResponses = {
+  /**
+   * A deterministic owned saved-search page.
+   */
+  200: SavedSearchListEnvelope;
+};
+
+export type ListAccountSavedSearchesResponse =
+  ListAccountSavedSearchesResponses[keyof ListAccountSavedSearchesResponses];
+
+export type CreateAccountSavedSearchData = {
+  body: SavedSearchWriteRequest;
+  path?: never;
+  query?: never;
+  url: "/api/account/saved-searches";
+};
+
+export type CreateAccountSavedSearchErrors = {
+  /**
+   * A path or request value failed validation.
+   */
+  400: ErrorEnvelope;
+  /**
+   * Session cookies are missing, malformed, expired, revoked, or otherwise
+   * unusable.
+   *
+   */
+  401: ErrorEnvelope;
+  /**
+   * The browser Origin is not allowed or the CSRF cookie/header/server
+   * digest comparison failed.
+   *
+   */
+  403: ErrorEnvelope;
+  /**
+   * The account quota was reached, the optimistic version was stale, or a
+   * case-insensitive saved-search name already exists.
+   *
+   */
+  409: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
+  /**
+   * Optional account storage or authentication is unavailable. Anonymous
+   * profile, repository, and issue routes remain operational.
+   *
+   */
+  503: ErrorEnvelope;
+  /**
+   * The bounded request deadline elapsed or the client cancelled.
+   */
+  504: ErrorEnvelope;
+};
+
+export type CreateAccountSavedSearchError =
+  CreateAccountSavedSearchErrors[keyof CreateAccountSavedSearchErrors];
+
+export type CreateAccountSavedSearchResponses = {
+  /**
+   * The normalized saved search was created.
+   */
+  201: SavedSearchEnvelope;
+};
+
+export type CreateAccountSavedSearchResponse =
+  CreateAccountSavedSearchResponses[keyof CreateAccountSavedSearchResponses];
+
+export type DeleteAccountSavedSearchData = {
+  body?: never;
+  path: {
+    /**
+     * Opaque account-owned saved-search identifier.
+     */
+    savedSearchID: string;
+  };
+  query: {
+    /**
+     * Current positive optimistic-concurrency version.
+     */
+    version: number;
+  };
+  url: "/api/account/saved-searches/{savedSearchID}";
+};
+
+export type DeleteAccountSavedSearchErrors = {
+  /**
+   * A path or request value failed validation.
+   */
+  400: ErrorEnvelope;
+  /**
+   * Session cookies are missing, malformed, expired, revoked, or otherwise
+   * unusable.
+   *
+   */
+  401: ErrorEnvelope;
+  /**
+   * The browser Origin is not allowed or the CSRF cookie/header/server
+   * digest comparison failed.
+   *
+   */
+  403: ErrorEnvelope;
+  /**
+   * The resource is missing or is owned by another account. Those cases
+   * are intentionally indistinguishable.
+   *
+   */
+  404: ErrorEnvelope;
+  /**
+   * The account quota was reached, the optimistic version was stale, or a
+   * case-insensitive saved-search name already exists.
+   *
+   */
+  409: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
+  /**
+   * Optional account storage or authentication is unavailable. Anonymous
+   * profile, repository, and issue routes remain operational.
+   *
+   */
+  503: ErrorEnvelope;
+  /**
+   * The bounded request deadline elapsed or the client cancelled.
+   */
+  504: ErrorEnvelope;
+};
+
+export type DeleteAccountSavedSearchError =
+  DeleteAccountSavedSearchErrors[keyof DeleteAccountSavedSearchErrors];
+
+export type DeleteAccountSavedSearchResponses = {
+  /**
+   * The owned saved search was deleted.
+   */
+  200: DeletionEnvelope;
+};
+
+export type DeleteAccountSavedSearchResponse =
+  DeleteAccountSavedSearchResponses[keyof DeleteAccountSavedSearchResponses];
+
+export type UpdateAccountSavedSearchData = {
+  body: SavedSearchUpdateRequest;
+  path: {
+    /**
+     * Opaque account-owned saved-search identifier.
+     */
+    savedSearchID: string;
+  };
+  query?: never;
+  url: "/api/account/saved-searches/{savedSearchID}";
+};
+
+export type UpdateAccountSavedSearchErrors = {
+  /**
+   * A path or request value failed validation.
+   */
+  400: ErrorEnvelope;
+  /**
+   * Session cookies are missing, malformed, expired, revoked, or otherwise
+   * unusable.
+   *
+   */
+  401: ErrorEnvelope;
+  /**
+   * The browser Origin is not allowed or the CSRF cookie/header/server
+   * digest comparison failed.
+   *
+   */
+  403: ErrorEnvelope;
+  /**
+   * The resource is missing or is owned by another account. Those cases
+   * are intentionally indistinguishable.
+   *
+   */
+  404: ErrorEnvelope;
+  /**
+   * The account quota was reached, the optimistic version was stale, or a
+   * case-insensitive saved-search name already exists.
+   *
+   */
+  409: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
+  /**
+   * Optional account storage or authentication is unavailable. Anonymous
+   * profile, repository, and issue routes remain operational.
+   *
+   */
+  503: ErrorEnvelope;
+  /**
+   * The bounded request deadline elapsed or the client cancelled.
+   */
+  504: ErrorEnvelope;
+};
+
+export type UpdateAccountSavedSearchError =
+  UpdateAccountSavedSearchErrors[keyof UpdateAccountSavedSearchErrors];
+
+export type UpdateAccountSavedSearchResponses = {
+  /**
+   * The updated normalized saved search.
+   */
+  200: SavedSearchEnvelope;
+};
+
+export type UpdateAccountSavedSearchResponse =
+  UpdateAccountSavedSearchResponses[keyof UpdateAccountSavedSearchResponses];
+
+export type GetAccountPreferencesData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/api/account/preferences";
+};
+
+export type GetAccountPreferencesErrors = {
+  /**
+   * Session cookies are missing, malformed, expired, revoked, or otherwise
+   * unusable.
+   *
+   */
+  401: ErrorEnvelope;
+  /**
+   * The browser Origin is not in the configured allowlist.
+   */
+  403: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
+  /**
+   * Optional account storage or authentication is unavailable. Anonymous
+   * profile, repository, and issue routes remain operational.
+   *
+   */
+  503: ErrorEnvelope;
+  /**
+   * The bounded request deadline elapsed or the client cancelled.
+   */
+  504: ErrorEnvelope;
+};
+
+export type GetAccountPreferencesError =
+  GetAccountPreferencesErrors[keyof GetAccountPreferencesErrors];
+
+export type GetAccountPreferencesResponses = {
+  /**
+   * Persisted preferences or version-zero defaults.
+   */
+  200: PreferencesEnvelope;
+};
+
+export type GetAccountPreferencesResponse =
+  GetAccountPreferencesResponses[keyof GetAccountPreferencesResponses];
+
+export type UpdateAccountPreferencesData = {
+  body: PreferencesWriteRequest;
+  path?: never;
+  query?: never;
+  url: "/api/account/preferences";
+};
+
+export type UpdateAccountPreferencesErrors = {
+  /**
+   * A path or request value failed validation.
+   */
+  400: ErrorEnvelope;
+  /**
+   * Session cookies are missing, malformed, expired, revoked, or otherwise
+   * unusable.
+   *
+   */
+  401: ErrorEnvelope;
+  /**
+   * The browser Origin is not allowed or the CSRF cookie/header/server
+   * digest comparison failed.
+   *
+   */
+  403: ErrorEnvelope;
+  /**
+   * The account quota was reached, the optimistic version was stale, or a
+   * case-insensitive saved-search name already exists.
+   *
+   */
+  409: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
+  /**
+   * Optional account storage or authentication is unavailable. Anonymous
+   * profile, repository, and issue routes remain operational.
+   *
+   */
+  503: ErrorEnvelope;
+  /**
+   * The bounded request deadline elapsed or the client cancelled.
+   */
+  504: ErrorEnvelope;
+};
+
+export type UpdateAccountPreferencesError =
+  UpdateAccountPreferencesErrors[keyof UpdateAccountPreferencesErrors];
+
+export type UpdateAccountPreferencesResponses = {
+  /**
+   * The current persisted preferences.
+   */
+  200: PreferencesEnvelope;
+};
+
+export type UpdateAccountPreferencesResponse =
+  UpdateAccountPreferencesResponses[keyof UpdateAccountPreferencesResponses];
+
+export type ExportAccountDataData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/api/account/export";
+};
+
+export type ExportAccountDataErrors = {
+  /**
+   * Session cookies are missing, malformed, expired, revoked, or otherwise
+   * unusable.
+   *
+   */
+  401: ErrorEnvelope;
+  /**
+   * The browser Origin is not in the configured allowlist.
+   */
+  403: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
+  /**
+   * Optional account storage or authentication is unavailable. Anonymous
+   * profile, repository, and issue routes remain operational.
+   *
+   */
+  503: ErrorEnvelope;
+  /**
+   * The bounded request deadline elapsed or the client cancelled.
+   */
+  504: ErrorEnvelope;
+};
+
+export type ExportAccountDataError =
+  ExportAccountDataErrors[keyof ExportAccountDataErrors];
+
+export type ExportAccountDataResponses = {
+  /**
+   * A versioned privacy export generated at request time.
+   */
+  200: AccountExportEnvelope;
+};
+
+export type ExportAccountDataResponse =
+  ExportAccountDataResponses[keyof ExportAccountDataResponses];
+
+export type DeleteAccountData = {
+  body: AccountDeleteRequest;
+  path?: never;
+  query?: never;
+  url: "/api/account";
+};
+
+export type DeleteAccountErrors = {
+  /**
+   * A path or request value failed validation.
+   */
+  400: ErrorEnvelope;
+  /**
+   * Session cookies are missing, malformed, expired, revoked, or otherwise
+   * unusable.
+   *
+   */
+  401: ErrorEnvelope;
+  /**
+   * The browser Origin is not allowed or the CSRF cookie/header/server
+   * digest comparison failed.
+   *
+   */
+  403: ErrorEnvelope;
+  /**
+   * An unexpected internal failure was recovered without exposing details.
+   */
+  500: ErrorEnvelope;
+  /**
+   * Optional account storage or authentication is unavailable. Anonymous
+   * profile, repository, and issue routes remain operational.
+   *
+   */
+  503: ErrorEnvelope;
+  /**
+   * The bounded request deadline elapsed or the client cancelled.
+   */
+  504: ErrorEnvelope;
+};
+
+export type DeleteAccountError = DeleteAccountErrors[keyof DeleteAccountErrors];
+
+export type DeleteAccountResponses = {
+  /**
+   * Account deletion completed and browser cookies expired.
+   */
+  200: AccountDeleteEnvelope;
+};
+
+export type DeleteAccountResponse =
+  DeleteAccountResponses[keyof DeleteAccountResponses];

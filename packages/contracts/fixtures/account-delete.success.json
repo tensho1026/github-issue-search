@@ -1,0 +1,16 @@
+{
+  "data": {
+    "deleted": true,
+    "removed": {
+      "bookmarks": 2,
+      "identities": 1,
+      "preferences": 1,
+      "savedSearches": 3,
+      "sessions": 1
+    }
+  },
+  "meta": {
+    "requestId": "req_account_delete",
+    "timestamp": "2026-08-01T02:03:04Z"
+  }
+}

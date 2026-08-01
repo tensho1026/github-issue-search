@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: IssueScout API
-  version: 0.7.0
+  version: 0.8.0
   description: |
     API for analyzing a public GitHub profile and finding suitable open-source
     repositories and issues. Core discovery remains anonymous and stateless.
@@ -30,6 +30,11 @@ tags:
       Optional GitHub OAuth with PKCE, single-use state, rotating server
       sessions, and CSRF-protected mutations. Authentication is never an
       anonymous-feature access wall.
+  - name: Account workspace
+    description: |
+      Authenticated, account-owned bookmarks, saved searches, preferences,
+      privacy export, and irreversible account deletion. These routes never
+      accept an account identifier from the client.
 paths:
   /api/health:
     get:
@@ -648,6 +653,439 @@ paths:
           $ref: "#/components/responses/InternalServerError"
         "504":
           $ref: "#/components/responses/RequestTimeout"
+  /api/account/bookmarks:
+    get:
+      operationId: listAccountBookmarks
+      summary: List owned bookmarks
+      description: |
+        Returns normalized GitHub references ordered by createdAt descending
+        and UUID descending. References are marked `unverified` because a
+        repository or issue can be renamed, made private, or deleted upstream;
+        use the anonymous public detail routes to revalidate when displaying
+        one. No GitHub response body is persisted.
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/AccountPage"
+        - $ref: "#/components/parameters/AccountPerPage"
+      responses:
+        "200":
+          description: A deterministic owned bookmark page.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookmarkListEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+    put:
+      operationId: upsertAccountBookmark
+      summary: Idempotently bookmark a GitHub reference
+      description: |
+        Requires a valid session and CSRF header. The account is selected only
+        from the server-side principal. A duplicate normalized reference
+        returns the existing row without incrementing version. Each account is
+        limited to 200 bookmarks.
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookmarkWriteRequest"
+      responses:
+        "200":
+          description: The newly inserted or existing owned bookmark.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookmarkEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/AuthMutationForbidden"
+        "409":
+          $ref: "#/components/responses/AccountConflict"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/account/bookmarks/{bookmarkID}:
+    parameters:
+      - $ref: "#/components/parameters/BookmarkID"
+    delete:
+      operationId: deleteAccountBookmark
+      summary: Delete an owned bookmark
+      description: |
+        Requires the current positive version. A resource owned by another
+        account is indistinguishable from a missing resource.
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceVersion"
+      responses:
+        "200":
+          description: The owned bookmark was deleted.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletionEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/AuthMutationForbidden"
+        "404":
+          $ref: "#/components/responses/AccountResourceNotFound"
+        "409":
+          $ref: "#/components/responses/AccountConflict"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/account/saved-searches:
+    get:
+      operationId: listAccountSavedSearches
+      summary: List owned saved searches
+      description: |
+        Returns normalized filter documents ordered by updatedAt descending
+        and UUID descending. Stored filters use the same validation and
+        defaults as the corresponding anonymous search endpoint.
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/AccountPage"
+        - $ref: "#/components/parameters/AccountPerPage"
+      responses:
+        "200":
+          description: A deterministic owned saved-search page.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedSearchListEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+    post:
+      operationId: createAccountSavedSearch
+      summary: Create a named saved search
+      description: |
+        Requires a valid session and CSRF header. Names are unique
+        case-insensitively per account, filter JSON is capped at 8192 bytes,
+        and each account is limited to 50 saved searches.
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavedSearchWriteRequest"
+      responses:
+        "201":
+          description: The normalized saved search was created.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedSearchEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/AuthMutationForbidden"
+        "409":
+          $ref: "#/components/responses/AccountConflict"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/account/saved-searches/{savedSearchID}:
+    parameters:
+      - $ref: "#/components/parameters/SavedSearchID"
+    put:
+      operationId: updateAccountSavedSearch
+      summary: Replace an owned saved search
+      description: |
+        Revalidates and canonicalizes the entire filter document. Update
+        succeeds only when version matches, and increments it atomically.
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavedSearchUpdateRequest"
+      responses:
+        "200":
+          description: The updated normalized saved search.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedSearchEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/AuthMutationForbidden"
+        "404":
+          $ref: "#/components/responses/AccountResourceNotFound"
+        "409":
+          $ref: "#/components/responses/AccountConflict"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+    delete:
+      operationId: deleteAccountSavedSearch
+      summary: Delete an owned saved search
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceVersion"
+      responses:
+        "200":
+          description: The owned saved search was deleted.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletionEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/AuthMutationForbidden"
+        "404":
+          $ref: "#/components/responses/AccountResourceNotFound"
+        "409":
+          $ref: "#/components/responses/AccountConflict"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/account/preferences:
+    get:
+      operationId: getAccountPreferences
+      summary: Read owned display preferences
+      description: |
+        Returns deterministic system/system/20 defaults at version zero until
+        the account persists a preference row.
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Persisted preferences or version-zero defaults.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreferencesEnvelope"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+    put:
+      operationId: updateAccountPreferences
+      summary: Create or update owned display preferences
+      description: |
+        Use version zero for the first write and the current positive version
+        thereafter. A stale version returns VERSION_CONFLICT.
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreferencesWriteRequest"
+      responses:
+        "200":
+          description: The current persisted preferences.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreferencesEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/AuthMutationForbidden"
+        "409":
+          $ref: "#/components/responses/AccountConflict"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/account/export:
+    get:
+      operationId: exportAccountData
+      summary: Export bounded account-owned feature data
+      description: |
+        Returns normalized bookmarks, saved filter definitions, and persisted
+        preferences. Sessions, credential hashes, audit identifiers, GitHub
+        payloads, anonymous searches, and click history are excluded.
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: A versioned privacy export generated at request time.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountExportEnvelope"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrigin"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/account:
+    delete:
+      operationId: deleteAccount
+      summary: Permanently delete the authenticated account
+      description: |
+        Requires the literal confirmation `DELETE`, a valid session, and CSRF.
+        The account, identities, sessions, bookmarks, saved searches, and
+        preferences are deleted through foreign-key cascades. A content-free
+        account_deleted audit event remains without an account identifier.
+      tags:
+        - Account workspace
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountDeleteRequest"
+      responses:
+        "200":
+          description: Account deletion completed and browser cookies expired.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+            Set-Cookie:
+              $ref: "#/components/headers/AuthSetCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDeleteEnvelope"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/AuthMutationForbidden"
+        "503":
+          $ref: "#/components/responses/AccountStorageUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "504":
+          $ref: "#/components/responses/RequestTimeout"
 components:
   headers:
     RequestID:
@@ -734,6 +1172,51 @@ components:
         type: integer
         minimum: 1
       example: 42
+    AccountPage:
+      name: page
+      in: query
+      required: false
+      description: One-based page over a quota-bounded owned collection.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 1
+    AccountPerPage:
+      name: perPage
+      in: query
+      required: false
+      description: Bounded number of account-owned rows per page.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
+    BookmarkID:
+      name: bookmarkID
+      in: path
+      required: true
+      description: Opaque account-owned bookmark identifier.
+      schema:
+        type: string
+        format: uuid
+    SavedSearchID:
+      name: savedSearchID
+      in: path
+      required: true
+      description: Opaque account-owned saved-search identifier.
+      schema:
+        type: string
+        format: uuid
+    ResourceVersion:
+      name: version
+      in: query
+      required: true
+      description: Current positive optimistic-concurrency version.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
   responses:
     InvalidRequest:
       description: A path or request value failed validation.
@@ -848,6 +1331,39 @@ components:
       description: |
         The browser Origin is not allowed or the CSRF cookie/header/server
         digest comparison failed.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    AccountStorageUnavailable:
+      description: |
+        Optional account storage or authentication is unavailable. Anonymous
+        profile, repository, and issue routes remain operational.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    AccountConflict:
+      description: |
+        The account quota was reached, the optimistic version was stale, or a
+        case-insensitive saved-search name already exists.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    AccountResourceNotFound:
+      description: |
+        The resource is missing or is owned by another account. Those cases
+        are intentionally indistinguishable.
       headers:
         X-Request-ID:
           $ref: "#/components/headers/RequestID"
@@ -1016,6 +1532,486 @@ components:
               const: true
         meta:
           $ref: "#/components/schemas/Meta"
+    BookmarkWriteRequest:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - issueNumber
+            - repositoryName
+            - repositoryOwner
+            - targetType
+          properties:
+            targetType:
+              type: string
+              const: issue
+            repositoryOwner:
+              $ref: "#/components/schemas/GitHubOwnerValue"
+            repositoryName:
+              $ref: "#/components/schemas/GitHubRepositoryValue"
+            issueNumber:
+              type: integer
+              minimum: 1
+        - type: object
+          additionalProperties: false
+          required:
+            - repositoryName
+            - repositoryOwner
+            - targetType
+          properties:
+            targetType:
+              type: string
+              const: repository
+            repositoryOwner:
+              $ref: "#/components/schemas/GitHubOwnerValue"
+            repositoryName:
+              $ref: "#/components/schemas/GitHubRepositoryValue"
+    GitHubOwnerValue:
+      type: string
+      minLength: 1
+      maxLength: 39
+      pattern: "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?!-)){0,37}[A-Za-z0-9]$|^[A-Za-z0-9]$"
+    GitHubRepositoryValue:
+      type: string
+      minLength: 1
+      maxLength: 100
+      pattern: "^(?!\\.{1,2}$)[A-Za-z0-9._-]+$"
+    Bookmark:
+      type: object
+      additionalProperties: false
+      required:
+        - createdAt
+        - id
+        - repositoryName
+        - repositoryOwner
+        - targetType
+        - updatedAt
+        - upstreamState
+        - version
+      properties:
+        id:
+          type: string
+          format: uuid
+        targetType:
+          type: string
+          enum:
+            - issue
+            - repository
+        repositoryOwner:
+          $ref: "#/components/schemas/GitHubOwnerValue"
+        repositoryName:
+          $ref: "#/components/schemas/GitHubRepositoryValue"
+        issueNumber:
+          type: integer
+          minimum: 1
+        upstreamState:
+          type: string
+          const: unverified
+          description: |
+            The reference is stored without a GitHub payload and may be stale.
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    BookmarkEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/Bookmark"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    AccountPagination:
+      type: object
+      additionalProperties: false
+      required:
+        - page
+        - perPage
+        - total
+        - totalPages
+      properties:
+        page:
+          type: integer
+          minimum: 1
+          maximum: 100
+        perPage:
+          type: integer
+          minimum: 1
+          maximum: 50
+        total:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+    BookmarkListEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - items
+            - pagination
+          properties:
+            items:
+              type: array
+              maxItems: 50
+              items:
+                $ref: "#/components/schemas/Bookmark"
+            pagination:
+              $ref: "#/components/schemas/AccountPagination"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    SavedSearchWriteRequest:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - filters
+            - name
+            - searchType
+          properties:
+            searchType:
+              type: string
+              const: issue
+            name:
+              $ref: "#/components/schemas/SavedSearchName"
+            filters:
+              $ref: "#/components/schemas/IssueSearchRequest"
+        - type: object
+          additionalProperties: false
+          required:
+            - filters
+            - name
+            - searchType
+          properties:
+            searchType:
+              type: string
+              const: repository
+            name:
+              $ref: "#/components/schemas/SavedSearchName"
+            filters:
+              $ref: "#/components/schemas/RepositoryDiscoveryRequest"
+    SavedSearchUpdateRequest:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - filters
+            - name
+            - searchType
+            - version
+          properties:
+            searchType:
+              type: string
+              const: issue
+            name:
+              $ref: "#/components/schemas/SavedSearchName"
+            filters:
+              $ref: "#/components/schemas/IssueSearchRequest"
+            version:
+              type: integer
+              format: int64
+              minimum: 1
+        - type: object
+          additionalProperties: false
+          required:
+            - filters
+            - name
+            - searchType
+            - version
+          properties:
+            searchType:
+              type: string
+              const: repository
+            name:
+              $ref: "#/components/schemas/SavedSearchName"
+            filters:
+              $ref: "#/components/schemas/RepositoryDiscoveryRequest"
+            version:
+              type: integer
+              format: int64
+              minimum: 1
+    SavedSearchName:
+      type: string
+      minLength: 1
+      maxLength: 80
+    SavedSearch:
+      type: object
+      additionalProperties: false
+      required:
+        - createdAt
+        - filters
+        - id
+        - name
+        - searchType
+        - updatedAt
+        - version
+      properties:
+        id:
+          type: string
+          format: uuid
+        searchType:
+          type: string
+          enum:
+            - issue
+            - repository
+        name:
+          $ref: "#/components/schemas/SavedSearchName"
+        filters:
+          oneOf:
+            - $ref: "#/components/schemas/IssueSearchRequest"
+            - $ref: "#/components/schemas/RepositoryDiscoveryRequest"
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SavedSearchEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/SavedSearch"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    SavedSearchListEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - items
+            - pagination
+          properties:
+            items:
+              type: array
+              maxItems: 50
+              items:
+                $ref: "#/components/schemas/SavedSearch"
+            pagination:
+              $ref: "#/components/schemas/AccountPagination"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    PreferencesWriteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - reducedMotion
+        - resultsPerPage
+        - theme
+        - version
+      properties:
+        theme:
+          $ref: "#/components/schemas/ThemePreference"
+        reducedMotion:
+          $ref: "#/components/schemas/ReducedMotionPreference"
+        resultsPerPage:
+          type: integer
+          enum:
+            - 10
+            - 20
+            - 50
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    ThemePreference:
+      type: string
+      enum:
+        - light
+        - dark
+        - system
+    ReducedMotionPreference:
+      type: string
+      enum:
+        - reduce
+        - no-preference
+        - system
+    Preferences:
+      type: object
+      additionalProperties: false
+      required:
+        - reducedMotion
+        - resultsPerPage
+        - theme
+        - version
+      properties:
+        theme:
+          $ref: "#/components/schemas/ThemePreference"
+        reducedMotion:
+          $ref: "#/components/schemas/ReducedMotionPreference"
+        resultsPerPage:
+          type: integer
+          enum:
+            - 10
+            - 20
+            - 50
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PreferencesEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/Preferences"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    DeletionEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - deleted
+          properties:
+            deleted:
+              type: boolean
+              const: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+    AccountExportEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - bookmarks
+            - generatedAt
+            - preferences
+            - savedSearches
+            - schemaVersion
+          properties:
+            schemaVersion:
+              type: integer
+              const: 1
+            generatedAt:
+              type: string
+              format: date-time
+            bookmarks:
+              type: array
+              maxItems: 200
+              items:
+                $ref: "#/components/schemas/Bookmark"
+            savedSearches:
+              type: array
+              maxItems: 50
+              items:
+                $ref: "#/components/schemas/SavedSearch"
+            preferences:
+              oneOf:
+                - $ref: "#/components/schemas/Preferences"
+                - type: "null"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    AccountDeleteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - confirmation
+      properties:
+        confirmation:
+          type: string
+          const: DELETE
+    AccountDeleteEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - deleted
+            - removed
+          properties:
+            deleted:
+              type: boolean
+              const: true
+            removed:
+              $ref: "#/components/schemas/OwnedDataSummary"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    OwnedDataSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - bookmarks
+        - identities
+        - preferences
+        - savedSearches
+        - sessions
+      properties:
+        bookmarks:
+          type: integer
+          format: int64
+          minimum: 0
+        identities:
+          type: integer
+          format: int64
+          minimum: 0
+        preferences:
+          type: integer
+          format: int64
+          minimum: 0
+        savedSearches:
+          type: integer
+          format: int64
+          minimum: 0
+        sessions:
+          type: integer
+          format: int64
+          minimum: 0
     GitHubUserEnvelope:
       type: object
       additionalProperties: false
@@ -3210,10 +4206,12 @@ components:
             code:
               type: string
               enum:
+                - ACCOUNT_QUOTA_EXCEEDED
                 - AUTHENTICATION_REQUIRED
                 - AUTH_UNAVAILABLE
                 - CSRF_REJECTED
                 - DATABASE_UNAVAILABLE
+                - DUPLICATE_SAVED_SEARCH
                 - FORBIDDEN_ORIGIN
                 - GITHUB_AUTHORIZATION_REJECTED
                 - GITHUB_API_ERROR
@@ -3224,6 +4222,7 @@ components:
                 - INVALID_REQUEST
                 - NOT_FOUND
                 - REQUEST_TIMEOUT
+                - VERSION_CONFLICT
             message:
               type: string
         meta:

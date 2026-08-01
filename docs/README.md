@@ -12,9 +12,11 @@ then follow the topic guide that matches your change.
    [API contract](api.md).
 4. Read [Optional GitHub authentication](authentication.md) before changing
    sessions or account ownership.
-5. Use [Commands](commands.md) and [Testing](testing.md) while changing code.
-6. Use [Troubleshooting](troubleshooting.md) when a local or CI check fails.
-7. Read [Extension playbooks](extending.md) before adding a feature,
+5. Read [Authenticated account workspace](account-workspace.md) before
+   changing bookmarks, saved searches, preferences, export, or deletion.
+6. Use [Commands](commands.md) and [Testing](testing.md) while changing code.
+7. Use [Troubleshooting](troubleshooting.md) when a local or CI check fails.
+8. Read [Extension playbooks](extending.md) before adding a feature,
    upstream adapter, persistence, or a scoring rule.
 
 ## Knowledge map
@@ -30,6 +32,7 @@ then follow the topic guide that matches your change.
 | Issue analysis and ranking               | [Rule analysis](issue-analysis.md)              | [Recommendations](issue-recommendations.md)   |
 | Security and anonymous-data rules        | [Security](security.md)                         | [Configuration](configuration.md)             |
 | Optional OAuth and server sessions       | [Authentication](authentication.md)             | [Database](database.md)                       |
+| Account-owned optional features          | [Account workspace](account-workspace.md)       | [Authentication](authentication.md)           |
 | Authenticated PostgreSQL persistence     | [Database](database.md)                         | [Architecture](architecture.md)               |
 | Automated verification                   | [Testing](testing.md)                           | [CI](ci.md)                                   |
 | Release and promotion                    | [Delivery](delivery.md)                         | [ADR 0005](adr/0005-docker-free-delivery.md)  |

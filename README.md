@@ -62,7 +62,9 @@ accessible profile journey and state ownership, [the test strategy](docs/testing
 for deterministic validation, [the CI guide](docs/ci.md) for quality gates,
 [secure delivery](docs/delivery.md) for Docker-free releases, and
 [security engineering](docs/security.md) for trust boundaries and incident
-response. The [issue recommendation guide](docs/issue-recommendations.md)
+response. The [account workspace guide](docs/account-workspace.md) defines
+bookmarks, saved searches, preferences, privacy export, and deletion. The
+[issue recommendation guide](docs/issue-recommendations.md)
 documents the score, sampling, warnings, cache, and deterministic ranking.
 
 ## Prerequisites
@@ -109,8 +111,9 @@ must be rotated before use. The complete bounded configuration surface is in
 
 ### Optional local GitHub sign-in
 
-Anonymous development needs no OAuth App. To exercise login and future
-account-owned features, first create a GitHub OAuth App with:
+Anonymous development needs no OAuth App. To exercise login, bookmarks, saved
+searches, preferences, export, and deletion, first create a GitHub OAuth App
+with:
 
 - Homepage URL: `http://127.0.0.1:5173`
 - Authorization callback URL:
@@ -150,6 +153,11 @@ If the five required values are all absent, authentication stays disabled and
 without querying PostgreSQL. See the
 [authentication guide](docs/authentication.md) for callback, Cookie, PKCE,
 CSRF, rotation, proxy, and production HTTPS details.
+
+After signing in, use the tracked
+[`http/account-workspace.http`](http/account-workspace.http) requests with
+fresh credentials stored only in a private HTTPYAC environment. The deletion
+request contains a deliberately invalid confirmation by default.
 
 ## Essential commands
 
