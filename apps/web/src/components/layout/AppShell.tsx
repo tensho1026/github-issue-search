@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { Link, Outlet } from "react-router";
 
 import { appConfig, appRoutes } from "../../shared/config/app-config";
+import { AccountControl } from "../../features/auth/components/AccountControl";
+import { AuthFeedback } from "../../features/auth/components/AuthFeedback";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -125,8 +127,10 @@ export function AppShell() {
               }
               theme={theme}
             />
+            <AccountControl />
           </nav>
           <div className="flex items-center gap-1 sm:hidden">
+            <AccountControl />
             <ThemeToggle
               onChange={() =>
                 setTheme((current) => (current === "dark" ? "light" : "dark"))
@@ -161,6 +165,7 @@ export function AppShell() {
           </div>
         </div>
       </header>
+      <AuthFeedback />
       <main id="main-content">
         <Outlet />
       </main>

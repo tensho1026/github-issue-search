@@ -158,6 +158,10 @@ After signing in, use the tracked
 [`http/account-workspace.http`](http/account-workspace.http) requests with
 fresh credentials stored only in a private HTTPYAC environment. The deletion
 request contains a deliberately invalid confirmation by default.
+The web application exposes the same optional features at
+`http://127.0.0.1:5173/workspace`. Public result cards explain account-only
+save actions before sign-in and preserve the current validated route through
+OAuth; they never force a login or store credentials in browser storage.
 
 ## Essential commands
 

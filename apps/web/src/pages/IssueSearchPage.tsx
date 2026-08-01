@@ -12,6 +12,7 @@ import {
 } from "../components/ui/card";
 import { Icon } from "../components/ui/icon";
 import { useIssueSearch } from "../features/issue-search/api/useIssueSearch";
+import { SaveSearchAction } from "../features/account/components/SaveSearchAction";
 import { IssueSearchForm } from "../features/issue-search/components/IssueSearchForm";
 import { IssueSearchResults } from "../features/issue-search/components/IssueSearchResults";
 import {
@@ -23,6 +24,7 @@ import {
 import {
   decodeSearchParams,
   encodeSearchParams,
+  toIssueSearchRequest,
   type SearchFilters,
 } from "../features/issue-search/model/search-filters";
 
@@ -92,6 +94,14 @@ export function IssueSearchPage() {
           explains each server-ranked recommendation without opening a database
           connection.
         </p>
+        {location.shouldSearch && location.valid ? (
+          <div className="mt-5">
+            <SaveSearchAction
+              filters={toIssueSearchRequest(location.filters)}
+              searchType="issue"
+            />
+          </div>
+        ) : null}
       </header>
 
       <div className="mt-9 grid items-start gap-6 lg:grid-cols-[minmax(20rem,0.82fr)_minmax(0,1.18fr)]">

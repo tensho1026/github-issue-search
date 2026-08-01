@@ -171,8 +171,8 @@ the same file.
 | `BenchmarkRecommendBounded` latency                  |      1 ms/op |
 | Recommendation bytes                                 |   128 KiB/op |
 | Recommendation allocations                           |     1,000/op |
-| Largest JavaScript asset                             | 140 KiB gzip |
-| All JavaScript and CSS                               | 200 KiB gzip |
+| Largest JavaScript asset                             |  75 KiB gzip |
+| All JavaScript and CSS                               | 205 KiB gzip |
 
 ## Contract fixtures
 

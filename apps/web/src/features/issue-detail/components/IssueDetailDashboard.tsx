@@ -36,6 +36,7 @@ import {
   skillPresentation,
   warningPresentation,
 } from "../../issue-search/model/search-presentation";
+import { BookmarkAction } from "../../account/components/BookmarkAction";
 import {
   categoryLabel,
   qualitySignalLabel,
@@ -283,6 +284,16 @@ export function IssueDetailDashboard({ envelope, returnTo }: Props) {
             {data.repository.isArchived ? (
               <Badge variant="warning">Archived repository</Badge>
             ) : null}
+          </div>
+          <div className="mt-5">
+            <BookmarkAction
+              request={{
+                issueNumber: data.issue.number,
+                repositoryName: data.repository.name,
+                repositoryOwner: data.repository.owner,
+                targetType: "issue",
+              }}
+            />
           </div>
           <div className="mt-4 flex flex-wrap gap-3">
             <Button asChild>

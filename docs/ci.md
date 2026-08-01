@@ -86,10 +86,14 @@ request ID, and graceful shutdown smoke test.
 - web statements, branches, functions, and lines: at least 70%;
 - bounded analysis: at most 5 ms, 256 KiB, and 200 allocations per operation;
 - recommendation scoring: at most 1 ms, 128 KiB, and 1,000 allocations per operation;
-- largest JavaScript asset: no more than 140 KiB gzip;
-- all JavaScript and CSS assets: no more than 200 KiB gzip.
+- largest JavaScript asset: no more than 75 KiB gzip;
+- all JavaScript and CSS assets: no more than 205 KiB gzip.
 
-Raise coverage expectations as features gain tests. Budget reductions require measured justification in the pull request and must not conceal a regression.
+The 205 KiB aggregate allowance includes the independently loaded account
+workspace, while the 75 KiB per-asset ceiling keeps shared and anonymous route
+chunks tightly bounded. Raise coverage expectations as features gain tests.
+Any budget change requires measured justification in the pull request and must
+not conceal a regression.
 
 ## Pull request policy
 

@@ -1,4 +1,13 @@
 export const queryKeys = Object.freeze({
+  account: Object.freeze({
+    bookmarks: ["account", "bookmarks"] as const,
+    preferences: ["account", "preferences"] as const,
+    root: ["account"] as const,
+    savedSearches: ["account", "saved-searches"] as const,
+  }),
+  auth: Object.freeze({
+    session: ["auth", "session"] as const,
+  }),
   issues: Object.freeze({
     detail(
       owner: string,

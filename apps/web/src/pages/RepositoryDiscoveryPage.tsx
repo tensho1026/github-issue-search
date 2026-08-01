@@ -12,6 +12,7 @@ import {
 } from "../components/ui/card";
 import { Icon } from "../components/ui/icon";
 import { useRepositoryDiscovery } from "../features/repository-discovery/api/useRepositoryDiscovery";
+import { SaveSearchAction } from "../features/account/components/SaveSearchAction";
 import { RepositoryDiscoveryForm } from "../features/repository-discovery/components/RepositoryDiscoveryForm";
 import { RepositoryDiscoveryResults } from "../features/repository-discovery/components/RepositoryDiscoveryResults";
 import {
@@ -23,6 +24,7 @@ import {
 import {
   decodeRepositorySearchParams,
   encodeRepositorySearchParams,
+  toRepositoryDiscoveryRequest,
   type RepositoryFilters,
 } from "../features/repository-discovery/model/repository-filters";
 
@@ -92,6 +94,14 @@ export function RepositoryDiscoveryPage() {
           contribution readiness. IssueScout explains bounded evidence without
           using an account or database.
         </p>
+        {location.shouldSearch && location.valid ? (
+          <div className="mt-5">
+            <SaveSearchAction
+              filters={toRepositoryDiscoveryRequest(location.filters)}
+              searchType="repository"
+            />
+          </div>
+        ) : null}
       </header>
 
       <div className="mt-9 grid items-start gap-6 xl:grid-cols-[minmax(24rem,0.86fr)_minmax(0,1.14fr)]">

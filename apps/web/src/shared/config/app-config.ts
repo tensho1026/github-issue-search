@@ -48,6 +48,7 @@ export const appRoutes = Object.freeze({
   },
   repositories: "/repositories",
   search: "/search",
+  workspace: "/workspace",
 });
 
 export const externalLinks = Object.freeze({
@@ -107,5 +108,40 @@ export const repositoryEndpoints = Object.freeze({
       perPage: perPage.toString(),
     });
     return `/api/repositories/search?${query.toString()}`;
+  },
+});
+
+export const authEndpoints = Object.freeze({
+  logout: "/api/auth/logout" as const,
+  refresh: "/api/auth/session/refresh" as const,
+  session: "/api/auth/session" as const,
+  start(returnTo: string): string {
+    const query = new URLSearchParams({ returnTo });
+    return `${appConfig.apiBaseUrl}/api/auth/github/start?${query.toString()}`;
+  },
+});
+
+export const accountEndpoints = Object.freeze({
+  account: "/api/account" as const,
+  bookmark(id: string, version: number): `/${string}` {
+    return `/api/account/bookmarks/${encodeURIComponent(
+      id,
+    )}?version=${version}`;
+  },
+  bookmarks(page = 1, perPage = 50): `/${string}` {
+    return `/api/account/bookmarks?page=${page}&perPage=${perPage}`;
+  },
+  export: "/api/account/export" as const,
+  preferences: "/api/account/preferences" as const,
+  savedSearch(id: string): `/${string}` {
+    return `/api/account/saved-searches/${encodeURIComponent(id)}`;
+  },
+  savedSearchForDelete(id: string, version: number): `/${string}` {
+    return `/api/account/saved-searches/${encodeURIComponent(
+      id,
+    )}?version=${version}`;
+  },
+  savedSearches(page = 1, perPage = 50): `/${string}` {
+    return `/api/account/saved-searches?page=${page}&perPage=${perPage}`;
   },
 });

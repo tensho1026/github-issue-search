@@ -4,6 +4,7 @@ import { useState, type PropsWithChildren } from "react";
 import { appConfig } from "../shared/config/app-config";
 import { shouldRetryQuery } from "../shared/query/retry-policy";
 import { TooltipProvider } from "../components/ui/tooltip";
+import { AuthProvider } from "../features/auth/AuthProvider";
 
 const createQueryClient = () =>
   new QueryClient({
@@ -22,7 +23,9 @@ export function AppProviders({ children }: PropsWithChildren) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider delayDuration={300}>{children}</TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider delayDuration={300}>{children}</TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
