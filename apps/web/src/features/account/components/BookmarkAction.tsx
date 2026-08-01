@@ -20,6 +20,8 @@ export function BookmarkAction({ request }: { request: BookmarkWriteRequest }) {
   const { markSessionExpired, session, signIn } = useAuth();
   const queryClient = useQueryClient();
   const [promptOpen, setPromptOpen] = useState(false);
+  const [savedTarget, setSavedTarget] = useState("");
+  const targetKey = JSON.stringify(request);
   const mutation = useMutation({
     mutationFn: () => {
       if (!session?.authenticated || !session.csrfToken) {
@@ -38,6 +40,7 @@ export function BookmarkAction({ request }: { request: BookmarkWriteRequest }) {
       }
     },
     async onSuccess() {
+      setSavedTarget(targetKey);
       await queryClient.invalidateQueries({
         queryKey: queryKeys.account.bookmarks,
       });
@@ -60,7 +63,7 @@ export function BookmarkAction({ request }: { request: BookmarkWriteRequest }) {
       >
         {mutation.isPending
           ? "Saving…"
-          : mutation.isSuccess
+          : savedTarget === targetKey
             ? "Bookmarked"
             : "Bookmark"}
       </Button>

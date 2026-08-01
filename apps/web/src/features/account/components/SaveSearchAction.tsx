@@ -32,6 +32,8 @@ export function SaveSearchAction(props: Props) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [formError, setFormError] = useState("");
+  const [savedFilters, setSavedFilters] = useState("");
+  const filterKey = JSON.stringify(props.filters);
   const mutation = useMutation({
     mutationFn: (request: SavedSearchWriteRequest) => {
       if (!session?.authenticated || !session.csrfToken) {
@@ -51,6 +53,7 @@ export function SaveSearchAction(props: Props) {
     async onSuccess() {
       setOpen(false);
       setName("");
+      setSavedFilters(filterKey);
       await queryClient.invalidateQueries({
         queryKey: queryKeys.account.savedSearches,
       });
@@ -75,7 +78,7 @@ export function SaveSearchAction(props: Props) {
   return (
     <>
       <Button onClick={() => setOpen(true)} size="small" variant="outline">
-        {mutation.isSuccess ? "Search saved" : "Save this search"}
+        {savedFilters === filterKey ? "Search saved" : "Save this search"}
       </Button>
       <Dialog onOpenChange={setOpen} open={open}>
         <DialogContent>
